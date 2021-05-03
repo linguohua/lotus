@@ -38,6 +38,50 @@ func NewRetrievalProviderNode(maddr dtypes.MinerAddress, secb sectorblocks.Secto
 	return &retrievalProviderNode{address.Address(maddr), secb, pp, full}
 }
 
+func (rpn *retrievalProviderNode) GetDealPricingParams(ctx context.Context, storageDeals []abi.DealID) (retrievalmarket.DealPricingParams, error) {
+	resp := retrievalmarket.DealPricingParams{}
+
+	head, err := rpn.full.ChainHead(ctx)
+	if err != nil {
+		return resp, xerrors.Errorf("failed to get chain head: %s", err)
+	}
+
+	for _, dealID := range storageDeals {
+		ds, err := rpn.full.StateMarketStorageDeal(ctx, dealID, head.Key())
+		if err != nil {
+			return resp, xerrors.Errorf("failed to look up deals on chain: %w", err)
+		}
+		if ds.Proposal.VerifiedDeal {
+			resp.VerifiedDeal = true
+			break
+		}
+	}
+
+	return resp, nil
+}
+
+func (rpn *retrievalProviderNode) IsUnsealed(ctx context.Context, sectorID abi.SectorNumber, offset abi.UnpaddedPieceSize, length abi.UnpaddedPieceSize) (bool, error) {
+	si, err := rpn.secb.SectorsStatus(ctx, sectorID, false)
+	if err != nil {
+		return false, err
+	}
+
+	mid, err := address.IDFromAddress(rpn.maddr)
+	if err != nil {
+		return false, err
+	}
+
+	ref := specstorage.SectorRef{
+		ID: abi.SectorID{
+			Miner:  abi.ActorID(mid),
+			Number: sectorID,
+		},
+		ProofType: si.SealProof,
+	}
+
+	return rpn.pp.IsUnsealed(ctx, ref, storiface.UnpaddedByteIndex(offset), length)
+}
+
 func (rpn *retrievalProviderNode) GetMinerWorkerAddress(ctx context.Context, miner address.Address, tok shared.TipSetToken) (address.Address, error) {
 	tsk, err := types.TipSetKeyFromBytes(tok)
 	if err != nil {
