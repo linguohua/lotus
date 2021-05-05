@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/lotus/markets/pricing"
 	"go.uber.org/fx"
 	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
@@ -631,6 +633,29 @@ func RetrievalDealFilter(userFilter dtypes.RetrievalDealFilter) func(onlineOk dt
 	}
 }
 
+func RetrievalPricingFunc(cfg config.DealmakingConfig) dtypes.RetrievalPricingFunc {
+	if cfg.UseDynamicRetrievalPricing {
+		return pricing.CliRetrievalPricingFunc(cfg.DynamicRetrievalPricingFunc)
+	}
+
+	return func(ctx context.Context, dealPricingParams retrievalmarket.DealPricingParams) (retrievalmarket.Ask, error) {
+		params := cfg.DefaultRetrievalPricingParams
+
+		resp := retrievalmarket.Ask{
+			PricePerByte:            abi.TokenAmount(params.PricePerByte),
+			UnsealPrice:             abi.TokenAmount(params.UnsealPrice),
+			PaymentInterval:         params.PaymentInterval,
+			PaymentIntervalIncrease: params.PaymentIntervalIncrease,
+		}
+
+		// don't charge for Unsealing if we have an Unsealed copy.
+		if dealPricingParams.Unsealed {
+			resp.UnsealPrice = big.Zero()
+		}
+		return resp, nil
+	}
+}
+
 func RetrievalNetwork(h host.Host) rmnet.RetrievalMarketNetwork {
 	return rmnet.NewFromLibp2pHost(h)
 }
@@ -645,9 +670,12 @@ func RetrievalProvider(
 	mds dtypes.StagingMultiDstore,
 	dt dtypes.ProviderDataTransfer,
 	userFilter dtypes.RetrievalDealFilter,
+	pricingFnc dtypes.RetrievalPricingFunc,
 ) (retrievalmarket.RetrievalProvider, error) {
 	opt := retrievalimpl.DealDeciderOpt(retrievalimpl.DealDecider(userFilter))
-	return retrievalimpl.NewProvider(address.Address(maddr), adapter, netwk, pieceStore, mds, dt, namespace.Wrap(ds, datastore.NewKey("/retrievals/provider")), opt)
+
+	return retrievalimpl.NewProvider(address.Address(maddr), adapter, netwk, pieceStore, mds, dt, namespace.Wrap(ds, datastore.NewKey("/retrievals/provider")),
+		retrievalimpl.DealPricingFunc(pricingFnc), opt)
 }
 
 var WorkerCallsPrefix = datastore.NewKey("/worker/calls")

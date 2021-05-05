@@ -66,6 +66,20 @@ type DealmakingConfig struct {
 
 	Filter          string
 	RetrievalFilter string
+
+	// If UseDynamicRetrievalPricing is set to false(default), we will use the DefaultRetrievalPricingParams
+	// for pricing retrieval deals, otherwise we will use the DynamicRetrievalPricingFunc configured here.
+	UseDynamicRetrievalPricing  bool
+	DynamicRetrievalPricingFunc string
+
+	DefaultRetrievalPricingParams DefaultRetrievalPricingParams
+}
+
+type DefaultRetrievalPricingParams struct {
+	PricePerByte            types.FIL
+	UnsealPrice             types.FIL
+	PaymentInterval         uint64
+	PaymentIntervalIncrease uint64
 }
 
 type SealingConfig struct {
@@ -264,6 +278,14 @@ func DefaultStorageMiner() *StorageMiner {
 			PublishMsgPeriod:                Duration(time.Hour),
 			MaxDealsPerPublishMsg:           8,
 			MaxProviderCollateralMultiplier: 2,
+
+			UseDynamicRetrievalPricing: false,
+			DefaultRetrievalPricingParams: DefaultRetrievalPricingParams{
+				PricePerByte:            types.MustParseFIL("0"),
+				UnsealPrice:             types.MustParseFIL("0"),
+				PaymentInterval:         0,
+				PaymentIntervalIncrease: 0,
+			},
 		},
 
 		Fees: MinerFeeConfig{
