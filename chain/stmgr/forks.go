@@ -143,7 +143,7 @@ func DefaultUpgradeSchedule() UpgradeSchedule {
 		Network:   network.Version3,
 		Migration: UpgradeRefuel,
 	}, {
-		Height:    build.UpgradeActorsV2Height,
+		Height:    build.UpgradeAssemblyHeight,
 		Network:   network.Version4,
 		Expensive: true,
 		Migration: UpgradeActorsV2,
@@ -172,7 +172,7 @@ func DefaultUpgradeSchedule() UpgradeSchedule {
 		Network:   network.Version9,
 		Migration: nil,
 	}, {
-		Height:    build.UpgradeActorsV3Height,
+		Height:    build.UpgradeTrustHeight,
 		Network:   network.Version10,
 		Migration: UpgradeActorsV3,
 		PreMigrations: []PreMigration{{
@@ -192,7 +192,7 @@ func DefaultUpgradeSchedule() UpgradeSchedule {
 		Network:   network.Version11,
 		Migration: nil,
 	}, {
-		Height:    build.UpgradeActorsV4Height,
+		Height:    build.UpgradeTurboHeight,
 		Network:   network.Version12,
 		Migration: UpgradeActorsV4,
 		PreMigrations: []PreMigration{{
@@ -207,6 +207,10 @@ func DefaultUpgradeSchedule() UpgradeSchedule {
 			StopWithin:      5,
 		}},
 		Expensive: true,
+	}, {
+		Height:    build.UpgradeHyperdriveHeight,
+		Network:   network.Version13,
+		Migration: nil,
 	}}
 
 	for _, u := range updates {
@@ -1053,7 +1057,7 @@ func upgradeActorsV3Common(
 	// Perform the migration
 	newHamtRoot, err := nv10.MigrateStateTree(ctx, store, stateRoot.Actors, epoch, config, migrationLogger{}, cache)
 	if err != nil {
-		return cid.Undef, xerrors.Errorf("upgrading to actors v2: %w", err)
+		return cid.Undef, xerrors.Errorf("upgrading to actors v3: %w", err)
 	}
 
 	// Persist the result.
@@ -1139,7 +1143,7 @@ func upgradeActorsV4Common(
 	// Perform the migration
 	newHamtRoot, err := nv12.MigrateStateTree(ctx, store, stateRoot.Actors, epoch, config, migrationLogger{}, cache)
 	if err != nil {
-		return cid.Undef, xerrors.Errorf("upgrading to actors v2: %w", err)
+		return cid.Undef, xerrors.Errorf("upgrading to actors v4: %w", err)
 	}
 
 	// Persist the result.
