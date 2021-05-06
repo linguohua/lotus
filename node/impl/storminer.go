@@ -441,10 +441,8 @@ func (sm *StorageMinerAPI) MarketSetRetrievalAsk(ctx context.Context, rask *retr
 	return nil
 }
 
-// TODO CORRECT BEHAVIOUR
 func (sm *StorageMinerAPI) MarketGetRetrievalAsk(ctx context.Context) (*retrievalmarket.Ask, error) {
-	//return sm.RetrievalProvider.GetAsk(), nil
-	return nil, nil
+	return sm.RetrievalProvider.GetAsk(), nil
 }
 
 func (sm *StorageMinerAPI) MarketListDataTransfers(ctx context.Context) ([]api.DataTransferChannel, error) {
