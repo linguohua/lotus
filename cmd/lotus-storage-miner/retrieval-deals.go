@@ -5,9 +5,12 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/docker/go-units"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/urfave/cli/v2"
 
+	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 )
 
@@ -17,6 +20,8 @@ var retrievalDealsCmd = &cli.Command{
 	Subcommands: []*cli.Command{
 		retrievalDealSelectionCmd,
 		retrievalDealsListCmd,
+		retrievalSetAskCmd,
+		retrievalGetAskCmd,
 	},
 }
 
@@ -155,10 +160,83 @@ var retrievalDealsListCmd = &cli.Command{
 	},
 }
 
-// TODO FIX THIS
-/*var retrievalGetAskCmd = &cli.Command{
-	Name:  "get-ask",
-	Usage: "Get the provider's current retrieval ask",
+var retrievalSetAskCmd = &cli.Command{
+	Name:  "set-ask",
+	Usage: "Configure the provider's retrieval ask",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "price",
+			Usage: "Set the price of the ask for retrievals (FIL/GiB)",
+		},
+		&cli.StringFlag{
+			Name:  "unseal-price",
+			Usage: "Set the price to unseal",
+		},
+		&cli.StringFlag{
+			Name:        "payment-interval",
+			Usage:       "Set the payment interval (in bytes) for retrieval",
+			DefaultText: "1MiB",
+		},
+		&cli.StringFlag{
+			Name:        "payment-interval-increase",
+			Usage:       "Set the payment interval increase (in bytes) for retrieval",
+			DefaultText: "1MiB",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		ctx := lcli.DaemonContext(cctx)
+
+		api, closer, err := lcli.GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ask, err := api.MarketGetRetrievalAsk(ctx)
+		if err != nil {
+			return err
+		}
+
+		if cctx.IsSet("price") {
+			v, err := types.ParseFIL(cctx.String("price"))
+			if err != nil {
+				return err
+			}
+			ask.PricePerByte = types.BigDiv(types.BigInt(v), types.NewInt(1<<30))
+		}
+
+		if cctx.IsSet("unseal-price") {
+			v, err := types.ParseFIL(cctx.String("unseal-price"))
+			if err != nil {
+				return err
+			}
+			ask.UnsealPrice = abi.TokenAmount(v)
+		}
+
+		if cctx.IsSet("payment-interval") {
+			v, err := units.RAMInBytes(cctx.String("payment-interval"))
+			if err != nil {
+				return err
+			}
+			ask.PaymentInterval = uint64(v)
+		}
+
+		if cctx.IsSet("payment-interval-increase") {
+			v, err := units.RAMInBytes(cctx.String("payment-interval-increase"))
+			if err != nil {
+				return err
+			}
+			ask.PaymentIntervalIncrease = uint64(v)
+		}
+
+		return api.MarketSetRetrievalAsk(ctx, ask)
+	},
+}
+
+var retrievalGetAskCmd = &cli.Command{
+	Name: "get-ask",
+	Usage: "Get the current retrieval ask configured by the provider in the ask-store. No-op if user has configured an external script to " +
+		"dynamically price retrieval deals.",
 	Flags: []cli.Flag{},
 	Action: func(cctx *cli.Context) error {
 		ctx := lcli.DaemonContext(cctx)
@@ -190,4 +268,4 @@ var retrievalDealsListCmd = &cli.Command{
 		return w.Flush()
 
 	},
-}*/
+}

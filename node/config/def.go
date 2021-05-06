@@ -67,19 +67,20 @@ type DealmakingConfig struct {
 	Filter          string
 	RetrievalFilter string
 
-	// If UseDynamicRetrievalPricing is set to false(default), we will use the DefaultRetrievalPricingParams
-	// for pricing retrieval deals, otherwise we will use the DynamicRetrievalPricingFunc configured here.
+	// If `UseDynamicRetrievalPricing` is set to true(default is false), we will use the `DynamicRetrievalPricingFunc` script
+	// to dynamically price retrieval deals.
 	UseDynamicRetrievalPricing  bool
 	DynamicRetrievalPricingFunc string
 
+	// These are the parameters we will use to configure the default retrieval pricer if `UseDynamicRetrievalPricing`
+	// is set to false(default).
 	DefaultRetrievalPricingParams DefaultRetrievalPricingParams
 }
 
 type DefaultRetrievalPricingParams struct {
-	PricePerByte            types.FIL
-	UnsealPrice             types.FIL
-	PaymentInterval         uint64
-	PaymentIntervalIncrease uint64
+	// The default retrieval pricer will not charge for data transfer if this flag is set to true.
+	// default is true.
+	VerifiedDealsFreeTransfer bool
 }
 
 type SealingConfig struct {
@@ -281,10 +282,7 @@ func DefaultStorageMiner() *StorageMiner {
 
 			UseDynamicRetrievalPricing: false,
 			DefaultRetrievalPricingParams: DefaultRetrievalPricingParams{
-				PricePerByte:            types.MustParseFIL("0"),
-				UnsealPrice:             types.MustParseFIL("0"),
-				PaymentInterval:         0,
-				PaymentIntervalIncrease: 0,
+				VerifiedDealsFreeTransfer: true,
 			},
 		},
 

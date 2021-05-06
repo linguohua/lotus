@@ -436,6 +436,11 @@ func (sm *StorageMinerAPI) MarketGetAsk(ctx context.Context) (*storagemarket.Sig
 	return sm.StorageProvider.GetAsk(), nil
 }
 
+func (sm *StorageMinerAPI) MarketSetRetrievalAsk(ctx context.Context, rask *retrievalmarket.Ask) error {
+	sm.RetrievalProvider.SetAsk(rask)
+	return nil
+}
+
 // TODO CORRECT BEHAVIOUR
 func (sm *StorageMinerAPI) MarketGetRetrievalAsk(ctx context.Context) (*retrievalmarket.Ask, error) {
 	//return sm.RetrievalProvider.GetAsk(), nil

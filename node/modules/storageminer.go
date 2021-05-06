@@ -638,21 +638,22 @@ func RetrievalPricingFunc(cfg config.DealmakingConfig) dtypes.RetrievalPricingFu
 		return pricing.CliRetrievalPricingFunc(cfg.DynamicRetrievalPricingFunc)
 	}
 
-	return func(ctx context.Context, dealPricingParams retrievalmarket.DealPricingParams) (retrievalmarket.Ask, error) {
+	return func(ctx context.Context, pricingInput retrievalmarket.PricingInput) (retrievalmarket.Ask, error) {
+		ask := pricingInput.CurrentAsk
+
 		params := cfg.DefaultRetrievalPricingParams
 
-		resp := retrievalmarket.Ask{
-			PricePerByte:            abi.TokenAmount(params.PricePerByte),
-			UnsealPrice:             abi.TokenAmount(params.UnsealPrice),
-			PaymentInterval:         params.PaymentInterval,
-			PaymentIntervalIncrease: params.PaymentIntervalIncrease,
+		// don't charge for Unsealing if we have an Unsealed copy.
+		if pricingInput.Unsealed {
+			ask.UnsealPrice = big.Zero()
 		}
 
-		// don't charge for Unsealing if we have an Unsealed copy.
-		if dealPricingParams.Unsealed {
-			resp.UnsealPrice = big.Zero()
+		// don't charge for data transfer for verified deals if it's been configured to do so.
+		if pricingInput.VerifiedDeal && params.VerifiedDealsFreeTransfer {
+			ask.PricePerByte = big.Zero()
 		}
-		return resp, nil
+
+		return ask, nil
 	}
 }
 

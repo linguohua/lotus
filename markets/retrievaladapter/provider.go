@@ -38,8 +38,8 @@ func NewRetrievalProviderNode(maddr dtypes.MinerAddress, secb sectorblocks.Secto
 	return &retrievalProviderNode{address.Address(maddr), secb, pp, full}
 }
 
-func (rpn *retrievalProviderNode) GetDealPricingParams(ctx context.Context, storageDeals []abi.DealID) (retrievalmarket.DealPricingParams, error) {
-	resp := retrievalmarket.DealPricingParams{}
+func (rpn *retrievalProviderNode) GetRetrievalPricingInput(ctx context.Context, pieceCID cid.Cid, storageDeals []abi.DealID) (retrievalmarket.PricingInput, error) {
+	resp := retrievalmarket.PricingInput{}
 
 	head, err := rpn.full.ChainHead(ctx)
 	if err != nil {
@@ -53,7 +53,10 @@ func (rpn *retrievalProviderNode) GetDealPricingParams(ctx context.Context, stor
 		}
 		if ds.Proposal.VerifiedDeal {
 			resp.VerifiedDeal = true
-			break
+		}
+
+		if ds.Proposal.PieceCID.Equals(pieceCID) {
+			resp.PieceSize = ds.Proposal.PieceSize.Unpadded()
 		}
 	}
 

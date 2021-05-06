@@ -12,13 +12,13 @@ import (
 )
 
 func CliRetrievalPricingFunc(cmd string) dtypes.RetrievalPricingFunc {
-	return func(ctx context.Context, pricingInput retrievalmarket.DealPricingParams) (retrievalmarket.Ask, error) {
+	return func(ctx context.Context, pricingInput retrievalmarket.PricingInput) (retrievalmarket.Ask, error) {
 		return runPricingFunc(ctx, cmd, pricingInput)
 	}
 }
 
 func runPricingFunc(_ context.Context, cmd string, params interface{}) (retrievalmarket.Ask, error) {
-	j, err := json.MarshalIndent(params, "", "  ")
+	j, err := json.Marshal(params)
 	if err != nil {
 		return retrievalmarket.Ask{}, err
 	}
