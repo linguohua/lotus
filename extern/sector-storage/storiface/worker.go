@@ -17,8 +17,8 @@ import (
 )
 
 type WorkerInfo struct {
-	Hostname string
-
+	Hostname  string
+	GroupId   string
 	Resources WorkerResources
 }
 

@@ -23,6 +23,7 @@ type worker struct {
 	ls         stores.LocalStorage
 
 	disabled int64
+	groupId  string
 }
 
 func (w *worker) Version(context.Context) (api.Version, error) {

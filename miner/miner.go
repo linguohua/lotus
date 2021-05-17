@@ -416,6 +416,7 @@ func (m *Miner) GetBestMiningCandidate(ctx context.Context) (*MiningBase, error)
 //
 //  1.
 func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg, error) {
+	// lingh: winning POST mineOne
 	log.Debugw("attempting to mine a block", "tipset", types.LogCids(base.TipSet.Cids()))
 	start := build.Clock.Now()
 
@@ -496,6 +497,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg,
 
 	tSeed := build.Clock.Now()
 
+	// lingh: winning POST
 	postProof, err := m.epp.ComputeProof(ctx, mbi.Sectors, prand)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to compute winning post proof: %w", err)
