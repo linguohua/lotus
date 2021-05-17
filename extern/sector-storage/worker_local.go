@@ -39,7 +39,6 @@ type WorkerConfig struct {
 type ExecutorFunc func() (ffiwrapper.Storage, error)
 
 type LocalWorker struct {
-	groupId    string
 	storage    stores.Store
 	localStore *stores.Local
 	sindex     stores.SectorIndex
@@ -59,14 +58,13 @@ type LocalWorker struct {
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 	store stores.Store, local *stores.Local, sindex stores.SectorIndex,
-	ret storiface.WorkerReturn, cst *statestore.StateStore, groupId string) *LocalWorker {
+	ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
 	acceptTasks := map[sealtasks.TaskType]struct{}{}
 	for _, taskType := range wcfg.TaskTypes {
 		acceptTasks[taskType] = struct{}{}
 	}
 
 	w := &LocalWorker{
-		groupId:    groupId,
 		storage:    store,
 		localStore: local,
 		sindex:     sindex,
@@ -111,8 +109,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 }
 
 func NewLocalWorker(wcfg WorkerConfig, store stores.Store, local *stores.Local, sindex stores.SectorIndex,
-	ret storiface.WorkerReturn, cst *statestore.StateStore, groupId string) *LocalWorker {
-	return newLocalWorker(nil, wcfg, store, local, sindex, ret, cst, groupId)
+	ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
+	return newLocalWorker(nil, wcfg, store, local, sindex, ret, cst)
 }
 
 type localWorkerPathProvider struct {
@@ -517,7 +515,6 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 
 	return storiface.WorkerInfo{
 		Hostname: hostname,
-		GroupId:  l.groupId,
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,
