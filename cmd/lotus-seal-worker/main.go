@@ -161,6 +161,11 @@ var runCmd = &cli.Command{
 			Usage:    "specify the role of worker, valid value are: APx,P1,P2,C2",
 			Required: true,
 		},
+		&cli.StringFlag{
+			Name:  "group",
+			Usage: "specify which group the worker belong to",
+			Value: "",
+		},
 	},
 
 	Before: func(cctx *cli.Context) error {
@@ -406,6 +411,8 @@ var runCmd = &cli.Command{
 		}
 
 		// Create / expose the worker
+		groupID := cctx.String("group")
+		log.Infof("worker group id %s", groupID)
 
 		wsts := statestore.New(namespace.Wrap(ds, modules.WorkerCallsPrefix))
 
@@ -413,7 +420,7 @@ var runCmd = &cli.Command{
 			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
 				TaskTypes: taskTypes,
 				NoSwap:    cctx.Bool("no-swap"),
-			}, remote, localStore, nodeApi, nodeApi, wsts),
+			}, remote, localStore, nodeApi, nodeApi, wsts, groupID),
 			localStore: localStore,
 			ls:         lr,
 		}

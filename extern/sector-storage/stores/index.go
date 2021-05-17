@@ -26,6 +26,7 @@ var SkippedHeartbeatThresh = HeartbeatInterval * 5
 type ID string
 
 type StorageInfo struct {
+	GroupID    string
 	ID         ID
 	URLs       []string // TODO: Support non-http transports
 	Weight     uint64
@@ -41,9 +42,10 @@ type HealthReport struct {
 }
 
 type SectorStorageInfo struct {
-	ID     ID
-	URLs   []string // TODO: Support non-http transports
-	Weight uint64
+	GroupID string
+	ID      ID
+	URLs    []string // TODO: Support non-http transports
+	Weight  uint64
 
 	CanSeal  bool
 	CanStore bool
@@ -160,6 +162,7 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 		i.stores[si.ID].info.MaxStorage = si.MaxStorage
 		i.stores[si.ID].info.CanSeal = si.CanSeal
 		i.stores[si.ID].info.CanStore = si.CanStore
+		i.stores[si.ID].info.GroupID = si.GroupID
 
 		return nil
 	}
@@ -297,9 +300,10 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 		}
 
 		out = append(out, SectorStorageInfo{
-			ID:     id,
-			URLs:   urls,
-			Weight: st.info.Weight * n, // storage with more sector types is better
+			GroupID: st.info.GroupID,
+			ID:      id,
+			URLs:    urls,
+			Weight:  st.info.Weight * n, // storage with more sector types is better
 
 			CanSeal:  st.info.CanSeal,
 			CanStore: st.info.CanStore,
@@ -350,9 +354,10 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 			}
 
 			out = append(out, SectorStorageInfo{
-				ID:     id,
-				URLs:   urls,
-				Weight: st.info.Weight * 0, // TODO: something better than just '0'
+				GroupID: st.info.GroupID,
+				ID:      id,
+				URLs:    urls,
+				Weight:  st.info.Weight * 0, // TODO: something better than just '0'
 
 				CanSeal:  st.info.CanSeal,
 				CanStore: st.info.CanStore,
