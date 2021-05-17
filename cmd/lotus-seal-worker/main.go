@@ -161,11 +161,6 @@ var runCmd = &cli.Command{
 			Usage:    "specify the role of worker, valid value are: APx,P1,P2,C2",
 			Required: true,
 		},
-		&cli.StringFlag{
-			Name:  "group",
-			Usage: "specify which group the worker belong to",
-			Value: "",
-		},
 	},
 
 	Before: func(cctx *cli.Context) error {
@@ -245,9 +240,6 @@ var runCmd = &cli.Command{
 				return xerrors.Errorf("get params: %w", err)
 			}
 		}
-
-		groupId := cctx.String("group")
-		log.Infof("worker group id %s", groupId)
 
 		var taskTypes []sealtasks.TaskType
 
@@ -421,7 +413,7 @@ var runCmd = &cli.Command{
 			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
 				TaskTypes: taskTypes,
 				NoSwap:    cctx.Bool("no-swap"),
-			}, remote, localStore, nodeApi, nodeApi, wsts, groupId),
+			}, remote, localStore, nodeApi, nodeApi, wsts),
 			localStore: localStore,
 			ls:         lr,
 		}
