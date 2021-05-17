@@ -143,8 +143,8 @@ var initCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		if os.Getenv("no-fetch-params") != "" {
-			log.Info("no-fetch-params is not empty, skip fetch and check proof parameters")
+		if os.Getenv("no_fetch_params") != "" {
+			log.Info("no_fetch_params is not empty, skip fetch and check proof parameters")
 		} else {
 			log.Info("Checking proof parameters")
 
