@@ -77,6 +77,8 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 		windowsRequested: 0,
 	}
 
+	log.Infof("schedWorker.runWorker, group id:%s, host name:%s", info.GroupID, info.Hostname)
+
 	go sw.handleWorker()
 
 	return nil
