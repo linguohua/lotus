@@ -156,7 +156,18 @@ var runCmd = &cli.Command{
 			Usage: "used when 'listen' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function",
 			Value: "30m",
 		},
+		&cli.StringFlag{
+			Name:     "role",
+			Usage:    "specify the role of worker, valid value are: APx,P1,P2,C2",
+			Required: true,
+		},
+		&cli.StringFlag{
+			Name:  "group",
+			Usage: "specify which group the worker belong to",
+			Value: "",
+		},
 	},
+
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
 			log.Warnf("The '--address' flag is deprecated, it has been replaced by '--listen'")
@@ -226,30 +237,58 @@ var runCmd = &cli.Command{
 			return err
 		}
 
-		if cctx.Bool("commit") {
+		// role
+		role := cctx.String("role")
+		//if cctx.Bool("commit2") {
+		if role == "C2" {
 			if err := paramfetch.GetParams(ctx, build.ParametersJSON(), uint64(ssize)); err != nil {
 				return xerrors.Errorf("get params: %w", err)
 			}
 		}
 
+		groupId := cctx.String("group")
+		log.Infof("worker group id %s", groupId)
+
 		var taskTypes []sealtasks.TaskType
 
-		taskTypes = append(taskTypes, sealtasks.TTFetch, sealtasks.TTCommit1, sealtasks.TTFinalize)
+		// taskTypes = append(taskTypes, sealtasks.TTFetch, sealtasks.TTCommit1, sealtasks.TTFinalize)
 
-		if cctx.Bool("addpiece") {
-			taskTypes = append(taskTypes, sealtasks.TTAddPiece)
-		}
-		if cctx.Bool("precommit1") {
+		// if cctx.Bool("addpiece") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTAddPiece)
+		// }
+		// if cctx.Bool("precommit1") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTPreCommit1)
+		// }
+		// if cctx.Bool("unseal") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTUnseal)
+		// }
+		// if cctx.Bool("precommit2") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
+		// }
+		// if cctx.Bool("commit1") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTCommit1)
+		// }
+		// if cctx.Bool("commit2") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTCommit2)
+		// }
+		// if cctx.Bool("finalize") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTFinalize)
+		// }
+		// if cctx.Bool("fetch") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTFetch)
+		// }
+		switch role {
+		case "APx":
+			taskTypes = append(taskTypes, sealtasks.TTAddPiece,
+				sealtasks.TTCommit1, sealtasks.TTFetch, sealtasks.TTFinalize)
+		case "P1":
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit1)
-		}
-		if cctx.Bool("unseal") {
-			taskTypes = append(taskTypes, sealtasks.TTUnseal)
-		}
-		if cctx.Bool("precommit2") {
+		case "P2":
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
-		}
-		if cctx.Bool("commit") {
+		case "C2":
 			taskTypes = append(taskTypes, sealtasks.TTCommit2)
+		default:
+			return xerrors.Errorf("unsupported role:%s", role)
 		}
 
 		if len(taskTypes) == 0 {
@@ -382,7 +421,7 @@ var runCmd = &cli.Command{
 			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
 				TaskTypes: taskTypes,
 				NoSwap:    cctx.Bool("no-swap"),
-			}, remote, localStore, nodeApi, nodeApi, wsts),
+			}, remote, localStore, nodeApi, nodeApi, wsts, groupId),
 			localStore: localStore,
 			ls:         lr,
 		}

@@ -54,6 +54,7 @@ func (handler *FetchHandler) remoteStatFs(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// lingh: send mega files through http?
 func (handler *FetchHandler) remoteGetSector(w http.ResponseWriter, r *http.Request) {
 	log.Infof("SERVE GET %s", r.URL)
 	vars := mux.Vars(r)

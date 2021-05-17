@@ -154,6 +154,7 @@ func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
 	return stat, err
 }
 
+// lingh: sector path
 func (p *path) sectorPath(sid abi.SectorID, fileType storiface.SectorFileType) string {
 	return filepath.Join(p.local, fileType.String(), storiface.SectorName(sid))
 }
@@ -414,6 +415,7 @@ func (st *Local) Reserve(ctx context.Context, sid storage.SectorRef, ft storifac
 	return done, nil
 }
 
+// lingh: path allocate
 func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, pathType storiface.PathType, op storiface.AcquireMode) (storiface.SectorPaths, storiface.SectorPaths, error) {
 	if existing|allocate != existing^allocate {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")

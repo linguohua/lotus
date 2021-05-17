@@ -111,6 +111,7 @@ func New(ctx context.Context, ls stores.LocalStorage, si stores.SectorIndex, sc 
 		return nil, err
 	}
 
+	// lingh:make sure use local storage
 	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si})
 	if err != nil {
 		return nil, xerrors.Errorf("creating prover instance: %w", err)
@@ -159,9 +160,10 @@ func New(ctx context.Context, ls stores.LocalStorage, si stores.SectorIndex, sc 
 		localTasks = append(localTasks, sealtasks.TTUnseal)
 	}
 
+	// lingh: why must have a local worker?
 	err = m.AddWorker(ctx, NewLocalWorker(WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, si, m, wss))
+	}, stor, lstor, si, m, wss, "")) // groupId is empty
 	if err != nil {
 		return nil, xerrors.Errorf("adding local worker: %w", err)
 	}
@@ -372,6 +374,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	return out, err
 }
 
+// lingh: get work and schedule to worker to do
 func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (out storage.PreCommit1Out, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -407,7 +410,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 
 	selector := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathSealing)
 
-	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, m.schedFetch(sector, storiface.FTUnsealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
+	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.SealPreCommit1(ctx, sector, ticket, pieces))
 		if err != nil {
 			return err
@@ -456,7 +459,7 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, true)
 
-	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit2, selector, m.schedFetch(sector, storiface.FTCache|storiface.FTSealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
+	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit2, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.SealPreCommit2(ctx, sector, phase1Out))
 		if err != nil {
 			return err
@@ -508,7 +511,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 	// generally very cheap / fast, and transferring data is not worth the effort
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, false)
 
-	err = m.sched.Schedule(ctx, sector, sealtasks.TTCommit1, selector, m.schedFetch(sector, storiface.FTCache|storiface.FTSealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
+	err = m.sched.Schedule(ctx, sector, sealtasks.TTCommit1, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.SealCommit1(ctx, sector, ticket, seed, pieces, cids))
 		if err != nil {
 			return err
@@ -567,6 +570,7 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 	return out, waitErr
 }
 
+// lingh: seal-to-storage
 func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, keepUnsealed []storage.Range) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -590,7 +594,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, false)
 
 	err := m.sched.Schedule(ctx, sector, sealtasks.TTFinalize, selector,
-		m.schedFetch(sector, storiface.FTCache|storiface.FTSealed|unsealed, storiface.PathSealing, storiface.AcquireMove),
+		schedNop,
 		func(ctx context.Context, w Worker) error {
 			_, err := m.waitSimpleCall(ctx)(w.FinalizeSector(ctx, sector, keepUnsealed))
 			return err
@@ -607,8 +611,9 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		}
 	}
 
+	// lingh: do move to ceph
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTFetch, fetchSel,
-		m.schedFetch(sector, storiface.FTCache|storiface.FTSealed|moveUnsealed, storiface.PathStorage, storiface.AcquireMove),
+		schedNop,
 		func(ctx context.Context, w Worker) error {
 			_, err := m.waitSimpleCall(ctx)(w.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed|moveUnsealed))
 			return err
