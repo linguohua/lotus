@@ -163,7 +163,7 @@ func New(ctx context.Context, ls stores.LocalStorage, si stores.SectorIndex, sc 
 	// lingh: why must have a local worker?
 	err = m.AddWorker(ctx, NewLocalWorker(WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, si, m, wss, "")) // groupId is empty
+	}, stor, lstor, si, m, wss)) // groupId is empty
 	if err != nil {
 		return nil, xerrors.Errorf("adding local worker: %w", err)
 	}
