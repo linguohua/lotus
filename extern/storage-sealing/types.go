@@ -114,6 +114,9 @@ type SectorInfo struct {
 	LastErr string
 
 	Log []Log
+
+	// lingh: bind sector to specific storage groupID when seal
+	SealStorageGroupID string
 }
 
 func (t *SectorInfo) pieceInfos() []abi.PieceInfo {

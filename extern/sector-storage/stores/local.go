@@ -32,6 +32,8 @@ type StoragePath struct {
 
 // LocalStorageMeta [path]/sectorstore.json
 type LocalStorageMeta struct {
+	GroupID string
+
 	ID ID
 
 	// A high weight means data is more likely to be stored in this path
@@ -200,6 +202,7 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 	}
 
 	err = st.index.StorageAttach(ctx, StorageInfo{
+		GroupID:    meta.GroupID,
 		ID:         meta.ID,
 		URLs:       st.urls,
 		Weight:     meta.Weight,
@@ -264,6 +267,7 @@ func (st *Local) Redeclare(ctx context.Context) error {
 		}
 
 		err = st.index.StorageAttach(ctx, StorageInfo{
+			GroupID:    meta.GroupID,
 			ID:         id,
 			URLs:       st.urls,
 			Weight:     meta.Weight,

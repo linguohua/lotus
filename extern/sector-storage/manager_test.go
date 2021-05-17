@@ -332,7 +332,7 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, idx, m, statestore.New(wds))
+	}, stor, lstor, idx, m, statestore.New(wds), "")
 
 	err := m.AddWorker(ctx, w)
 	require.NoError(t, err)
@@ -368,7 +368,7 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, idx, m, statestore.New(wds))
+	}, stor, lstor, idx, m, statestore.New(wds), "")
 
 	err = m.AddWorker(ctx, w)
 	require.NoError(t, err)
@@ -404,7 +404,7 @@ func TestReenableWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, idx, m, statestore.New(wds))
+	}, stor, lstor, idx, m, statestore.New(wds), "")
 
 	err := m.AddWorker(ctx, w)
 	require.NoError(t, err)
