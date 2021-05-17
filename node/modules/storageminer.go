@@ -99,9 +99,11 @@ func GetParams(spt abi.RegisteredSealProof) error {
 		return nil
 	}
 
-	// TODO: We should fetch the params for the actual proof type, not just based on the size.
-	if err := paramfetch.GetParams(context.TODO(), build.ParametersJSON(), uint64(ssize)); err != nil {
-		return xerrors.Errorf("fetching proof parameters: %w", err)
+	if os.Getenv("no-fetch-params") == "" {
+		// TODO: We should fetch the params for the actual proof type, not just based on the size.
+		if err := paramfetch.GetParams(context.TODO(), build.ParametersJSON(), uint64(ssize)); err != nil {
+			return xerrors.Errorf("fetching proof parameters: %w", err)
+		}
 	}
 
 	return nil
