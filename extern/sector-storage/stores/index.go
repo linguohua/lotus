@@ -3,6 +3,7 @@ package stores
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"net/url"
 	gopath "path"
 	"sort"
@@ -88,6 +89,8 @@ type storageEntry struct {
 
 	lastHeartbeat time.Time
 	heartbeatErr  error
+
+	bindSector abi.SectorID
 }
 
 type Index struct {
@@ -109,10 +112,88 @@ func NewIndex() *Index {
 }
 
 func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
-	return StorageInfo{}, nil
+	log.Infof("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
+	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
+
+	i.lk.RLock()
+	defer i.lk.RUnlock()
+
+	emptySectorID := abi.SectorID{}
+	var candidates []storageEntry
+	for _, p := range i.stores {
+		// only bind to sealing storage
+		if !p.info.CanSeal {
+			log.Infof("TryBindSector2SealStorage storage %s not a seal storage",
+				p.info.ID)
+			continue
+		}
+
+		if p.info.GroupID != groupID {
+			log.Infof("TryBindSector2SealStorage group not match, require:%s, p:%s",
+				groupID, p.info.GroupID)
+			continue
+		}
+
+		if p.bindSector != emptySectorID {
+			if p.bindSector == sector {
+				log.Infof("TryBindSector2SealStorage bind ok, already bind: sector %s, storage ID:%s",
+					sector, p.info.ID)
+				return *p.info, nil
+			}
+
+			log.Infof("TryBindSector2SealStorage storage %s already bind to sector:%s",
+				p.info.ID, p.bindSector)
+			continue
+		}
+
+		if time.Since(p.lastHeartbeat) > SkippedHeartbeatThresh {
+			log.Debugf("TryBindSector2SealStorage not allocating on %s, didn't receive heartbeats for %s",
+				p.info.ID, time.Since(p.lastHeartbeat))
+			continue
+		}
+
+		if p.heartbeatErr != nil {
+			log.Debugf("TryBindSector2SealStorage not allocating on %s, heartbeat error: %s",
+				p.info.ID, p.heartbeatErr)
+			continue
+		}
+
+		candidates = append(candidates, *p)
+	}
+
+	if len(candidates) < 1 {
+		return StorageInfo{}, xerrors.Errorf("TryBindSector2SealStorage failed to found storage to bind %s, groupID:%s",
+			sector, groupID)
+	}
+
+	// random select one
+	candidate := candidates[rand.Int()%len(candidates)]
+	candidate.bindSector = sector
+	// err := i.StorageDeclareSector(ctx, storageID, sector, ft, true)
+	// if err != nil {
+	// 	return StorageInfo{}, err
+	// }
+	log.Infof("TryBindSector2SealStorage bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
+	return *candidate.info, nil
 }
 
 func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
+	log.Infof("UnBindSector2SealStorage: %s", sector)
+	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
+
+	i.lk.RLock()
+	defer i.lk.RUnlock()
+
+	emptySectorID := abi.SectorID{}
+	for _, p := range i.stores {
+		if p.bindSector == sector {
+			p.bindSector = emptySectorID
+			log.Infof("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
+			return nil
+		}
+	}
+
+	log.Infof("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
 	return nil
 }
 
@@ -404,11 +485,17 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 		return nil, xerrors.Errorf("estimating required space: %w", err)
 	}
 
+	emptySectorID := abi.SectorID{}
 	for _, p := range i.stores {
 		if (pathType == storiface.PathSealing) && !p.info.CanSeal {
 			continue
 		}
 		if (pathType == storiface.PathStorage) && !p.info.CanStore {
+			continue
+		}
+
+		if p.bindSector != emptySectorID {
+			log.Info("not allocating on %s, it already bind to sector:%s", p.info.ID, p.bindSector)
 			continue
 		}
 
