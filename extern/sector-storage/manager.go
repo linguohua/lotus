@@ -627,6 +627,9 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		return xerrors.Errorf("moving sector to storage: %w", err)
 	}
 
+	// lingh: release seal storage
+	m.index.UnBindSector2SealStorage(ctx, sector.ID)
+
 	return nil
 }
 
