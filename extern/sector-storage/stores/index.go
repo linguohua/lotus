@@ -316,6 +316,20 @@ loop:
 		})
 	}
 
+	store, exist := i.stores[storageID]
+	if exist && store.info.GroupID != "" {
+		emptySectorID := abi.SectorID{}
+		if store.bindSector == emptySectorID {
+			store.bindSector = s
+			log.Infof("sector %v declared in %s, re-bind store to sector", s, storageID)
+		} else if store.bindSector != s {
+			log.Errorf("sector %v declared in %s, but store has bind to another sector:%v ",
+				s, storageID, store.bindSector)
+		} else {
+			log.Infof("sector %v declared in %s, store already bind to it", s, storageID)
+		}
+	}
+
 	return nil
 }
 
