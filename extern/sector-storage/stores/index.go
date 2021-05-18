@@ -364,6 +364,19 @@ func (i *Index) StorageDropSector(ctx context.Context, storageID ID, s abi.Secto
 		i.sectors[d] = rewritten
 	}
 
+	store, exist := i.stores[storageID]
+	if exist && store.info.GroupID != "" {
+		if store.bindSector == s {
+			log.Infof("sector %v drop in %s, unbind:%v ",
+				s, storageID, store.bindSector)
+			emptySectorID := abi.SectorID{}
+			store.bindSector = emptySectorID
+		} else {
+			log.Infof("sector %v drop in %s, but store bind to another sector",
+				s, storageID, store.bindSector)
+		}
+	}
+
 	return nil
 }
 
