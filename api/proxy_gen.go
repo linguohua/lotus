@@ -708,9 +708,9 @@ type StorageMinerStruct struct {
 
 		StorageTryLock func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) (bool, error) `perm:"admin"`
 
-		TryBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) ``
+		TryBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) `perm:"admin"`
 
-		UnBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID) error ``
+		UnBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID) error `perm:"admin"`
 
 		WorkerConnect func(p0 context.Context, p1 string) error `perm:"admin"`
 
