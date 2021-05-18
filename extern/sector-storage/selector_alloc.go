@@ -61,6 +61,7 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		// 	return true, nil
 		// }
 		if info.GroupID == workerGroupID {
+			log.Infof("found match worker and storage, group id:%s", workerGroupID)
 			return true, nil
 		}
 	}
