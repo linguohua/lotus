@@ -161,6 +161,7 @@ func New(api SealingAPI, fc FeeConfig, events Events, maddr address.Address, ds 
 		},
 	}
 
+	// lingh:SectorInfo pass through all state handler
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
 
 	return s

@@ -35,15 +35,15 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		return false, nil
 	}
 
-	paths, err := whnd.workerRpc.Paths(ctx)
-	if err != nil {
-		return false, xerrors.Errorf("getting worker paths: %w", err)
-	}
+	// paths, err := whnd.workerRpc.Paths(ctx)
+	// if err != nil {
+	// 	return false, xerrors.Errorf("getting worker paths: %w", err)
+	// }
 
-	have := map[stores.ID]struct{}{}
-	for _, path := range paths {
-		have[path.ID] = struct{}{}
-	}
+	// have := map[stores.ID]struct{}{}
+	// for _, path := range paths {
+	// 	have[path.ID] = struct{}{}
+	// }
 
 	ssize, err := spt.SectorSize()
 	if err != nil {
@@ -55,8 +55,12 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		return false, xerrors.Errorf("finding best alloc storage: %w", err)
 	}
 
+	workerGroupID := whnd.info.GroupID
 	for _, info := range best {
-		if _, ok := have[info.ID]; ok {
+		// if _, ok := have[info.ID]; ok {
+		// 	return true, nil
+		// }
+		if info.GroupID == workerGroupID {
 			return true, nil
 		}
 	}
