@@ -126,15 +126,15 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 		return storiface.SectorPaths{}, nil, err
 	}
 
-	releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
-	if err != nil {
-		return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
-	}
+	// releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
+	// if err != nil {
+	// 	return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
+	// }
 
 	log.Debugf("acquired sector %d (e:%d; a:%d): %v", sector, existing, allocate, paths)
 
 	return paths, func() {
-		releaseStorage()
+		// releaseStorage()
 
 		for _, fileType := range pathTypes {
 			if fileType&allocate == 0 {
