@@ -59,6 +59,7 @@ var sectorsPledgeCmd = &cli.Command{
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
 
+		// lingh: pledge beginning
 		id, err := nodeApi.PledgeSector(ctx)
 		if err != nil {
 			return err
