@@ -68,8 +68,8 @@ type SectorIndex interface { // part of storage-miner api
 	StorageLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) error
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)
 
-	TryBindSector2Storage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error)
-	UnBindSector2Storage(ctx context.Context, sector abi.SectorID) error
+	TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error)
+	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 }
 
 type Decl struct {
@@ -108,11 +108,11 @@ func NewIndex() *Index {
 	}
 }
 
-func (i *Index) TryBindSector2Storage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
+func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
 	return StorageInfo{}, nil
 }
 
-func (i *Index) UnBindSector2Storage(ctx context.Context, sector abi.SectorID) error {
+func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
 	return nil
 }
 
