@@ -150,15 +150,18 @@ func (r *Remote) AcquireSector(ctx context.Context, s storage.SectorRef, existin
 	// 		}
 	// 	}
 	// }
+	paths := storiface.SectorPaths{}
+	stores := storiface.SectorPaths{}
+
+	if pathType != storiface.PathSealing {
+		return paths, stores, xerrors.Errorf("-lin- this version only supply remote.AcquireSector with sealing type:%s", pathType)
+	}
 
 	// get the local path, lock storage by sector
-	si, err := r.index.TryBindSector2Storage(ctx, s.ID, r.groupID)
+	si, err := r.index.TryBindSector2SealStorage(ctx, s.ID, r.groupID)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
-
-	paths := storiface.SectorPaths{}
-	stores := storiface.SectorPaths{}
 
 	loclpath := si.URLs[0]
 	for _, fileType := range storiface.PathTypes {
