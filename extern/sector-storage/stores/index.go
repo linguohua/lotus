@@ -67,6 +67,9 @@ type SectorIndex interface { // part of storage-miner api
 	// atomically acquire locks on all sector file types. close ctx to unlock
 	StorageLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) error
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)
+
+	TryBindSector2Storage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error)
+	UnBindSector2Storage(ctx context.Context, sector abi.SectorID) error
 }
 
 type Decl struct {
@@ -103,6 +106,14 @@ func NewIndex() *Index {
 		sectors: map[Decl][]*declMeta{},
 		stores:  map[ID]*storageEntry{},
 	}
+}
+
+func (i *Index) TryBindSector2Storage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
+	return StorageInfo{}, nil
+}
+
+func (i *Index) UnBindSector2Storage(ctx context.Context, sector abi.SectorID) error {
+	return nil
 }
 
 func (i *Index) StorageList(ctx context.Context) (map[ID][]Decl, error) {

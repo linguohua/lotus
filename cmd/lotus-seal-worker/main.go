@@ -397,7 +397,8 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("could not get api info: %w", err)
 		}
 
-		remote := stores.NewRemote(localStore, nodeApi, sminfo.AuthHeader(), cctx.Int("parallel-fetch-limit"))
+		groupID := cctx.String("group")
+		remote := stores.NewRemote(localStore, nodeApi, sminfo.AuthHeader(), cctx.Int("parallel-fetch-limit"), groupID)
 
 		fh := &stores.FetchHandler{Local: localStore}
 		remoteHandler := func(w http.ResponseWriter, r *http.Request) {
@@ -411,7 +412,7 @@ var runCmd = &cli.Command{
 		}
 
 		// Create / expose the worker
-		groupID := cctx.String("group")
+
 		log.Infof("worker group id %s", groupID)
 
 		wsts := statestore.New(namespace.Wrap(ds, modules.WorkerCallsPrefix))
