@@ -204,7 +204,7 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 	err = st.index.StorageAttach(ctx, StorageInfo{
 		GroupID:    meta.GroupID,
 		ID:         meta.ID,
-		URLs:       st.urls,
+		URLs:       []string{p},
 		Weight:     meta.Weight,
 		MaxStorage: meta.MaxStorage,
 		CanSeal:    meta.CanSeal,
