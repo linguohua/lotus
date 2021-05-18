@@ -3,10 +3,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
-	"io"
-	"time"
-
+	"encoding/json"
+	"fmt"
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
@@ -16,12 +16,15 @@ import (
 	"github.com/filecoin-project/go-jsonrpc/auth"
 	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
@@ -29,6 +32,7 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 	marketevents "github.com/filecoin-project/lotus/markets/loggers"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
@@ -36,22 +40,42 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	protocol "github.com/libp2p/go-libp2p-core/protocol"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	ma "github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
 	xerrors "golang.org/x/xerrors"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
 )
 
+
 type ChainIOStruct struct {
+
 	Internal struct {
+
 		ChainHasObj func(p0 context.Context, p1 cid.Cid) (bool, error) ``
 
 		ChainReadObj func(p0 context.Context, p1 cid.Cid) ([]byte, error) ``
+
 	}
 }
 
 type ChainIOStub struct {
+
 }
 
 type CommonStruct struct {
+
 	Internal struct {
+
 		AuthNew func(p0 context.Context, p1 []auth.Permission) ([]byte, error) `perm:"admin"`
 
 		AuthVerify func(p0 context.Context, p1 string) ([]auth.Permission, error) `perm:"read"`
@@ -64,7 +88,7 @@ type CommonStruct struct {
 
 		LogList func(p0 context.Context) ([]string, error) `perm:"write"`
 
-		LogSetLevel func(p0 context.Context, p1 string, p2 string) error `perm:"write"`
+		LogSetLevel func(p0 context.Context, p1 string, p2 string) (error) `perm:"write"`
 
 		NetAddrsListen func(p0 context.Context) (peer.AddrInfo, error) `perm:"read"`
 
@@ -78,17 +102,17 @@ type CommonStruct struct {
 
 		NetBandwidthStatsByProtocol func(p0 context.Context) (map[protocol.ID]metrics.Stats, error) `perm:"read"`
 
-		NetBlockAdd func(p0 context.Context, p1 NetBlockList) error `perm:"admin"`
+		NetBlockAdd func(p0 context.Context, p1 NetBlockList) (error) `perm:"admin"`
 
 		NetBlockList func(p0 context.Context) (NetBlockList, error) `perm:"read"`
 
-		NetBlockRemove func(p0 context.Context, p1 NetBlockList) error `perm:"admin"`
+		NetBlockRemove func(p0 context.Context, p1 NetBlockList) (error) `perm:"admin"`
 
-		NetConnect func(p0 context.Context, p1 peer.AddrInfo) error `perm:"write"`
+		NetConnect func(p0 context.Context, p1 peer.AddrInfo) (error) `perm:"write"`
 
 		NetConnectedness func(p0 context.Context, p1 peer.ID) (network.Connectedness, error) `perm:"read"`
 
-		NetDisconnect func(p0 context.Context, p1 peer.ID) error `perm:"write"`
+		NetDisconnect func(p0 context.Context, p1 peer.ID) (error) `perm:"write"`
 
 		NetFindPeer func(p0 context.Context, p1 peer.ID) (peer.AddrInfo, error) `perm:"read"`
 
@@ -100,22 +124,26 @@ type CommonStruct struct {
 
 		Session func(p0 context.Context) (uuid.UUID, error) `perm:"read"`
 
-		Shutdown func(p0 context.Context) error `perm:"admin"`
+		Shutdown func(p0 context.Context) (error) `perm:"admin"`
 
 		Version func(p0 context.Context) (APIVersion, error) `perm:"read"`
+
 	}
 }
 
 type CommonStub struct {
+
 }
 
 type FullNodeStruct struct {
+
 	CommonStruct
 
 	Internal struct {
+
 		BeaconGetEntry func(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) `perm:"read"`
 
-		ChainDeleteObj func(p0 context.Context, p1 cid.Cid) error `perm:"admin"`
+		ChainDeleteObj func(p0 context.Context, p1 cid.Cid) (error) `perm:"admin"`
 
 		ChainExport func(p0 context.Context, p1 abi.ChainEpoch, p2 bool, p3 types.TipSetKey) (<-chan []byte, error) `perm:"read"`
 
@@ -151,7 +179,7 @@ type FullNodeStruct struct {
 
 		ChainReadObj func(p0 context.Context, p1 cid.Cid) ([]byte, error) `perm:"read"`
 
-		ChainSetHead func(p0 context.Context, p1 types.TipSetKey) error `perm:"admin"`
+		ChainSetHead func(p0 context.Context, p1 types.TipSetKey) (error) `perm:"admin"`
 
 		ChainStatObj func(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (ObjStat, error) `perm:"read"`
 
@@ -159,9 +187,9 @@ type FullNodeStruct struct {
 
 		ClientCalcCommP func(p0 context.Context, p1 string) (*CommPRet, error) `perm:"write"`
 
-		ClientCancelDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error `perm:"write"`
+		ClientCancelDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) `perm:"write"`
 
-		ClientCancelRetrievalDeal func(p0 context.Context, p1 retrievalmarket.DealID) error `perm:"write"`
+		ClientCancelRetrievalDeal func(p0 context.Context, p1 retrievalmarket.DealID) (error) `perm:"write"`
 
 		ClientDataTransferUpdates func(p0 context.Context) (<-chan DataTransferChannel, error) `perm:"write"`
 
@@ -171,7 +199,7 @@ type FullNodeStruct struct {
 
 		ClientFindData func(p0 context.Context, p1 cid.Cid, p2 *cid.Cid) ([]QueryOffer, error) `perm:"read"`
 
-		ClientGenCar func(p0 context.Context, p1 FileRef, p2 string) error `perm:"write"`
+		ClientGenCar func(p0 context.Context, p1 FileRef, p2 string) (error) `perm:"write"`
 
 		ClientGetDealInfo func(p0 context.Context, p1 cid.Cid) (*DealInfo, error) `perm:"read"`
 
@@ -193,19 +221,19 @@ type FullNodeStruct struct {
 
 		ClientQueryAsk func(p0 context.Context, p1 peer.ID, p2 address.Address) (*storagemarket.StorageAsk, error) `perm:"read"`
 
-		ClientRemoveImport func(p0 context.Context, p1 multistore.StoreID) error `perm:"admin"`
+		ClientRemoveImport func(p0 context.Context, p1 multistore.StoreID) (error) `perm:"admin"`
 
-		ClientRestartDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error `perm:"write"`
+		ClientRestartDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) `perm:"write"`
 
-		ClientRetrieve func(p0 context.Context, p1 RetrievalOrder, p2 *FileRef) error `perm:"admin"`
+		ClientRetrieve func(p0 context.Context, p1 RetrievalOrder, p2 *FileRef) (error) `perm:"admin"`
 
-		ClientRetrieveTryRestartInsufficientFunds func(p0 context.Context, p1 address.Address) error `perm:"write"`
+		ClientRetrieveTryRestartInsufficientFunds func(p0 context.Context, p1 address.Address) (error) `perm:"write"`
 
 		ClientRetrieveWithEvents func(p0 context.Context, p1 RetrievalOrder, p2 *FileRef) (<-chan marketevents.RetrievalEvent, error) `perm:"admin"`
 
 		ClientStartDeal func(p0 context.Context, p1 *StartDealParams) (*cid.Cid, error) `perm:"admin"`
 
-		CreateBackup func(p0 context.Context, p1 string) error `perm:"admin"`
+		CreateBackup func(p0 context.Context, p1 string) (error) `perm:"admin"`
 
 		GasEstimateFeeCap func(p0 context.Context, p1 *types.Message, p2 int64, p3 types.TipSetKey) (types.BigInt, error) `perm:"read"`
 
@@ -219,7 +247,7 @@ type FullNodeStruct struct {
 
 		MarketGetReserved func(p0 context.Context, p1 address.Address) (types.BigInt, error) `perm:"sign"`
 
-		MarketReleaseFunds func(p0 context.Context, p1 address.Address, p2 types.BigInt) error `perm:"sign"`
+		MarketReleaseFunds func(p0 context.Context, p1 address.Address, p2 types.BigInt) (error) `perm:"sign"`
 
 		MarketReserveFunds func(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (cid.Cid, error) `perm:"sign"`
 
@@ -235,7 +263,7 @@ type FullNodeStruct struct {
 
 		MpoolBatchPushUntrusted func(p0 context.Context, p1 []*types.SignedMessage) ([]cid.Cid, error) `perm:"write"`
 
-		MpoolClear func(p0 context.Context, p1 bool) error `perm:"write"`
+		MpoolClear func(p0 context.Context, p1 bool) (error) `perm:"write"`
 
 		MpoolGetConfig func(p0 context.Context) (*types.MpoolConfig, error) `perm:"read"`
 
@@ -251,7 +279,7 @@ type FullNodeStruct struct {
 
 		MpoolSelect func(p0 context.Context, p1 types.TipSetKey, p2 float64) ([]*types.SignedMessage, error) `perm:"read"`
 
-		MpoolSetConfig func(p0 context.Context, p1 *types.MpoolConfig) error `perm:"admin"`
+		MpoolSetConfig func(p0 context.Context, p1 *types.MpoolConfig) (error) `perm:"admin"`
 
 		MpoolSub func(p0 context.Context) (<-chan MpoolUpdate, error) `perm:"read"`
 
@@ -311,7 +339,7 @@ type FullNodeStruct struct {
 
 		PaychVoucherCheckSpendable func(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher, p3 []byte, p4 []byte) (bool, error) `perm:"read"`
 
-		PaychVoucherCheckValid func(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher) error `perm:"read"`
+		PaychVoucherCheckValid func(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher) (error) `perm:"read"`
 
 		PaychVoucherCreate func(p0 context.Context, p1 address.Address, p2 types.BigInt, p3 uint64) (*VoucherCreateResult, error) `perm:"sign"`
 
@@ -411,19 +439,19 @@ type FullNodeStruct struct {
 
 		SyncCheckBad func(p0 context.Context, p1 cid.Cid) (string, error) `perm:"read"`
 
-		SyncCheckpoint func(p0 context.Context, p1 types.TipSetKey) error `perm:"admin"`
+		SyncCheckpoint func(p0 context.Context, p1 types.TipSetKey) (error) `perm:"admin"`
 
 		SyncIncomingBlocks func(p0 context.Context) (<-chan *types.BlockHeader, error) `perm:"read"`
 
-		SyncMarkBad func(p0 context.Context, p1 cid.Cid) error `perm:"admin"`
+		SyncMarkBad func(p0 context.Context, p1 cid.Cid) (error) `perm:"admin"`
 
 		SyncState func(p0 context.Context) (*SyncState, error) `perm:"read"`
 
-		SyncSubmitBlock func(p0 context.Context, p1 *types.BlockMsg) error `perm:"write"`
+		SyncSubmitBlock func(p0 context.Context, p1 *types.BlockMsg) (error) `perm:"write"`
 
-		SyncUnmarkAllBad func(p0 context.Context) error `perm:"admin"`
+		SyncUnmarkAllBad func(p0 context.Context) (error) `perm:"admin"`
 
-		SyncUnmarkBad func(p0 context.Context, p1 cid.Cid) error `perm:"admin"`
+		SyncUnmarkBad func(p0 context.Context, p1 cid.Cid) (error) `perm:"admin"`
 
 		SyncValidateTipset func(p0 context.Context, p1 types.TipSetKey) (bool, error) `perm:"read"`
 
@@ -431,7 +459,7 @@ type FullNodeStruct struct {
 
 		WalletDefaultAddress func(p0 context.Context) (address.Address, error) `perm:"write"`
 
-		WalletDelete func(p0 context.Context, p1 address.Address) error `perm:"admin"`
+		WalletDelete func(p0 context.Context, p1 address.Address) (error) `perm:"admin"`
 
 		WalletExport func(p0 context.Context, p1 address.Address) (*types.KeyInfo, error) `perm:"admin"`
 
@@ -443,7 +471,7 @@ type FullNodeStruct struct {
 
 		WalletNew func(p0 context.Context, p1 types.KeyType) (address.Address, error) `perm:"write"`
 
-		WalletSetDefault func(p0 context.Context, p1 address.Address) error `perm:"write"`
+		WalletSetDefault func(p0 context.Context, p1 address.Address) (error) `perm:"write"`
 
 		WalletSign func(p0 context.Context, p1 address.Address, p2 []byte) (*crypto.Signature, error) `perm:"sign"`
 
@@ -452,15 +480,20 @@ type FullNodeStruct struct {
 		WalletValidateAddress func(p0 context.Context, p1 string) (address.Address, error) `perm:"read"`
 
 		WalletVerify func(p0 context.Context, p1 address.Address, p2 []byte, p3 *crypto.Signature) (bool, error) `perm:"read"`
+
 	}
 }
 
 type FullNodeStub struct {
+
 	CommonStub
+
 }
 
 type GatewayStruct struct {
+
 	Internal struct {
+
 		ChainGetBlockMessages func(p0 context.Context, p1 cid.Cid) (*BlockMessages, error) ``
 
 		ChainGetMessage func(p0 context.Context, p1 cid.Cid) (*types.Message, error) ``
@@ -518,25 +551,33 @@ type GatewayStruct struct {
 		StateWaitMsg func(p0 context.Context, p1 cid.Cid, p2 uint64, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) ``
 
 		WalletBalance func(p0 context.Context, p1 address.Address) (types.BigInt, error) ``
+
 	}
 }
 
 type GatewayStub struct {
+
 }
 
 type SignableStruct struct {
+
 	Internal struct {
-		Sign func(p0 context.Context, p1 SignFunc) error ``
+
+		Sign func(p0 context.Context, p1 SignFunc) (error) ``
+
 	}
 }
 
 type SignableStub struct {
+
 }
 
 type StorageMinerStruct struct {
+
 	CommonStruct
 
 	Internal struct {
+
 		ActorAddress func(p0 context.Context) (address.Address, error) `perm:"read"`
 
 		ActorAddressConfig func(p0 context.Context) (AddressConfig, error) `perm:"read"`
@@ -547,7 +588,7 @@ type StorageMinerStruct struct {
 
 		ComputeProof func(p0 context.Context, p1 []builtin.SectorInfo, p2 abi.PoStRandomness) ([]builtin.PoStProof, error) `perm:"read"`
 
-		CreateBackup func(p0 context.Context, p1 string) error `perm:"admin"`
+		CreateBackup func(p0 context.Context, p1 string) (error) `perm:"admin"`
 
 		DealsConsiderOfflineRetrievalDeals func(p0 context.Context) (bool, error) `perm:"admin"`
 
@@ -561,27 +602,27 @@ type StorageMinerStruct struct {
 
 		DealsConsiderVerifiedStorageDeals func(p0 context.Context) (bool, error) `perm:"admin"`
 
-		DealsImportData func(p0 context.Context, p1 cid.Cid, p2 string) error `perm:"admin"`
+		DealsImportData func(p0 context.Context, p1 cid.Cid, p2 string) (error) `perm:"admin"`
 
 		DealsList func(p0 context.Context) ([]MarketDeal, error) `perm:"admin"`
 
 		DealsPieceCidBlocklist func(p0 context.Context) ([]cid.Cid, error) `perm:"admin"`
 
-		DealsSetConsiderOfflineRetrievalDeals func(p0 context.Context, p1 bool) error `perm:"admin"`
+		DealsSetConsiderOfflineRetrievalDeals func(p0 context.Context, p1 bool) (error) `perm:"admin"`
 
-		DealsSetConsiderOfflineStorageDeals func(p0 context.Context, p1 bool) error `perm:"admin"`
+		DealsSetConsiderOfflineStorageDeals func(p0 context.Context, p1 bool) (error) `perm:"admin"`
 
-		DealsSetConsiderOnlineRetrievalDeals func(p0 context.Context, p1 bool) error `perm:"admin"`
+		DealsSetConsiderOnlineRetrievalDeals func(p0 context.Context, p1 bool) (error) `perm:"admin"`
 
-		DealsSetConsiderOnlineStorageDeals func(p0 context.Context, p1 bool) error `perm:"admin"`
+		DealsSetConsiderOnlineStorageDeals func(p0 context.Context, p1 bool) (error) `perm:"admin"`
 
-		DealsSetConsiderUnverifiedStorageDeals func(p0 context.Context, p1 bool) error `perm:"admin"`
+		DealsSetConsiderUnverifiedStorageDeals func(p0 context.Context, p1 bool) (error) `perm:"admin"`
 
-		DealsSetConsiderVerifiedStorageDeals func(p0 context.Context, p1 bool) error `perm:"admin"`
+		DealsSetConsiderVerifiedStorageDeals func(p0 context.Context, p1 bool) (error) `perm:"admin"`
 
-		DealsSetPieceCidBlocklist func(p0 context.Context, p1 []cid.Cid) error `perm:"admin"`
+		DealsSetPieceCidBlocklist func(p0 context.Context, p1 []cid.Cid) (error) `perm:"admin"`
 
-		MarketCancelDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error `perm:"write"`
+		MarketCancelDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) `perm:"write"`
 
 		MarketDataTransferUpdates func(p0 context.Context) (<-chan DataTransferChannel, error) `perm:"write"`
 
@@ -591,7 +632,7 @@ type StorageMinerStruct struct {
 
 		MarketGetRetrievalAsk func(p0 context.Context) (*retrievalmarket.Ask, error) `perm:"read"`
 
-		MarketImportDealData func(p0 context.Context, p1 cid.Cid, p2 string) error `perm:"write"`
+		MarketImportDealData func(p0 context.Context, p1 cid.Cid, p2 string) (error) `perm:"write"`
 
 		MarketListDataTransfers func(p0 context.Context) ([]DataTransferChannel, error) `perm:"write"`
 
@@ -603,13 +644,13 @@ type StorageMinerStruct struct {
 
 		MarketPendingDeals func(p0 context.Context) (PendingDealInfo, error) `perm:"write"`
 
-		MarketPublishPendingDeals func(p0 context.Context) error `perm:"admin"`
+		MarketPublishPendingDeals func(p0 context.Context) (error) `perm:"admin"`
 
-		MarketRestartDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error `perm:"write"`
+		MarketRestartDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) `perm:"write"`
 
-		MarketSetAsk func(p0 context.Context, p1 types.BigInt, p2 types.BigInt, p3 abi.ChainEpoch, p4 abi.PaddedPieceSize, p5 abi.PaddedPieceSize) error `perm:"admin"`
+		MarketSetAsk func(p0 context.Context, p1 types.BigInt, p2 types.BigInt, p3 abi.ChainEpoch, p4 abi.PaddedPieceSize, p5 abi.PaddedPieceSize) (error) `perm:"admin"`
 
-		MarketSetRetrievalAsk func(p0 context.Context, p1 *retrievalmarket.Ask) error `perm:"admin"`
+		MarketSetRetrievalAsk func(p0 context.Context, p1 *retrievalmarket.Ask) (error) `perm:"admin"`
 
 		MiningBase func(p0 context.Context) (*types.TipSet, error) `perm:"read"`
 
@@ -623,29 +664,29 @@ type StorageMinerStruct struct {
 
 		PledgeSector func(p0 context.Context) (abi.SectorID, error) `perm:"write"`
 
-		ReturnAddPiece func(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error `perm:"admin"`
+		ReturnAddPiece func(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnFetch func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error `perm:"admin"`
+		ReturnFetch func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnFinalizeSector func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error `perm:"admin"`
+		ReturnFinalizeSector func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnMoveStorage func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error `perm:"admin"`
+		ReturnMoveStorage func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnReadPiece func(p0 context.Context, p1 storiface.CallID, p2 bool, p3 *storiface.CallError) error `perm:"admin"`
+		ReturnReadPiece func(p0 context.Context, p1 storiface.CallID, p2 bool, p3 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnReleaseUnsealed func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error `perm:"admin"`
+		ReturnReleaseUnsealed func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnSealCommit1 func(p0 context.Context, p1 storiface.CallID, p2 storage.Commit1Out, p3 *storiface.CallError) error `perm:"admin"`
+		ReturnSealCommit1 func(p0 context.Context, p1 storiface.CallID, p2 storage.Commit1Out, p3 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnSealCommit2 func(p0 context.Context, p1 storiface.CallID, p2 storage.Proof, p3 *storiface.CallError) error `perm:"admin"`
+		ReturnSealCommit2 func(p0 context.Context, p1 storiface.CallID, p2 storage.Proof, p3 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnSealPreCommit1 func(p0 context.Context, p1 storiface.CallID, p2 storage.PreCommit1Out, p3 *storiface.CallError) error `perm:"admin"`
+		ReturnSealPreCommit1 func(p0 context.Context, p1 storiface.CallID, p2 storage.PreCommit1Out, p3 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnSealPreCommit2 func(p0 context.Context, p1 storiface.CallID, p2 storage.SectorCids, p3 *storiface.CallError) error `perm:"admin"`
+		ReturnSealPreCommit2 func(p0 context.Context, p1 storiface.CallID, p2 storage.SectorCids, p3 *storiface.CallError) (error) `perm:"admin"`
 
-		ReturnUnsealPiece func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error `perm:"admin"`
+		ReturnUnsealPiece func(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) `perm:"admin"`
 
-		SealingAbort func(p0 context.Context, p1 storiface.CallID) error `perm:"admin"`
+		SealingAbort func(p0 context.Context, p1 storiface.CallID) (error) `perm:"admin"`
 
 		SealingSchedDiag func(p0 context.Context, p1 bool) (interface{}, error) `perm:"admin"`
 
@@ -653,17 +694,17 @@ type StorageMinerStruct struct {
 
 		SectorGetSealDelay func(p0 context.Context) (time.Duration, error) `perm:"read"`
 
-		SectorMarkForUpgrade func(p0 context.Context, p1 abi.SectorNumber) error `perm:"admin"`
+		SectorMarkForUpgrade func(p0 context.Context, p1 abi.SectorNumber) (error) `perm:"admin"`
 
-		SectorRemove func(p0 context.Context, p1 abi.SectorNumber) error `perm:"admin"`
+		SectorRemove func(p0 context.Context, p1 abi.SectorNumber) (error) `perm:"admin"`
 
-		SectorSetExpectedSealDuration func(p0 context.Context, p1 time.Duration) error `perm:"write"`
+		SectorSetExpectedSealDuration func(p0 context.Context, p1 time.Duration) (error) `perm:"write"`
 
-		SectorSetSealDelay func(p0 context.Context, p1 time.Duration) error `perm:"write"`
+		SectorSetSealDelay func(p0 context.Context, p1 time.Duration) (error) `perm:"write"`
 
-		SectorStartSealing func(p0 context.Context, p1 abi.SectorNumber) error `perm:"write"`
+		SectorStartSealing func(p0 context.Context, p1 abi.SectorNumber) (error) `perm:"write"`
 
-		SectorTerminate func(p0 context.Context, p1 abi.SectorNumber) error `perm:"admin"`
+		SectorTerminate func(p0 context.Context, p1 abi.SectorNumber) (error) `perm:"admin"`
 
 		SectorTerminateFlush func(p0 context.Context) (*cid.Cid, error) `perm:"admin"`
 
@@ -679,17 +720,17 @@ type StorageMinerStruct struct {
 
 		SectorsSummary func(p0 context.Context) (map[SectorState]int, error) `perm:"read"`
 
-		SectorsUpdate func(p0 context.Context, p1 abi.SectorNumber, p2 SectorState) error `perm:"admin"`
+		SectorsUpdate func(p0 context.Context, p1 abi.SectorNumber, p2 SectorState) (error) `perm:"admin"`
 
-		StorageAddLocal func(p0 context.Context, p1 string) error `perm:"admin"`
+		StorageAddLocal func(p0 context.Context, p1 string) (error) `perm:"admin"`
 
-		StorageAttach func(p0 context.Context, p1 stores.StorageInfo, p2 fsutil.FsStat) error `perm:"admin"`
+		StorageAttach func(p0 context.Context, p1 stores.StorageInfo, p2 fsutil.FsStat) (error) `perm:"admin"`
 
 		StorageBestAlloc func(p0 context.Context, p1 storiface.SectorFileType, p2 abi.SectorSize, p3 storiface.PathType) ([]stores.StorageInfo, error) `perm:"admin"`
 
-		StorageDeclareSector func(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType, p4 bool) error `perm:"admin"`
+		StorageDeclareSector func(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType, p4 bool) (error) `perm:"admin"`
 
-		StorageDropSector func(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType) error `perm:"admin"`
+		StorageDropSector func(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType) (error) `perm:"admin"`
 
 		StorageFindSector func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 abi.SectorSize, p4 bool) ([]stores.SectorStorageInfo, error) `perm:"admin"`
 
@@ -699,29 +740,38 @@ type StorageMinerStruct struct {
 
 		StorageLocal func(p0 context.Context) (map[stores.ID]string, error) `perm:"admin"`
 
-		StorageLock func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) error `perm:"admin"`
+		StorageLock func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) (error) `perm:"admin"`
 
-		StorageReportHealth func(p0 context.Context, p1 stores.ID, p2 stores.HealthReport) error `perm:"admin"`
+		StorageReportHealth func(p0 context.Context, p1 stores.ID, p2 stores.HealthReport) (error) `perm:"admin"`
 
 		StorageStat func(p0 context.Context, p1 stores.ID) (fsutil.FsStat, error) `perm:"admin"`
 
 		StorageTryLock func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) (bool, error) `perm:"admin"`
 
-		WorkerConnect func(p0 context.Context, p1 string) error `perm:"admin"`
+		TryBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) ``
+
+		UnBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID) (error) ``
+
+		WorkerConnect func(p0 context.Context, p1 string) (error) `perm:"admin"`
 
 		WorkerJobs func(p0 context.Context) (map[uuid.UUID][]storiface.WorkerJob, error) `perm:"admin"`
 
 		WorkerStats func(p0 context.Context) (map[uuid.UUID]storiface.WorkerStats, error) `perm:"admin"`
+
 	}
 }
 
 type StorageMinerStub struct {
+
 	CommonStub
+
 }
 
 type WalletStruct struct {
+
 	Internal struct {
-		WalletDelete func(p0 context.Context, p1 address.Address) error ``
+
+		WalletDelete func(p0 context.Context, p1 address.Address) (error) ``
 
 		WalletExport func(p0 context.Context, p1 address.Address) (*types.KeyInfo, error) ``
 
@@ -734,14 +784,18 @@ type WalletStruct struct {
 		WalletNew func(p0 context.Context, p1 types.KeyType) (address.Address, error) ``
 
 		WalletSign func(p0 context.Context, p1 address.Address, p2 []byte, p3 MsgMeta) (*crypto.Signature, error) ``
+
 	}
 }
 
 type WalletStub struct {
+
 }
 
 type WorkerStruct struct {
+
 	Internal struct {
+
 		AddPiece func(p0 context.Context, p1 storage.SectorRef, p2 []abi.UnpaddedPieceSize, p3 abi.UnpaddedPieceSize, p4 storage.Data) (storiface.CallID, error) `perm:"admin"`
 
 		Enabled func(p0 context.Context) (bool, error) `perm:"admin"`
@@ -762,7 +816,7 @@ type WorkerStruct struct {
 
 		ReleaseUnsealed func(p0 context.Context, p1 storage.SectorRef, p2 []storage.Range) (storiface.CallID, error) `perm:"admin"`
 
-		Remove func(p0 context.Context, p1 abi.SectorID) error `perm:"admin"`
+		Remove func(p0 context.Context, p1 abi.SectorID) (error) `perm:"admin"`
 
 		SealCommit1 func(p0 context.Context, p1 storage.SectorRef, p2 abi.SealRandomness, p3 abi.InteractiveSealRandomness, p4 []abi.PieceInfo, p5 storage.SectorCids) (storiface.CallID, error) `perm:"admin"`
 
@@ -774,13 +828,13 @@ type WorkerStruct struct {
 
 		Session func(p0 context.Context) (uuid.UUID, error) `perm:"admin"`
 
-		SetEnabled func(p0 context.Context, p1 bool) error `perm:"admin"`
+		SetEnabled func(p0 context.Context, p1 bool) (error) `perm:"admin"`
 
-		StorageAddLocal func(p0 context.Context, p1 string) error `perm:"admin"`
+		StorageAddLocal func(p0 context.Context, p1 string) (error) `perm:"admin"`
 
-		TaskDisable func(p0 context.Context, p1 sealtasks.TaskType) error `perm:"admin"`
+		TaskDisable func(p0 context.Context, p1 sealtasks.TaskType) (error) `perm:"admin"`
 
-		TaskEnable func(p0 context.Context, p1 sealtasks.TaskType) error `perm:"admin"`
+		TaskEnable func(p0 context.Context, p1 sealtasks.TaskType) (error) `perm:"admin"`
 
 		TaskTypes func(p0 context.Context) (map[sealtasks.TaskType]struct{}, error) `perm:"admin"`
 
@@ -788,12 +842,18 @@ type WorkerStruct struct {
 
 		Version func(p0 context.Context) (Version, error) `perm:"admin"`
 
-		WaitQuiet func(p0 context.Context) error `perm:"admin"`
+		WaitQuiet func(p0 context.Context) (error) `perm:"admin"`
+
 	}
 }
 
 type WorkerStub struct {
+
 }
+
+
+
+
 
 func (s *ChainIOStruct) ChainHasObj(p0 context.Context, p1 cid.Cid) (bool, error) {
 	return s.Internal.ChainHasObj(p0, p1)
@@ -810,6 +870,9 @@ func (s *ChainIOStruct) ChainReadObj(p0 context.Context, p1 cid.Cid) ([]byte, er
 func (s *ChainIOStub) ChainReadObj(p0 context.Context, p1 cid.Cid) ([]byte, error) {
 	return *new([]byte), xerrors.New("method not supported")
 }
+
+
+
 
 func (s *CommonStruct) AuthNew(p0 context.Context, p1 []auth.Permission) ([]byte, error) {
 	return s.Internal.AuthNew(p0, p1)
@@ -859,11 +922,11 @@ func (s *CommonStub) LogList(p0 context.Context) ([]string, error) {
 	return *new([]string), xerrors.New("method not supported")
 }
 
-func (s *CommonStruct) LogSetLevel(p0 context.Context, p1 string, p2 string) error {
+func (s *CommonStruct) LogSetLevel(p0 context.Context, p1 string, p2 string) (error) {
 	return s.Internal.LogSetLevel(p0, p1, p2)
 }
 
-func (s *CommonStub) LogSetLevel(p0 context.Context, p1 string, p2 string) error {
+func (s *CommonStub) LogSetLevel(p0 context.Context, p1 string, p2 string) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -915,11 +978,11 @@ func (s *CommonStub) NetBandwidthStatsByProtocol(p0 context.Context) (map[protoc
 	return *new(map[protocol.ID]metrics.Stats), xerrors.New("method not supported")
 }
 
-func (s *CommonStruct) NetBlockAdd(p0 context.Context, p1 NetBlockList) error {
+func (s *CommonStruct) NetBlockAdd(p0 context.Context, p1 NetBlockList) (error) {
 	return s.Internal.NetBlockAdd(p0, p1)
 }
 
-func (s *CommonStub) NetBlockAdd(p0 context.Context, p1 NetBlockList) error {
+func (s *CommonStub) NetBlockAdd(p0 context.Context, p1 NetBlockList) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -931,19 +994,19 @@ func (s *CommonStub) NetBlockList(p0 context.Context) (NetBlockList, error) {
 	return *new(NetBlockList), xerrors.New("method not supported")
 }
 
-func (s *CommonStruct) NetBlockRemove(p0 context.Context, p1 NetBlockList) error {
+func (s *CommonStruct) NetBlockRemove(p0 context.Context, p1 NetBlockList) (error) {
 	return s.Internal.NetBlockRemove(p0, p1)
 }
 
-func (s *CommonStub) NetBlockRemove(p0 context.Context, p1 NetBlockList) error {
+func (s *CommonStub) NetBlockRemove(p0 context.Context, p1 NetBlockList) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *CommonStruct) NetConnect(p0 context.Context, p1 peer.AddrInfo) error {
+func (s *CommonStruct) NetConnect(p0 context.Context, p1 peer.AddrInfo) (error) {
 	return s.Internal.NetConnect(p0, p1)
 }
 
-func (s *CommonStub) NetConnect(p0 context.Context, p1 peer.AddrInfo) error {
+func (s *CommonStub) NetConnect(p0 context.Context, p1 peer.AddrInfo) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -955,11 +1018,11 @@ func (s *CommonStub) NetConnectedness(p0 context.Context, p1 peer.ID) (network.C
 	return *new(network.Connectedness), xerrors.New("method not supported")
 }
 
-func (s *CommonStruct) NetDisconnect(p0 context.Context, p1 peer.ID) error {
+func (s *CommonStruct) NetDisconnect(p0 context.Context, p1 peer.ID) (error) {
 	return s.Internal.NetDisconnect(p0, p1)
 }
 
-func (s *CommonStub) NetDisconnect(p0 context.Context, p1 peer.ID) error {
+func (s *CommonStub) NetDisconnect(p0 context.Context, p1 peer.ID) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1003,11 +1066,11 @@ func (s *CommonStub) Session(p0 context.Context) (uuid.UUID, error) {
 	return *new(uuid.UUID), xerrors.New("method not supported")
 }
 
-func (s *CommonStruct) Shutdown(p0 context.Context) error {
+func (s *CommonStruct) Shutdown(p0 context.Context) (error) {
 	return s.Internal.Shutdown(p0)
 }
 
-func (s *CommonStub) Shutdown(p0 context.Context) error {
+func (s *CommonStub) Shutdown(p0 context.Context) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1019,6 +1082,9 @@ func (s *CommonStub) Version(p0 context.Context) (APIVersion, error) {
 	return *new(APIVersion), xerrors.New("method not supported")
 }
 
+
+
+
 func (s *FullNodeStruct) BeaconGetEntry(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) {
 	return s.Internal.BeaconGetEntry(p0, p1)
 }
@@ -1027,11 +1093,11 @@ func (s *FullNodeStub) BeaconGetEntry(p0 context.Context, p1 abi.ChainEpoch) (*t
 	return nil, xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ChainDeleteObj(p0 context.Context, p1 cid.Cid) error {
+func (s *FullNodeStruct) ChainDeleteObj(p0 context.Context, p1 cid.Cid) (error) {
 	return s.Internal.ChainDeleteObj(p0, p1)
 }
 
-func (s *FullNodeStub) ChainDeleteObj(p0 context.Context, p1 cid.Cid) error {
+func (s *FullNodeStub) ChainDeleteObj(p0 context.Context, p1 cid.Cid) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1171,11 +1237,11 @@ func (s *FullNodeStub) ChainReadObj(p0 context.Context, p1 cid.Cid) ([]byte, err
 	return *new([]byte), xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ChainSetHead(p0 context.Context, p1 types.TipSetKey) error {
+func (s *FullNodeStruct) ChainSetHead(p0 context.Context, p1 types.TipSetKey) (error) {
 	return s.Internal.ChainSetHead(p0, p1)
 }
 
-func (s *FullNodeStub) ChainSetHead(p0 context.Context, p1 types.TipSetKey) error {
+func (s *FullNodeStub) ChainSetHead(p0 context.Context, p1 types.TipSetKey) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1203,19 +1269,19 @@ func (s *FullNodeStub) ClientCalcCommP(p0 context.Context, p1 string) (*CommPRet
 	return nil, xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ClientCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *FullNodeStruct) ClientCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return s.Internal.ClientCancelDataTransfer(p0, p1, p2, p3)
 }
 
-func (s *FullNodeStub) ClientCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *FullNodeStub) ClientCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ClientCancelRetrievalDeal(p0 context.Context, p1 retrievalmarket.DealID) error {
+func (s *FullNodeStruct) ClientCancelRetrievalDeal(p0 context.Context, p1 retrievalmarket.DealID) (error) {
 	return s.Internal.ClientCancelRetrievalDeal(p0, p1)
 }
 
-func (s *FullNodeStub) ClientCancelRetrievalDeal(p0 context.Context, p1 retrievalmarket.DealID) error {
+func (s *FullNodeStub) ClientCancelRetrievalDeal(p0 context.Context, p1 retrievalmarket.DealID) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1251,11 +1317,11 @@ func (s *FullNodeStub) ClientFindData(p0 context.Context, p1 cid.Cid, p2 *cid.Ci
 	return *new([]QueryOffer), xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ClientGenCar(p0 context.Context, p1 FileRef, p2 string) error {
+func (s *FullNodeStruct) ClientGenCar(p0 context.Context, p1 FileRef, p2 string) (error) {
 	return s.Internal.ClientGenCar(p0, p1, p2)
 }
 
-func (s *FullNodeStub) ClientGenCar(p0 context.Context, p1 FileRef, p2 string) error {
+func (s *FullNodeStub) ClientGenCar(p0 context.Context, p1 FileRef, p2 string) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1339,35 +1405,35 @@ func (s *FullNodeStub) ClientQueryAsk(p0 context.Context, p1 peer.ID, p2 address
 	return nil, xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ClientRemoveImport(p0 context.Context, p1 multistore.StoreID) error {
+func (s *FullNodeStruct) ClientRemoveImport(p0 context.Context, p1 multistore.StoreID) (error) {
 	return s.Internal.ClientRemoveImport(p0, p1)
 }
 
-func (s *FullNodeStub) ClientRemoveImport(p0 context.Context, p1 multistore.StoreID) error {
+func (s *FullNodeStub) ClientRemoveImport(p0 context.Context, p1 multistore.StoreID) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ClientRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *FullNodeStruct) ClientRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return s.Internal.ClientRestartDataTransfer(p0, p1, p2, p3)
 }
 
-func (s *FullNodeStub) ClientRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *FullNodeStub) ClientRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ClientRetrieve(p0 context.Context, p1 RetrievalOrder, p2 *FileRef) error {
+func (s *FullNodeStruct) ClientRetrieve(p0 context.Context, p1 RetrievalOrder, p2 *FileRef) (error) {
 	return s.Internal.ClientRetrieve(p0, p1, p2)
 }
 
-func (s *FullNodeStub) ClientRetrieve(p0 context.Context, p1 RetrievalOrder, p2 *FileRef) error {
+func (s *FullNodeStub) ClientRetrieve(p0 context.Context, p1 RetrievalOrder, p2 *FileRef) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) ClientRetrieveTryRestartInsufficientFunds(p0 context.Context, p1 address.Address) error {
+func (s *FullNodeStruct) ClientRetrieveTryRestartInsufficientFunds(p0 context.Context, p1 address.Address) (error) {
 	return s.Internal.ClientRetrieveTryRestartInsufficientFunds(p0, p1)
 }
 
-func (s *FullNodeStub) ClientRetrieveTryRestartInsufficientFunds(p0 context.Context, p1 address.Address) error {
+func (s *FullNodeStub) ClientRetrieveTryRestartInsufficientFunds(p0 context.Context, p1 address.Address) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1387,11 +1453,11 @@ func (s *FullNodeStub) ClientStartDeal(p0 context.Context, p1 *StartDealParams) 
 	return nil, xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) CreateBackup(p0 context.Context, p1 string) error {
+func (s *FullNodeStruct) CreateBackup(p0 context.Context, p1 string) (error) {
 	return s.Internal.CreateBackup(p0, p1)
 }
 
-func (s *FullNodeStub) CreateBackup(p0 context.Context, p1 string) error {
+func (s *FullNodeStub) CreateBackup(p0 context.Context, p1 string) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1443,11 +1509,11 @@ func (s *FullNodeStub) MarketGetReserved(p0 context.Context, p1 address.Address)
 	return *new(types.BigInt), xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) MarketReleaseFunds(p0 context.Context, p1 address.Address, p2 types.BigInt) error {
+func (s *FullNodeStruct) MarketReleaseFunds(p0 context.Context, p1 address.Address, p2 types.BigInt) (error) {
 	return s.Internal.MarketReleaseFunds(p0, p1, p2)
 }
 
-func (s *FullNodeStub) MarketReleaseFunds(p0 context.Context, p1 address.Address, p2 types.BigInt) error {
+func (s *FullNodeStub) MarketReleaseFunds(p0 context.Context, p1 address.Address, p2 types.BigInt) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1507,11 +1573,11 @@ func (s *FullNodeStub) MpoolBatchPushUntrusted(p0 context.Context, p1 []*types.S
 	return *new([]cid.Cid), xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) MpoolClear(p0 context.Context, p1 bool) error {
+func (s *FullNodeStruct) MpoolClear(p0 context.Context, p1 bool) (error) {
 	return s.Internal.MpoolClear(p0, p1)
 }
 
-func (s *FullNodeStub) MpoolClear(p0 context.Context, p1 bool) error {
+func (s *FullNodeStub) MpoolClear(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1571,11 +1637,11 @@ func (s *FullNodeStub) MpoolSelect(p0 context.Context, p1 types.TipSetKey, p2 fl
 	return *new([]*types.SignedMessage), xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) MpoolSetConfig(p0 context.Context, p1 *types.MpoolConfig) error {
+func (s *FullNodeStruct) MpoolSetConfig(p0 context.Context, p1 *types.MpoolConfig) (error) {
 	return s.Internal.MpoolSetConfig(p0, p1)
 }
 
-func (s *FullNodeStub) MpoolSetConfig(p0 context.Context, p1 *types.MpoolConfig) error {
+func (s *FullNodeStub) MpoolSetConfig(p0 context.Context, p1 *types.MpoolConfig) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -1811,11 +1877,11 @@ func (s *FullNodeStub) PaychVoucherCheckSpendable(p0 context.Context, p1 address
 	return false, xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) PaychVoucherCheckValid(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher) error {
+func (s *FullNodeStruct) PaychVoucherCheckValid(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher) (error) {
 	return s.Internal.PaychVoucherCheckValid(p0, p1, p2)
 }
 
-func (s *FullNodeStub) PaychVoucherCheckValid(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher) error {
+func (s *FullNodeStub) PaychVoucherCheckValid(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2211,11 +2277,11 @@ func (s *FullNodeStub) SyncCheckBad(p0 context.Context, p1 cid.Cid) (string, err
 	return "", xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) SyncCheckpoint(p0 context.Context, p1 types.TipSetKey) error {
+func (s *FullNodeStruct) SyncCheckpoint(p0 context.Context, p1 types.TipSetKey) (error) {
 	return s.Internal.SyncCheckpoint(p0, p1)
 }
 
-func (s *FullNodeStub) SyncCheckpoint(p0 context.Context, p1 types.TipSetKey) error {
+func (s *FullNodeStub) SyncCheckpoint(p0 context.Context, p1 types.TipSetKey) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2227,11 +2293,11 @@ func (s *FullNodeStub) SyncIncomingBlocks(p0 context.Context) (<-chan *types.Blo
 	return nil, xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) SyncMarkBad(p0 context.Context, p1 cid.Cid) error {
+func (s *FullNodeStruct) SyncMarkBad(p0 context.Context, p1 cid.Cid) (error) {
 	return s.Internal.SyncMarkBad(p0, p1)
 }
 
-func (s *FullNodeStub) SyncMarkBad(p0 context.Context, p1 cid.Cid) error {
+func (s *FullNodeStub) SyncMarkBad(p0 context.Context, p1 cid.Cid) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2243,27 +2309,27 @@ func (s *FullNodeStub) SyncState(p0 context.Context) (*SyncState, error) {
 	return nil, xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) SyncSubmitBlock(p0 context.Context, p1 *types.BlockMsg) error {
+func (s *FullNodeStruct) SyncSubmitBlock(p0 context.Context, p1 *types.BlockMsg) (error) {
 	return s.Internal.SyncSubmitBlock(p0, p1)
 }
 
-func (s *FullNodeStub) SyncSubmitBlock(p0 context.Context, p1 *types.BlockMsg) error {
+func (s *FullNodeStub) SyncSubmitBlock(p0 context.Context, p1 *types.BlockMsg) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) SyncUnmarkAllBad(p0 context.Context) error {
+func (s *FullNodeStruct) SyncUnmarkAllBad(p0 context.Context) (error) {
 	return s.Internal.SyncUnmarkAllBad(p0)
 }
 
-func (s *FullNodeStub) SyncUnmarkAllBad(p0 context.Context) error {
+func (s *FullNodeStub) SyncUnmarkAllBad(p0 context.Context) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) SyncUnmarkBad(p0 context.Context, p1 cid.Cid) error {
+func (s *FullNodeStruct) SyncUnmarkBad(p0 context.Context, p1 cid.Cid) (error) {
 	return s.Internal.SyncUnmarkBad(p0, p1)
 }
 
-func (s *FullNodeStub) SyncUnmarkBad(p0 context.Context, p1 cid.Cid) error {
+func (s *FullNodeStub) SyncUnmarkBad(p0 context.Context, p1 cid.Cid) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2291,11 +2357,11 @@ func (s *FullNodeStub) WalletDefaultAddress(p0 context.Context) (address.Address
 	return *new(address.Address), xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) WalletDelete(p0 context.Context, p1 address.Address) error {
+func (s *FullNodeStruct) WalletDelete(p0 context.Context, p1 address.Address) (error) {
 	return s.Internal.WalletDelete(p0, p1)
 }
 
-func (s *FullNodeStub) WalletDelete(p0 context.Context, p1 address.Address) error {
+func (s *FullNodeStub) WalletDelete(p0 context.Context, p1 address.Address) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2339,11 +2405,11 @@ func (s *FullNodeStub) WalletNew(p0 context.Context, p1 types.KeyType) (address.
 	return *new(address.Address), xerrors.New("method not supported")
 }
 
-func (s *FullNodeStruct) WalletSetDefault(p0 context.Context, p1 address.Address) error {
+func (s *FullNodeStruct) WalletSetDefault(p0 context.Context, p1 address.Address) (error) {
 	return s.Internal.WalletSetDefault(p0, p1)
 }
 
-func (s *FullNodeStub) WalletSetDefault(p0 context.Context, p1 address.Address) error {
+func (s *FullNodeStub) WalletSetDefault(p0 context.Context, p1 address.Address) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2378,6 +2444,9 @@ func (s *FullNodeStruct) WalletVerify(p0 context.Context, p1 address.Address, p2
 func (s *FullNodeStub) WalletVerify(p0 context.Context, p1 address.Address, p2 []byte, p3 *crypto.Signature) (bool, error) {
 	return false, xerrors.New("method not supported")
 }
+
+
+
 
 func (s *GatewayStruct) ChainGetBlockMessages(p0 context.Context, p1 cid.Cid) (*BlockMessages, error) {
 	return s.Internal.ChainGetBlockMessages(p0, p1)
@@ -2611,13 +2680,19 @@ func (s *GatewayStub) WalletBalance(p0 context.Context, p1 address.Address) (typ
 	return *new(types.BigInt), xerrors.New("method not supported")
 }
 
-func (s *SignableStruct) Sign(p0 context.Context, p1 SignFunc) error {
+
+
+
+func (s *SignableStruct) Sign(p0 context.Context, p1 SignFunc) (error) {
 	return s.Internal.Sign(p0, p1)
 }
 
-func (s *SignableStub) Sign(p0 context.Context, p1 SignFunc) error {
+func (s *SignableStub) Sign(p0 context.Context, p1 SignFunc) (error) {
 	return xerrors.New("method not supported")
 }
+
+
+
 
 func (s *StorageMinerStruct) ActorAddress(p0 context.Context) (address.Address, error) {
 	return s.Internal.ActorAddress(p0)
@@ -2659,11 +2734,11 @@ func (s *StorageMinerStub) ComputeProof(p0 context.Context, p1 []builtin.SectorI
 	return *new([]builtin.PoStProof), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) CreateBackup(p0 context.Context, p1 string) error {
+func (s *StorageMinerStruct) CreateBackup(p0 context.Context, p1 string) (error) {
 	return s.Internal.CreateBackup(p0, p1)
 }
 
-func (s *StorageMinerStub) CreateBackup(p0 context.Context, p1 string) error {
+func (s *StorageMinerStub) CreateBackup(p0 context.Context, p1 string) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2715,11 +2790,11 @@ func (s *StorageMinerStub) DealsConsiderVerifiedStorageDeals(p0 context.Context)
 	return false, xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsImportData(p0 context.Context, p1 cid.Cid, p2 string) error {
+func (s *StorageMinerStruct) DealsImportData(p0 context.Context, p1 cid.Cid, p2 string) (error) {
 	return s.Internal.DealsImportData(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) DealsImportData(p0 context.Context, p1 cid.Cid, p2 string) error {
+func (s *StorageMinerStub) DealsImportData(p0 context.Context, p1 cid.Cid, p2 string) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2739,67 +2814,67 @@ func (s *StorageMinerStub) DealsPieceCidBlocklist(p0 context.Context) ([]cid.Cid
 	return *new([]cid.Cid), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsSetConsiderOfflineRetrievalDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStruct) DealsSetConsiderOfflineRetrievalDeals(p0 context.Context, p1 bool) (error) {
 	return s.Internal.DealsSetConsiderOfflineRetrievalDeals(p0, p1)
 }
 
-func (s *StorageMinerStub) DealsSetConsiderOfflineRetrievalDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStub) DealsSetConsiderOfflineRetrievalDeals(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsSetConsiderOfflineStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStruct) DealsSetConsiderOfflineStorageDeals(p0 context.Context, p1 bool) (error) {
 	return s.Internal.DealsSetConsiderOfflineStorageDeals(p0, p1)
 }
 
-func (s *StorageMinerStub) DealsSetConsiderOfflineStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStub) DealsSetConsiderOfflineStorageDeals(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsSetConsiderOnlineRetrievalDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStruct) DealsSetConsiderOnlineRetrievalDeals(p0 context.Context, p1 bool) (error) {
 	return s.Internal.DealsSetConsiderOnlineRetrievalDeals(p0, p1)
 }
 
-func (s *StorageMinerStub) DealsSetConsiderOnlineRetrievalDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStub) DealsSetConsiderOnlineRetrievalDeals(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsSetConsiderOnlineStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStruct) DealsSetConsiderOnlineStorageDeals(p0 context.Context, p1 bool) (error) {
 	return s.Internal.DealsSetConsiderOnlineStorageDeals(p0, p1)
 }
 
-func (s *StorageMinerStub) DealsSetConsiderOnlineStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStub) DealsSetConsiderOnlineStorageDeals(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsSetConsiderUnverifiedStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStruct) DealsSetConsiderUnverifiedStorageDeals(p0 context.Context, p1 bool) (error) {
 	return s.Internal.DealsSetConsiderUnverifiedStorageDeals(p0, p1)
 }
 
-func (s *StorageMinerStub) DealsSetConsiderUnverifiedStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStub) DealsSetConsiderUnverifiedStorageDeals(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsSetConsiderVerifiedStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStruct) DealsSetConsiderVerifiedStorageDeals(p0 context.Context, p1 bool) (error) {
 	return s.Internal.DealsSetConsiderVerifiedStorageDeals(p0, p1)
 }
 
-func (s *StorageMinerStub) DealsSetConsiderVerifiedStorageDeals(p0 context.Context, p1 bool) error {
+func (s *StorageMinerStub) DealsSetConsiderVerifiedStorageDeals(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) DealsSetPieceCidBlocklist(p0 context.Context, p1 []cid.Cid) error {
+func (s *StorageMinerStruct) DealsSetPieceCidBlocklist(p0 context.Context, p1 []cid.Cid) (error) {
 	return s.Internal.DealsSetPieceCidBlocklist(p0, p1)
 }
 
-func (s *StorageMinerStub) DealsSetPieceCidBlocklist(p0 context.Context, p1 []cid.Cid) error {
+func (s *StorageMinerStub) DealsSetPieceCidBlocklist(p0 context.Context, p1 []cid.Cid) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) MarketCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *StorageMinerStruct) MarketCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return s.Internal.MarketCancelDataTransfer(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) MarketCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *StorageMinerStub) MarketCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2835,11 +2910,11 @@ func (s *StorageMinerStub) MarketGetRetrievalAsk(p0 context.Context) (*retrieval
 	return nil, xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) MarketImportDealData(p0 context.Context, p1 cid.Cid, p2 string) error {
+func (s *StorageMinerStruct) MarketImportDealData(p0 context.Context, p1 cid.Cid, p2 string) (error) {
 	return s.Internal.MarketImportDealData(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) MarketImportDealData(p0 context.Context, p1 cid.Cid, p2 string) error {
+func (s *StorageMinerStub) MarketImportDealData(p0 context.Context, p1 cid.Cid, p2 string) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2883,35 +2958,35 @@ func (s *StorageMinerStub) MarketPendingDeals(p0 context.Context) (PendingDealIn
 	return *new(PendingDealInfo), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) MarketPublishPendingDeals(p0 context.Context) error {
+func (s *StorageMinerStruct) MarketPublishPendingDeals(p0 context.Context) (error) {
 	return s.Internal.MarketPublishPendingDeals(p0)
 }
 
-func (s *StorageMinerStub) MarketPublishPendingDeals(p0 context.Context) error {
+func (s *StorageMinerStub) MarketPublishPendingDeals(p0 context.Context) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) MarketRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *StorageMinerStruct) MarketRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return s.Internal.MarketRestartDataTransfer(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) MarketRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
+func (s *StorageMinerStub) MarketRestartDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) MarketSetAsk(p0 context.Context, p1 types.BigInt, p2 types.BigInt, p3 abi.ChainEpoch, p4 abi.PaddedPieceSize, p5 abi.PaddedPieceSize) error {
+func (s *StorageMinerStruct) MarketSetAsk(p0 context.Context, p1 types.BigInt, p2 types.BigInt, p3 abi.ChainEpoch, p4 abi.PaddedPieceSize, p5 abi.PaddedPieceSize) (error) {
 	return s.Internal.MarketSetAsk(p0, p1, p2, p3, p4, p5)
 }
 
-func (s *StorageMinerStub) MarketSetAsk(p0 context.Context, p1 types.BigInt, p2 types.BigInt, p3 abi.ChainEpoch, p4 abi.PaddedPieceSize, p5 abi.PaddedPieceSize) error {
+func (s *StorageMinerStub) MarketSetAsk(p0 context.Context, p1 types.BigInt, p2 types.BigInt, p3 abi.ChainEpoch, p4 abi.PaddedPieceSize, p5 abi.PaddedPieceSize) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) MarketSetRetrievalAsk(p0 context.Context, p1 *retrievalmarket.Ask) error {
+func (s *StorageMinerStruct) MarketSetRetrievalAsk(p0 context.Context, p1 *retrievalmarket.Ask) (error) {
 	return s.Internal.MarketSetRetrievalAsk(p0, p1)
 }
 
-func (s *StorageMinerStub) MarketSetRetrievalAsk(p0 context.Context, p1 *retrievalmarket.Ask) error {
+func (s *StorageMinerStub) MarketSetRetrievalAsk(p0 context.Context, p1 *retrievalmarket.Ask) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -2963,99 +3038,99 @@ func (s *StorageMinerStub) PledgeSector(p0 context.Context) (abi.SectorID, error
 	return *new(abi.SectorID), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnAddPiece(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnAddPiece(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) (error) {
 	return s.Internal.ReturnAddPiece(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) ReturnAddPiece(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnAddPiece(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnFetch(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnFetch(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return s.Internal.ReturnFetch(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) ReturnFetch(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnFetch(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnFinalizeSector(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnFinalizeSector(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return s.Internal.ReturnFinalizeSector(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) ReturnFinalizeSector(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnFinalizeSector(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnMoveStorage(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnMoveStorage(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return s.Internal.ReturnMoveStorage(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) ReturnMoveStorage(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnMoveStorage(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnReadPiece(p0 context.Context, p1 storiface.CallID, p2 bool, p3 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnReadPiece(p0 context.Context, p1 storiface.CallID, p2 bool, p3 *storiface.CallError) (error) {
 	return s.Internal.ReturnReadPiece(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) ReturnReadPiece(p0 context.Context, p1 storiface.CallID, p2 bool, p3 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnReadPiece(p0 context.Context, p1 storiface.CallID, p2 bool, p3 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnReleaseUnsealed(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnReleaseUnsealed(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return s.Internal.ReturnReleaseUnsealed(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) ReturnReleaseUnsealed(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnReleaseUnsealed(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnSealCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.Commit1Out, p3 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnSealCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.Commit1Out, p3 *storiface.CallError) (error) {
 	return s.Internal.ReturnSealCommit1(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) ReturnSealCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.Commit1Out, p3 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnSealCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.Commit1Out, p3 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnSealCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.Proof, p3 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnSealCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.Proof, p3 *storiface.CallError) (error) {
 	return s.Internal.ReturnSealCommit2(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) ReturnSealCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.Proof, p3 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnSealCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.Proof, p3 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnSealPreCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.PreCommit1Out, p3 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnSealPreCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.PreCommit1Out, p3 *storiface.CallError) (error) {
 	return s.Internal.ReturnSealPreCommit1(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) ReturnSealPreCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.PreCommit1Out, p3 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnSealPreCommit1(p0 context.Context, p1 storiface.CallID, p2 storage.PreCommit1Out, p3 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnSealPreCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.SectorCids, p3 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnSealPreCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.SectorCids, p3 *storiface.CallError) (error) {
 	return s.Internal.ReturnSealPreCommit2(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) ReturnSealPreCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.SectorCids, p3 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnSealPreCommit2(p0 context.Context, p1 storiface.CallID, p2 storage.SectorCids, p3 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) ReturnUnsealPiece(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStruct) ReturnUnsealPiece(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return s.Internal.ReturnUnsealPiece(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) ReturnUnsealPiece(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) error {
+func (s *StorageMinerStub) ReturnUnsealPiece(p0 context.Context, p1 storiface.CallID, p2 *storiface.CallError) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SealingAbort(p0 context.Context, p1 storiface.CallID) error {
+func (s *StorageMinerStruct) SealingAbort(p0 context.Context, p1 storiface.CallID) (error) {
 	return s.Internal.SealingAbort(p0, p1)
 }
 
-func (s *StorageMinerStub) SealingAbort(p0 context.Context, p1 storiface.CallID) error {
+func (s *StorageMinerStub) SealingAbort(p0 context.Context, p1 storiface.CallID) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3083,51 +3158,51 @@ func (s *StorageMinerStub) SectorGetSealDelay(p0 context.Context) (time.Duration
 	return *new(time.Duration), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SectorMarkForUpgrade(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStruct) SectorMarkForUpgrade(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return s.Internal.SectorMarkForUpgrade(p0, p1)
 }
 
-func (s *StorageMinerStub) SectorMarkForUpgrade(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStub) SectorMarkForUpgrade(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SectorRemove(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStruct) SectorRemove(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return s.Internal.SectorRemove(p0, p1)
 }
 
-func (s *StorageMinerStub) SectorRemove(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStub) SectorRemove(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SectorSetExpectedSealDuration(p0 context.Context, p1 time.Duration) error {
+func (s *StorageMinerStruct) SectorSetExpectedSealDuration(p0 context.Context, p1 time.Duration) (error) {
 	return s.Internal.SectorSetExpectedSealDuration(p0, p1)
 }
 
-func (s *StorageMinerStub) SectorSetExpectedSealDuration(p0 context.Context, p1 time.Duration) error {
+func (s *StorageMinerStub) SectorSetExpectedSealDuration(p0 context.Context, p1 time.Duration) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SectorSetSealDelay(p0 context.Context, p1 time.Duration) error {
+func (s *StorageMinerStruct) SectorSetSealDelay(p0 context.Context, p1 time.Duration) (error) {
 	return s.Internal.SectorSetSealDelay(p0, p1)
 }
 
-func (s *StorageMinerStub) SectorSetSealDelay(p0 context.Context, p1 time.Duration) error {
+func (s *StorageMinerStub) SectorSetSealDelay(p0 context.Context, p1 time.Duration) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SectorStartSealing(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStruct) SectorStartSealing(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return s.Internal.SectorStartSealing(p0, p1)
 }
 
-func (s *StorageMinerStub) SectorStartSealing(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStub) SectorStartSealing(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SectorTerminate(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStruct) SectorTerminate(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return s.Internal.SectorTerminate(p0, p1)
 }
 
-func (s *StorageMinerStub) SectorTerminate(p0 context.Context, p1 abi.SectorNumber) error {
+func (s *StorageMinerStub) SectorTerminate(p0 context.Context, p1 abi.SectorNumber) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3187,27 +3262,27 @@ func (s *StorageMinerStub) SectorsSummary(p0 context.Context) (map[SectorState]i
 	return *new(map[SectorState]int), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) SectorsUpdate(p0 context.Context, p1 abi.SectorNumber, p2 SectorState) error {
+func (s *StorageMinerStruct) SectorsUpdate(p0 context.Context, p1 abi.SectorNumber, p2 SectorState) (error) {
 	return s.Internal.SectorsUpdate(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) SectorsUpdate(p0 context.Context, p1 abi.SectorNumber, p2 SectorState) error {
+func (s *StorageMinerStub) SectorsUpdate(p0 context.Context, p1 abi.SectorNumber, p2 SectorState) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) StorageAddLocal(p0 context.Context, p1 string) error {
+func (s *StorageMinerStruct) StorageAddLocal(p0 context.Context, p1 string) (error) {
 	return s.Internal.StorageAddLocal(p0, p1)
 }
 
-func (s *StorageMinerStub) StorageAddLocal(p0 context.Context, p1 string) error {
+func (s *StorageMinerStub) StorageAddLocal(p0 context.Context, p1 string) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) StorageAttach(p0 context.Context, p1 stores.StorageInfo, p2 fsutil.FsStat) error {
+func (s *StorageMinerStruct) StorageAttach(p0 context.Context, p1 stores.StorageInfo, p2 fsutil.FsStat) (error) {
 	return s.Internal.StorageAttach(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) StorageAttach(p0 context.Context, p1 stores.StorageInfo, p2 fsutil.FsStat) error {
+func (s *StorageMinerStub) StorageAttach(p0 context.Context, p1 stores.StorageInfo, p2 fsutil.FsStat) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3219,19 +3294,19 @@ func (s *StorageMinerStub) StorageBestAlloc(p0 context.Context, p1 storiface.Sec
 	return *new([]stores.StorageInfo), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) StorageDeclareSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType, p4 bool) error {
+func (s *StorageMinerStruct) StorageDeclareSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType, p4 bool) (error) {
 	return s.Internal.StorageDeclareSector(p0, p1, p2, p3, p4)
 }
 
-func (s *StorageMinerStub) StorageDeclareSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType, p4 bool) error {
+func (s *StorageMinerStub) StorageDeclareSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType, p4 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) StorageDropSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType) error {
+func (s *StorageMinerStruct) StorageDropSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType) (error) {
 	return s.Internal.StorageDropSector(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) StorageDropSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType) error {
+func (s *StorageMinerStub) StorageDropSector(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3267,19 +3342,19 @@ func (s *StorageMinerStub) StorageLocal(p0 context.Context) (map[stores.ID]strin
 	return *new(map[stores.ID]string), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) StorageLock(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) error {
+func (s *StorageMinerStruct) StorageLock(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) (error) {
 	return s.Internal.StorageLock(p0, p1, p2, p3)
 }
 
-func (s *StorageMinerStub) StorageLock(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) error {
+func (s *StorageMinerStub) StorageLock(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) StorageReportHealth(p0 context.Context, p1 stores.ID, p2 stores.HealthReport) error {
+func (s *StorageMinerStruct) StorageReportHealth(p0 context.Context, p1 stores.ID, p2 stores.HealthReport) (error) {
 	return s.Internal.StorageReportHealth(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) StorageReportHealth(p0 context.Context, p1 stores.ID, p2 stores.HealthReport) error {
+func (s *StorageMinerStub) StorageReportHealth(p0 context.Context, p1 stores.ID, p2 stores.HealthReport) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3299,11 +3374,27 @@ func (s *StorageMinerStub) StorageTryLock(p0 context.Context, p1 abi.SectorID, p
 	return false, xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) WorkerConnect(p0 context.Context, p1 string) error {
+func (s *StorageMinerStruct) TryBindSector2SealStorage(p0 context.Context, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) {
+	return s.Internal.TryBindSector2SealStorage(p0, p1, p2)
+}
+
+func (s *StorageMinerStub) TryBindSector2SealStorage(p0 context.Context, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) {
+	return *new(stores.StorageInfo), xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) UnBindSector2SealStorage(p0 context.Context, p1 abi.SectorID) (error) {
+	return s.Internal.UnBindSector2SealStorage(p0, p1)
+}
+
+func (s *StorageMinerStub) UnBindSector2SealStorage(p0 context.Context, p1 abi.SectorID) (error) {
+	return xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) WorkerConnect(p0 context.Context, p1 string) (error) {
 	return s.Internal.WorkerConnect(p0, p1)
 }
 
-func (s *StorageMinerStub) WorkerConnect(p0 context.Context, p1 string) error {
+func (s *StorageMinerStub) WorkerConnect(p0 context.Context, p1 string) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3323,11 +3414,14 @@ func (s *StorageMinerStub) WorkerStats(p0 context.Context) (map[uuid.UUID]storif
 	return *new(map[uuid.UUID]storiface.WorkerStats), xerrors.New("method not supported")
 }
 
-func (s *WalletStruct) WalletDelete(p0 context.Context, p1 address.Address) error {
+
+
+
+func (s *WalletStruct) WalletDelete(p0 context.Context, p1 address.Address) (error) {
 	return s.Internal.WalletDelete(p0, p1)
 }
 
-func (s *WalletStub) WalletDelete(p0 context.Context, p1 address.Address) error {
+func (s *WalletStub) WalletDelete(p0 context.Context, p1 address.Address) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3378,6 +3472,9 @@ func (s *WalletStruct) WalletSign(p0 context.Context, p1 address.Address, p2 []b
 func (s *WalletStub) WalletSign(p0 context.Context, p1 address.Address, p2 []byte, p3 MsgMeta) (*crypto.Signature, error) {
 	return nil, xerrors.New("method not supported")
 }
+
+
+
 
 func (s *WorkerStruct) AddPiece(p0 context.Context, p1 storage.SectorRef, p2 []abi.UnpaddedPieceSize, p3 abi.UnpaddedPieceSize, p4 storage.Data) (storiface.CallID, error) {
 	return s.Internal.AddPiece(p0, p1, p2, p3, p4)
@@ -3459,11 +3556,11 @@ func (s *WorkerStub) ReleaseUnsealed(p0 context.Context, p1 storage.SectorRef, p
 	return *new(storiface.CallID), xerrors.New("method not supported")
 }
 
-func (s *WorkerStruct) Remove(p0 context.Context, p1 abi.SectorID) error {
+func (s *WorkerStruct) Remove(p0 context.Context, p1 abi.SectorID) (error) {
 	return s.Internal.Remove(p0, p1)
 }
 
-func (s *WorkerStub) Remove(p0 context.Context, p1 abi.SectorID) error {
+func (s *WorkerStub) Remove(p0 context.Context, p1 abi.SectorID) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3507,35 +3604,35 @@ func (s *WorkerStub) Session(p0 context.Context) (uuid.UUID, error) {
 	return *new(uuid.UUID), xerrors.New("method not supported")
 }
 
-func (s *WorkerStruct) SetEnabled(p0 context.Context, p1 bool) error {
+func (s *WorkerStruct) SetEnabled(p0 context.Context, p1 bool) (error) {
 	return s.Internal.SetEnabled(p0, p1)
 }
 
-func (s *WorkerStub) SetEnabled(p0 context.Context, p1 bool) error {
+func (s *WorkerStub) SetEnabled(p0 context.Context, p1 bool) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *WorkerStruct) StorageAddLocal(p0 context.Context, p1 string) error {
+func (s *WorkerStruct) StorageAddLocal(p0 context.Context, p1 string) (error) {
 	return s.Internal.StorageAddLocal(p0, p1)
 }
 
-func (s *WorkerStub) StorageAddLocal(p0 context.Context, p1 string) error {
+func (s *WorkerStub) StorageAddLocal(p0 context.Context, p1 string) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *WorkerStruct) TaskDisable(p0 context.Context, p1 sealtasks.TaskType) error {
+func (s *WorkerStruct) TaskDisable(p0 context.Context, p1 sealtasks.TaskType) (error) {
 	return s.Internal.TaskDisable(p0, p1)
 }
 
-func (s *WorkerStub) TaskDisable(p0 context.Context, p1 sealtasks.TaskType) error {
+func (s *WorkerStub) TaskDisable(p0 context.Context, p1 sealtasks.TaskType) (error) {
 	return xerrors.New("method not supported")
 }
 
-func (s *WorkerStruct) TaskEnable(p0 context.Context, p1 sealtasks.TaskType) error {
+func (s *WorkerStruct) TaskEnable(p0 context.Context, p1 sealtasks.TaskType) (error) {
 	return s.Internal.TaskEnable(p0, p1)
 }
 
-func (s *WorkerStub) TaskEnable(p0 context.Context, p1 sealtasks.TaskType) error {
+func (s *WorkerStub) TaskEnable(p0 context.Context, p1 sealtasks.TaskType) (error) {
 	return xerrors.New("method not supported")
 }
 
@@ -3563,13 +3660,15 @@ func (s *WorkerStub) Version(p0 context.Context) (Version, error) {
 	return *new(Version), xerrors.New("method not supported")
 }
 
-func (s *WorkerStruct) WaitQuiet(p0 context.Context) error {
+func (s *WorkerStruct) WaitQuiet(p0 context.Context) (error) {
 	return s.Internal.WaitQuiet(p0)
 }
 
-func (s *WorkerStub) WaitQuiet(p0 context.Context) error {
+func (s *WorkerStub) WaitQuiet(p0 context.Context) (error) {
 	return xerrors.New("method not supported")
 }
+
+
 
 var _ ChainIO = new(ChainIOStruct)
 var _ Common = new(CommonStruct)
@@ -3579,3 +3678,5 @@ var _ Signable = new(SignableStruct)
 var _ StorageMiner = new(StorageMinerStruct)
 var _ Wallet = new(WalletStruct)
 var _ Worker = new(WorkerStruct)
+
+
