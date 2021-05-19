@@ -314,6 +314,10 @@ func (sw *schedWorker) waitForUpdates() (update bool, sched bool, ok bool) {
 	case w := <-sw.scheduledWindows:
 		sw.worker.wndLk.Lock()
 		sw.worker.activeWindows = append(sw.worker.activeWindows, w)
+		taskType := w.todo.taskType
+		count, _ := sw.worker.requestedWindowsCounter[taskType]
+		count = count - 1
+		sw.worker.requestedWindowsCounter[taskType] = count
 		sw.worker.wndLk.Unlock()
 		return true, false, true
 	case <-sw.taskDone:
