@@ -19,8 +19,6 @@ type schedWorker struct {
 	heartbeatTimer   *time.Ticker
 	scheduledWindows chan *schedWindow
 	taskDone         chan struct{}
-
-	windowsRequested int
 }
 
 // context only used for startup
@@ -51,6 +49,8 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 
 		closingMgr: make(chan struct{}),
 		closedMgr:  make(chan struct{}),
+
+		requestedWindowsCounter: make(map[sealtasks.TaskType]int),
 	}
 
 	wid := WorkerID(sessID)
@@ -79,8 +79,6 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 		heartbeatTimer:   time.NewTicker(stores.HeartbeatInterval),
 		scheduledWindows: make(chan *schedWindow, schedWindowsCount),
 		taskDone:         make(chan struct{}, 1),
-
-		windowsRequested: 0,
 	}
 
 	log.Infof("schedWorker.runWorker, group id:%s, host name:%s", info.GroupID, info.Hostname)
@@ -206,7 +204,8 @@ func (sw *schedWorker) disable(ctx context.Context) error {
 	}
 
 	sw.worker.activeWindows = sw.worker.activeWindows[:0]
-	sw.windowsRequested = 0
+	sw.worker.requestedWindowsCounter = make(map[sealtasks.TaskType]int)
+
 	return nil
 }
 
@@ -275,17 +274,33 @@ func (sw *schedWorker) requestWindowsByTasktype(taskType sealtasks.TaskType, i i
 	return true
 }
 
+func (sw *schedWorker) releaseWindowOfTasktype(taskType sealtasks.TaskType) {
+	sw.worker.wndLk.Lock()
+	count, _ := sw.worker.requestedWindowsCounter[taskType]
+	count = count + 1
+	sw.worker.requestedWindowsCounter[taskType] = count
+	sw.worker.wndLk.Unlock()
+}
+
 func (sw *schedWorker) requestWindows() bool {
 	// acceptTaskType, validcounts := sw.worker.info.Resources.ValidTaskType()
 	for i, t := range sw.worker.acceptTaskTypes {
 		x := sw.worker.taskTypeValidcounts[i]
 		// lingh: TODO lock protect
-		diff := int(x) - int(sw.worker.active.used(t))
+
+		sw.worker.wndLk.Lock()
+		count, _ := sw.worker.requestedWindowsCounter[t]
+		sw.worker.wndLk.Unlock()
+		diff := int(x) - count
 		if diff > 0 {
 			b := sw.requestWindowsByTasktype(t, diff)
 			if !b {
 				return false
 			}
+
+			sw.worker.wndLk.Lock()
+			sw.worker.requestedWindowsCounter[t] = count + diff
+			sw.worker.wndLk.Unlock()
 		}
 	}
 
@@ -394,7 +409,7 @@ func (sw *schedWorker) processAssignedWindows() {
 		// todo := firstWindow.todo[tidx]
 		todo := firstWindow.todo
 		log.Debugf("assign worker sector %d", todo.sector.ID.Number)
-		err := sw.startProcessingTask(sw.taskDone, todo)
+		err := sw.startProcessingTask(sw.taskDone, firstWindow)
 
 		if err != nil {
 			log.Errorf("startProcessingTask error: %+v", err)
@@ -404,18 +419,18 @@ func (sw *schedWorker) processAssignedWindows() {
 		// Note: we're not freeing window.allocated resources here very much on purpose
 		//copy(firstWindow.todo[tidx:], firstWindow.todo[tidx+1:])
 		//firstWindow.todo[len(firstWindow.todo)-1] = nil
-		firstWindow.todo = nil // firstWindow.todo[:len(firstWindow.todo)-1]
+		// firstWindow.todo = nil // firstWindow.todo[:len(firstWindow.todo)-1]
 		//
 
 		copy(worker.activeWindows, worker.activeWindows[1:])
 		worker.activeWindows[len(worker.activeWindows)-1] = nil
 		worker.activeWindows = worker.activeWindows[:len(worker.activeWindows)-1]
 
-		sw.windowsRequested--
+		//sw.windowsRequested--
 	}
 }
 
-func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRequest) error {
+func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *schedWindow) error {
 	w, sh := sw.worker, sw.sched
 
 	// needRes := ResourceTable[req.taskType][req.sector.ProofType]
@@ -426,6 +441,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 
 	go func() {
 		// first run the prepare step (e.g. fetching sector data from other worker)
+		req := window.todo
 		err := req.prepare(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
 		sh.workersLk.Lock()
 
@@ -474,10 +490,10 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 			case <-sh.closing:
 				log.Warnf("scheduler closed while sending response")
 			}
-
 			return nil
 		})
 
+		sw.releaseWindowOfTasktype(window.todo.taskType)
 		sh.workersLk.Unlock()
 
 		// This error should always be nil, since nothing is setting it, but just to be safe:

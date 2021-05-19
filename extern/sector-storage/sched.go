@@ -88,6 +88,8 @@ type workerHandle struct {
 
 	wndLk         sync.Mutex
 	activeWindows []*schedWindow
+	// count all request windows
+	requestedWindowsCounter map[sealtasks.TaskType]int
 
 	enabled bool
 

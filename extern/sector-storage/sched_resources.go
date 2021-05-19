@@ -9,7 +9,7 @@ import (
 
 func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerResources,
 	taskType sealtasks.TaskType, locker sync.Locker, cb func() error) error {
-	for !a.canHandleRequest(taskType, id, "withResources") {
+	for !a.canHandleRequest(wr, taskType, id, "withResources") {
 		if a.cond == nil {
 			a.cond = sync.NewCond(locker)
 		}
@@ -26,25 +26,6 @@ func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerResource
 	}
 
 	return err
-}
-
-func (a *activeResources) used(taskType sealtasks.TaskType) uint32 {
-	switch taskType {
-	case sealtasks.TTAddPiece:
-		return a.AP
-	case sealtasks.TTCommit1:
-		return a.C1
-	case sealtasks.TTCommit2:
-		return a.C2
-	case sealtasks.TTPreCommit1:
-		return a.P1
-	case sealtasks.TTPreCommit2:
-		return a.P2
-	case sealtasks.TTFinalize:
-		return a.FIN
-	}
-
-	return 0
 }
 
 func (a *activeResources) add(wr storiface.WorkerResources, taskType sealtasks.TaskType) {
@@ -117,30 +98,30 @@ func (a *activeResources) free(wr storiface.WorkerResources, taskType sealtasks.
 	}
 }
 
-func (a *activeResources) canHandleRequest(taskType sealtasks.TaskType, wid WorkerID, caller string) bool {
+func (a *activeResources) canHandleRequest(wr storiface.WorkerResources, taskType sealtasks.TaskType, wid WorkerID, caller string) bool {
 	switch taskType {
 	case sealtasks.TTAddPiece:
-		if a.AP > 0 {
+		if a.AP < wr.AP {
 			return true
 		}
 	case sealtasks.TTCommit1:
-		if a.C1 > 0 {
+		if a.C1 < wr.C1 {
 			return true
 		}
 	case sealtasks.TTCommit2:
-		if a.C2 > 0 {
+		if a.C2 < wr.C2 {
 			return true
 		}
 	case sealtasks.TTPreCommit1:
-		if a.P1 > 0 {
+		if a.P1 < wr.P1 {
 			return true
 		}
 	case sealtasks.TTPreCommit2:
-		if a.P2 > 0 {
+		if a.P2 < wr.P2 {
 			return true
 		}
 	case sealtasks.TTFinalize:
-		if a.FIN > 0 {
+		if a.FIN < wr.FIN {
 			return true
 		}
 	}
