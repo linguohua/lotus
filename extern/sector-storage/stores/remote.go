@@ -363,8 +363,8 @@ func (r *Remote) deleteFromRemote(ctx context.Context, url string) error {
 	// if resp.StatusCode != 200 {
 	// 	return xerrors.Errorf("non-200 code: %d", resp.StatusCode)
 	// }
-
-	return xerrors.Errorf("-lin- this version not support Delete %s", url)
+	log.Infof("-lin- this version not support Delete %s", url)
+	return nil
 }
 
 func (r *Remote) FsStat(ctx context.Context, id ID) (fsutil.FsStat, error) {
