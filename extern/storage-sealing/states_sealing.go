@@ -374,7 +374,9 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 
 	randHeight := pci.PreCommitEpoch + policy.GetPreCommitChallengeDelay()
 
+	log.Infof("handleWaitSeed, call ChainAt begin, sector number:%d", sector.SectorNumber)
 	err = m.events.ChainAt(func(ectx context.Context, _ TipSetToken, curH abi.ChainEpoch) error {
+		log.Infof("handleWaitSeed, call ChainAt completed, sector number:%d", sector.SectorNumber)
 		// in case of null blocks the randomness can land after the tipset we
 		// get from the events API
 		tok, _, err := m.api.ChainHead(ctx.Context())
@@ -399,12 +401,14 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 
 		return nil
 	}, func(ctx context.Context, ts TipSetToken) error {
-		log.Warn("revert in interactive commit sector step")
+		log.Warnf("handleWaitSeed, call ChainAt completed, revert in interactive commit sector step, sector:%d",
+			sector.SectorNumber)
 		// TODO: need to cancel running process and restart...
 		return nil
 	}, InteractivePoRepConfidence, randHeight)
 	if err != nil {
-		log.Warn("waitForPreCommitMessage ChainAt errored: ", err)
+		log.Warnf("handleWaitSeed, call ChainAt completed, waitForPreCommitMessage ChainAt errored:%v, sector:%d",
+			err, sector.SectorNumber)
 	}
 
 	return nil
