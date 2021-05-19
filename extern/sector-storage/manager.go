@@ -413,7 +413,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 	// lingh: not use newAllocSelector
 	// selector := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathSealing)
 	// lingh: not allow fetch
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, false)
+	selector := newExistingSelector(m.index, sector.ID, storiface.FTUnsealed|storiface.FTCache|storiface.FTSealed, false)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.SealPreCommit1(ctx, sector, ticket, pieces))
