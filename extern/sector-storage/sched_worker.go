@@ -317,7 +317,12 @@ func (sw *schedWorker) waitForUpdates() (update bool, sched bool, ok bool) {
 		taskType := w.todo.taskType
 		count, _ := sw.worker.requestedWindowsCounter[taskType]
 		count = count - 1
-		sw.worker.requestedWindowsCounter[taskType] = count
+		if count >= 0 {
+			sw.worker.requestedWindowsCounter[taskType] = count
+		} else {
+			log.Errorf("waitForUpdates error, worker request window counter:%d < 0, tasktype:%s",
+				count, taskType)
+		}
 		sw.worker.wndLk.Unlock()
 		return true, false, true
 	case <-sw.taskDone:
