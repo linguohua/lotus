@@ -659,6 +659,10 @@ func (m *Manager) Remove(ctx context.Context, sector storage.SectorRef) error {
 		err = multierror.Append(err, xerrors.Errorf("removing sector (unsealed): %w", rerr))
 	}
 
+	if err == nil {
+		m.index.UnBindSector2SealStorage(ctx, sector.ID)
+	}
+
 	return err
 }
 
