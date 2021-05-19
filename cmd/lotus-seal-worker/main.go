@@ -292,8 +292,17 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("no task types specified")
 		}
 
-		// Open repo
+		if role != "Apx" {
+			if !cctx.Bool("no-local-storage") {
+				return xerrors.Errorf("seal worker of role:%s must use 'no-local-storage' to start", role)
+			}
+		} else {
+			if cctx.Bool("no-local-storage") {
+				return xerrors.Errorf("seal worker of role:%s must not use 'no-local-storage' to start", role)
+			}
+		}
 
+		// Open repo
 		repoPath := cctx.String(FlagWorkerRepo)
 		r, err := repo.NewFS(repoPath)
 		if err != nil {
