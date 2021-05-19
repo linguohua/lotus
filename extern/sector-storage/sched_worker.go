@@ -490,10 +490,17 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 			case <-sh.closing:
 				log.Warnf("scheduler closed while sending response")
 			}
+
+			// release window
+			sw.releaseWindowOfTasktype(window.todo.taskType)
+			select {
+			// notify request window
+			case taskDone <- struct{}{}:
+			case <-sh.closing:
+			}
 			return nil
 		})
 
-		sw.releaseWindowOfTasktype(window.todo.taskType)
 		sh.workersLk.Unlock()
 
 		// This error should always be nil, since nothing is setting it, but just to be safe:
