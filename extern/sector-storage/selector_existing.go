@@ -65,8 +65,11 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		if info.GroupID == workerGroupID {
 			return true, nil
 		}
+
+		log.Infof("existingSelector.ok group id not match info:%s != worker:%d", info.GroupID, workerGroupID)
 	}
 
+	log.Infof("existingSelector.ok return false, task type:%s", task)
 	return false, nil
 }
 
