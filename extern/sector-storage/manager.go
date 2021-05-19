@@ -141,32 +141,33 @@ func New(ctx context.Context, ls stores.LocalStorage, si stores.SectorIndex, sc 
 
 	go m.sched.runSched()
 
-	localTasks := []sealtasks.TaskType{
-		sealtasks.TTCommit1, sealtasks.TTFinalize, sealtasks.TTFetch, sealtasks.TTReadUnsealed,
-	}
-	if sc.AllowAddPiece {
-		localTasks = append(localTasks, sealtasks.TTAddPiece)
-	}
-	if sc.AllowPreCommit1 {
-		localTasks = append(localTasks, sealtasks.TTPreCommit1)
-	}
-	if sc.AllowPreCommit2 {
-		localTasks = append(localTasks, sealtasks.TTPreCommit2)
-	}
-	if sc.AllowCommit {
-		localTasks = append(localTasks, sealtasks.TTCommit2)
-	}
-	if sc.AllowUnseal {
-		localTasks = append(localTasks, sealtasks.TTUnseal)
-	}
+	// lingh: no local worker
+	// localTasks := []sealtasks.TaskType{
+	// 	sealtasks.TTCommit1, sealtasks.TTFinalize, sealtasks.TTFetch, sealtasks.TTReadUnsealed,
+	// }
+	// if sc.AllowAddPiece {
+	// 	localTasks = append(localTasks, sealtasks.TTAddPiece)
+	// }
+	// if sc.AllowPreCommit1 {
+	// 	localTasks = append(localTasks, sealtasks.TTPreCommit1)
+	// }
+	// if sc.AllowPreCommit2 {
+	// 	localTasks = append(localTasks, sealtasks.TTPreCommit2)
+	// }
+	// if sc.AllowCommit {
+	// 	localTasks = append(localTasks, sealtasks.TTCommit2)
+	// }
+	// if sc.AllowUnseal {
+	// 	localTasks = append(localTasks, sealtasks.TTUnseal)
+	// }
 
-	// lingh: why must have a local worker?
-	err = m.AddWorker(ctx, NewLocalWorker(WorkerConfig{
-		TaskTypes: localTasks,
-	}, stor, lstor, si, m, wss, "")) // groupID is empty
-	if err != nil {
-		return nil, xerrors.Errorf("adding local worker: %w", err)
-	}
+	// // lingh: why must have a local worker?
+	// err = m.AddWorker(ctx, NewLocalWorker(WorkerConfig{
+	// 	TaskTypes: localTasks,
+	// }, stor, lstor, si, m, wss, "")) // groupID is empty
+	// if err != nil {
+	// 	return nil, xerrors.Errorf("adding local worker: %w", err)
+	// }
 
 	return m, nil
 }
