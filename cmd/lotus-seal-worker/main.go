@@ -292,14 +292,8 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("no task types specified")
 		}
 
-		if role != "Apx" {
-			if !cctx.Bool("no-local-storage") {
-				return xerrors.Errorf("seal worker of role:%s must use 'no-local-storage' to start", role)
-			}
-		} else {
-			if cctx.Bool("no-local-storage") {
-				return xerrors.Errorf("seal worker of role:%s must not use 'no-local-storage' to start", role)
-			}
+		if !cctx.Bool("no-local-storage") {
+			return xerrors.Errorf("seal worker of role:%s must use 'no-local-storage' to start", role)
 		}
 
 		// Open repo
