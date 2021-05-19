@@ -25,7 +25,7 @@ var SelectorTimeout = 5 * time.Second
 var InitWait = 3 * time.Second
 
 var (
-	SchedWindows = 2
+// SchedWindows = 2
 )
 
 func getPriority(ctx context.Context) int {
@@ -78,8 +78,11 @@ type workerHandle struct {
 
 	info storiface.WorkerInfo
 
-	preparing *activeResources
-	active    *activeResources
+	acceptTaskTypes     []sealtasks.TaskType
+	taskTypeValidcounts []uint32
+
+	//preparing *activeResources
+	active *activeResources
 
 	lk sync.Mutex
 
@@ -95,14 +98,17 @@ type workerHandle struct {
 }
 
 type schedWindowRequest struct {
-	worker WorkerID
+	worker         WorkerID
+	acceptTaskType sealtasks.TaskType
 
 	done chan *schedWindow
 }
 
 type schedWindow struct {
-	allocated activeResources
-	todo      []*workerRequest
+	//allocated activeResources
+
+	// todo []*workerRequest
+	todo *workerRequest
 }
 
 type workerDisableReq struct {
@@ -112,10 +118,16 @@ type workerDisableReq struct {
 }
 
 type activeResources struct {
-	memUsedMin uint64
-	memUsedMax uint64
-	gpuUsed    bool
-	cpuUse     uint64
+	// memUsedMin uint64
+	// memUsedMax uint64
+	// gpuUsed    bool
+	// cpuUse     uint64
+	P1  uint32
+	P2  uint32
+	C1  uint32
+	C2  uint32
+	AP  uint32
+	FIN uint32
 
 	cond *sync.Cond
 }
@@ -279,8 +291,11 @@ func (sh *scheduler) runSched() {
 
 			for _, req := range toDisable {
 				for _, window := range req.activeWindows {
-					for _, request := range window.todo {
-						sh.schedQueue.Push(request)
+					// for _, request := range window.todo {
+					// 	sh.schedQueue.Push(request)
+					// }
+					if window.todo != nil {
+						sh.schedQueue.Push(window.todo)
 					}
 				}
 
@@ -376,10 +391,15 @@ func (sh *scheduler) trySched() {
 			}()
 
 			task := (*sh.schedQueue)[sqi]
-			needRes := ResourceTable[task.taskType][task.sector.ProofType]
+			//needRes := ResourceTable[task.taskType][task.sector.ProofType]
 
 			task.indexHeap = sqi
 			for wnd, windowRequest := range sh.openWindows {
+				if windowRequest.acceptTaskType != task.taskType {
+					log.Debugf("skipping window, task type not match %s != %s", windowRequest.acceptTaskType, task.taskType)
+					continue
+				}
+
 				worker, ok := sh.workers[windowRequest.worker]
 				if !ok {
 					log.Errorf("worker referenced by windowRequest not found (worker: %s)", windowRequest.worker)
@@ -393,9 +413,9 @@ func (sh *scheduler) trySched() {
 				}
 
 				// TODO: allow bigger windows
-				if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info.Resources) {
-					continue
-				}
+				// if !windows[wnd].allocated.canHandleRequest(needRes, windowRequest.worker, "schedAcceptable", worker.info.Resources) {
+				// 	continue
+				// }
 
 				rpcCtx, cancel := context.WithTimeout(task.ctx, SelectorTimeout)
 				ok, err := task.sel.Ok(rpcCtx, task.taskType, task.sector.ProofType, worker)
@@ -455,23 +475,23 @@ func (sh *scheduler) trySched() {
 
 	for sqi := 0; sqi < queuneLen; sqi++ {
 		task := (*sh.schedQueue)[sqi]
-		needRes := ResourceTable[task.taskType][task.sector.ProofType]
+		//needRes := ResourceTable[task.taskType][task.sector.ProofType]
 
 		selectedWindow := -1
 		for _, wnd := range acceptableWindows[task.indexHeap] {
-			wid := sh.openWindows[wnd].worker
-			wr := sh.workers[wid].info.Resources
+			//wid := sh.openWindows[wnd].worker
+			//wr := sh.workers[wid].info.Resources
 
 			log.Debugf("SCHED try assign sqi:%d sector %d to window %d", sqi, task.sector.ID.Number, wnd)
 
 			// TODO: allow bigger windows
-			if !windows[wnd].allocated.canHandleRequest(needRes, wid, "schedAssign", wr) {
+			if windows[wnd].todo != nil {
 				continue
 			}
 
 			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d", sqi, task.sector.ID.Number, task.taskType, wnd)
 
-			windows[wnd].allocated.add(wr, needRes)
+			// windows[wnd].allocated.add(wr, needRes)
 			// TODO: We probably want to re-sort acceptableWindows here based on new
 			//  workerHandle.utilization + windows[wnd].allocated.utilization (workerHandle.utilization is used in all
 			//  task selectors, but not in the same way, so need to figure out how to do that in a non-O(n^2 way), and
@@ -486,8 +506,8 @@ func (sh *scheduler) trySched() {
 			continue
 		}
 
-		windows[selectedWindow].todo = append(windows[selectedWindow].todo, task)
-
+		// windows[selectedWindow].todo = append(windows[selectedWindow].todo, task)
+		windows[selectedWindow].todo = task
 		rmQueue = append(rmQueue, sqi)
 		scheduled++
 	}
@@ -506,7 +526,8 @@ func (sh *scheduler) trySched() {
 
 	scheduledWindows := map[int]struct{}{}
 	for wnd, window := range windows {
-		if len(window.todo) == 0 {
+		//if len(window.todo) == 0 {
+		if window.todo == nil {
 			// Nothing scheduled here, keep the window open
 			continue
 		}
