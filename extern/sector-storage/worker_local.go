@@ -6,18 +6,15 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/elastic/go-sysinfo"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
-	ffi "github.com/filecoin-project/filecoin-ffi"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-statestore"
 	storage "github.com/filecoin-project/specs-storage/storage"
@@ -495,37 +492,57 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 		panic(err)
 	}
 
-	gpus, err := ffi.GetGPUDevices()
-	if err != nil {
-		log.Errorf("getting gpu devices failed: %+v", err)
-	}
+	// gpus, err := ffi.GetGPUDevices()
+	// if err != nil {
+	// 	log.Errorf("getting gpu devices failed: %+v", err)
+	// }
 
-	h, err := sysinfo.Host()
-	if err != nil {
-		return storiface.WorkerInfo{}, xerrors.Errorf("getting host info: %w", err)
-	}
+	// h, err := sysinfo.Host()
+	// if err != nil {
+	// 	return storiface.WorkerInfo{}, xerrors.Errorf("getting host info: %w", err)
+	// }
 
-	mem, err := h.Memory()
-	if err != nil {
-		return storiface.WorkerInfo{}, xerrors.Errorf("getting memory info: %w", err)
-	}
+	// mem, err := h.Memory()
+	// if err != nil {
+	// 	return storiface.WorkerInfo{}, xerrors.Errorf("getting memory info: %w", err)
+	// }
 
-	memSwap := mem.VirtualTotal
-	if l.noSwap {
-		memSwap = 0
-	}
+	// memSwap := mem.VirtualTotal
+	// if l.noSwap {
+	// 	memSwap = 0
+	// }
+
+	res := l.getWorkerResourceConfig()
 
 	return storiface.WorkerInfo{
-		GroupID:  l.groupID,
-		Hostname: hostname,
-		Resources: storiface.WorkerResources{
-			MemPhysical: mem.Total,
-			MemSwap:     memSwap,
-			MemReserved: mem.VirtualUsed + mem.Total - mem.Available, // TODO: sub this process
-			CPUs:        uint64(runtime.NumCPU()),
-			GPUs:        gpus,
-		},
+		GroupID:   l.groupID,
+		Hostname:  hostname,
+		Resources: res,
 	}, nil
+}
+
+func (l *LocalWorker) getWorkerResourceConfig() storiface.WorkerResources {
+	l.taskLk.Lock()
+	defer l.taskLk.Unlock()
+	res := storiface.WorkerResources{}
+	for k, _ := range l.acceptTasks {
+		switch k {
+		case sealtasks.TTAddPiece:
+			res.AP = 1
+		case sealtasks.TTCommit1:
+			res.C1 = 8
+		case sealtasks.TTCommit2:
+			res.C2 = 1
+		case sealtasks.TTPreCommit1:
+			res.P1 = 1
+		case sealtasks.TTPreCommit2:
+			res.P2 = 1
+		case sealtasks.TTFinalize:
+			res.FIN = 1
+		}
+	}
+
+	return res
 }
 
 func (l *LocalWorker) Session(ctx context.Context) (uuid.UUID, error) {
