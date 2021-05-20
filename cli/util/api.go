@@ -86,14 +86,16 @@ func GetAPIInfo(ctx *cli.Context, t repo.RepoType) (APIInfo, error) {
 	// Check if there was a flag passed with the listen address of the API
 	// server (only used by the tests)
 	apiFlag := flagForAPI(t)
+	log.Infof("GetAPIInfo, first try apiFlag:%s from command line", apiFlag)
 	if ctx.IsSet(apiFlag) {
 		strma := ctx.String(apiFlag)
 		strma = strings.TrimSpace(strma)
-
+		log.Infof("GetAPIInfo, use command line :%s", strma)
 		return APIInfo{Addr: strma}, nil
 	}
 
 	envKey := EnvForRepo(t)
+	log.Infof("GetAPIInfo, second try envKey:%s from env", envKey)
 	env, ok := os.LookupEnv(envKey)
 	if !ok {
 		// TODO remove after deprecation period
@@ -104,11 +106,12 @@ func GetAPIInfo(ctx *cli.Context, t repo.RepoType) (APIInfo, error) {
 		}
 	}
 	if ok {
+		log.Infof("GetAPIInfo, use env :%s", env)
 		return ParseApiInfo(env), nil
 	}
 
 	repoFlag := flagForRepo(t)
-
+	log.Infof("GetAPIInfo, third try repoFlag:%s from local dir", repoFlag)
 	p, err := homedir.Expand(ctx.String(repoFlag))
 	if err != nil {
 		return APIInfo{}, xerrors.Errorf("could not expand home dir (%s): %w", repoFlag, err)
@@ -129,6 +132,7 @@ func GetAPIInfo(ctx *cli.Context, t repo.RepoType) (APIInfo, error) {
 		log.Warnf("Couldn't load CLI token, capabilities may be limited: %v", err)
 	}
 
+	log.Infof("GetAPIInfo, use local repo ma:%s , token:%s", ma.String(), token)
 	return APIInfo{
 		Addr:  ma.String(),
 		Token: token,
