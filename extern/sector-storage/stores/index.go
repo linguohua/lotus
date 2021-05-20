@@ -522,7 +522,7 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 		}
 
 		if p.bindSector != emptySectorID {
-			log.Info("not allocating on %s, it already bind to sector:%s", p.info.ID, p.bindSector)
+			log.Debugf("not allocating on %s, it already bind to sector:%s", p.info.ID, p.bindSector)
 			continue
 		}
 
