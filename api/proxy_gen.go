@@ -3353,6 +3353,22 @@ func (s *StorageMinerStub) StorageTryLock(p0 context.Context, p1 abi.SectorID, p
 	return false, xerrors.New("method not supported")
 }
 
+func (s *StorageMinerStruct) TryBindSector2SealStorage(p0 context.Context, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) {
+	return s.Internal.TryBindSector2SealStorage(p0, p1, p2)
+}
+
+func (s *StorageMinerStub) TryBindSector2SealStorage(p0 context.Context, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) {
+	return *new(stores.StorageInfo), xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) UnBindSector2SealStorage(p0 context.Context, p1 abi.SectorID) error {
+	return s.Internal.UnBindSector2SealStorage(p0, p1)
+}
+
+func (s *StorageMinerStub) UnBindSector2SealStorage(p0 context.Context, p1 abi.SectorID) error {
+	return xerrors.New("method not supported")
+}
+
 func (s *StorageMinerStruct) WorkerConnect(p0 context.Context, p1 string) error {
 	return s.Internal.WorkerConnect(p0, p1)
 }
