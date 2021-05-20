@@ -57,6 +57,11 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		return false, xerrors.Errorf("finding best storage: %w", err)
 	}
 
+	if len(best) < 1 {
+		log.Errorf("existingSelector.ok StorageFindSector found none, sector:%s task type:%s", s.sector, task)
+		return false, nil
+	}
+
 	workerGroupID := whnd.info.GroupID
 	for _, info := range best {
 		// if _, ok := have[info.ID]; ok {
