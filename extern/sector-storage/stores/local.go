@@ -201,7 +201,7 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 		return err
 	}
 
-	err = st.index.StorageAttach(ctx, StorageInfo{
+	sinfo := StorageInfo{
 		GroupID:    meta.GroupID,
 		ID:         meta.ID,
 		URLs:       []string{p},
@@ -209,7 +209,10 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 		MaxStorage: meta.MaxStorage,
 		CanSeal:    meta.CanSeal,
 		CanStore:   meta.CanStore,
-	}, fst)
+	}
+
+	log.Infof("local stores call remote index StorageAttach with:%+v", sinfo)
+	err = st.index.StorageAttach(ctx, sinfo, fst)
 	if err != nil {
 		return xerrors.Errorf("declaring storage in index: %w", err)
 	}

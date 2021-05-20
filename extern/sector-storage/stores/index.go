@@ -230,7 +230,7 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 	i.lk.Lock()
 	defer i.lk.Unlock()
 
-	log.Infof("New sector storage: %s, groupID:%s", si.ID, si.GroupID)
+	log.Infof("StorageAttach, New sector storage: %+v", si)
 
 	if _, ok := i.stores[si.ID]; ok {
 		for _, u := range si.URLs {
