@@ -115,6 +115,12 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 	log.Infof("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 
+	if groupID == "" {
+		log.Errorf("TryBindSector2SealStorage worker GroupID is empty, sector:%s", sector)
+
+		// just continue
+	}
+
 	i.lk.RLock()
 	defer i.lk.RUnlock()
 
@@ -124,6 +130,12 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 		// only bind to sealing storage
 		if !p.info.CanSeal {
 			log.Infof("TryBindSector2SealStorage storage %s not a seal storage",
+				p.info.ID)
+			continue
+		}
+
+		if p.info.GroupID == "" {
+			log.Errorf("TryBindSector2SealStorage storage %s is seal storage but without GroupID",
 				p.info.ID)
 			continue
 		}

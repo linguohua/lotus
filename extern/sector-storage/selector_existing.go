@@ -67,8 +67,14 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		// if _, ok := have[info.ID]; ok {
 		// 	return true, nil
 		// }
-		if info.GroupID == workerGroupID {
+		if info.GroupID == "" {
+			// can bind to any worker
+			log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
 			return true, nil
+		} else {
+			if info.GroupID == workerGroupID {
+				return true, nil
+			}
 		}
 
 		log.Infof("existingSelector.ok group id not match info:%s != worker:%d", info.GroupID, workerGroupID)

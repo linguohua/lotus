@@ -60,9 +60,15 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		// if _, ok := have[info.ID]; ok {
 		// 	return true, nil
 		// }
-		if info.GroupID == workerGroupID {
-			log.Infof("found match worker and storage, group id:%s", workerGroupID)
+		if info.GroupID == "" {
+			// can bind to any worker
+			log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
 			return true, nil
+		} else {
+			if info.GroupID == workerGroupID {
+				log.Infof("found match worker and storage, group id:%s", workerGroupID)
+				return true, nil
+			}
 		}
 	}
 
