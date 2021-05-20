@@ -241,8 +241,12 @@ var runCmd = &cli.Command{
 		role := cctx.String("role")
 		//if cctx.Bool("commit2") {
 		if role == "C2" {
-			if err := paramfetch.GetParams(ctx, build.ParametersJSON(), uint64(ssize)); err != nil {
-				return xerrors.Errorf("get params: %w", err)
+			if os.Getenv("no_fetch_params") != "" {
+				log.Info("no_fetch_params is not empty, skip fetch and check proof parameters")
+			} else {
+				if err := paramfetch.GetParams(ctx, build.ParametersJSON(), uint64(ssize)); err != nil {
+					return xerrors.Errorf("get params: %w", err)
+				}
 			}
 		}
 
