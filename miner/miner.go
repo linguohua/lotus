@@ -427,7 +427,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg,
 		return nil, xerrors.Errorf("failed to get mining base info: %w", err)
 	}
 	if mbi == nil {
-		log.Warnf("mineOne: unexpectedly nil MiningBaseInfo for round %d, off tipset %d/%s", round, base.TipSet.Height(), base.TipSet.Key().String())
+		// lingh: too many log output
+		// log.Warnf("mineOne: unexpectedly nil MiningBaseInfo for round %d, off tipset %d/%s", round, base.TipSet.Height(), base.TipSet.Key().String())
 		return nil, nil
 	}
 
