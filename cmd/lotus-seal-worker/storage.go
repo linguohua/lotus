@@ -53,7 +53,7 @@ var storageAttachCmd = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "group",
-			Usage: "group id",
+			Usage: "group id when use in sealing",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
