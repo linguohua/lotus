@@ -51,6 +51,10 @@ var storageAttachCmd = &cli.Command{
 			Name:  "max-storage",
 			Usage: "(for init) limit storage space for sectors (expensive for very large paths!)",
 		},
+		&cli.StringFlag{
+			Name:  "group",
+			Usage: "group id",
+		},
 	},
 	Action: func(cctx *cli.Context) error {
 		nodeApi, closer, err := lcli.GetWorkerAPI(cctx)
@@ -92,12 +96,15 @@ var storageAttachCmd = &cli.Command{
 				}
 			}
 
+			groupID := cctx.String("group")
+
 			cfg := &stores.LocalStorageMeta{
 				ID:         stores.ID(uuid.New().String()),
 				Weight:     cctx.Uint64("weight"),
 				CanSeal:    cctx.Bool("seal"),
 				CanStore:   cctx.Bool("store"),
 				MaxStorage: uint64(maxStor),
+				GroupID:    groupID,
 			}
 
 			if !(cfg.CanStore || cfg.CanSeal) {
