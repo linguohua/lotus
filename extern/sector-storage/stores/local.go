@@ -272,7 +272,7 @@ func (st *Local) Redeclare(ctx context.Context) error {
 		err = st.index.StorageAttach(ctx, StorageInfo{
 			GroupID:    meta.GroupID,
 			ID:         id,
-			URLs:       st.urls,
+			URLs:       []string{p.local},
 			Weight:     meta.Weight,
 			MaxStorage: meta.MaxStorage,
 			CanSeal:    meta.CanSeal,
