@@ -368,15 +368,15 @@ func (r *Remote) deleteFromRemote(ctx context.Context, url string) error {
 }
 
 func (r *Remote) FsStat(ctx context.Context, id ID) (fsutil.FsStat, error) {
-	// st, err := r.local.FsStat(ctx, id)
-	// switch err {
-	// case nil:
-	// 	return st, nil
-	// case errPathNotFound:
-	// 	break
-	// default:
-	// 	return fsutil.FsStat{}, xerrors.Errorf("local stat: %w", err)
-	// }
+	st, err := r.local.FsStat(ctx, id)
+	switch err {
+	case nil:
+		return st, nil
+	case errPathNotFound:
+		break
+	default:
+		return fsutil.FsStat{}, xerrors.Errorf("local stat: %w", err)
+	}
 
 	// si, err := r.index.StorageInfo(ctx, id)
 	// if err != nil {
@@ -426,7 +426,9 @@ func (r *Remote) FsStat(ctx context.Context, id ID) (fsutil.FsStat, error) {
 
 	// defer resp.Body.Close() // nolint
 
-	return fsutil.FsStat{}, xerrors.Errorf("-lin- this version not support remote FsStat")
+	// return fsutil.FsStat{}, xerrors.Errorf("-lin- this version not support remote FsStat")
+	log.Error("-lin- this version not support remote FsStat")
+	return fsutil.FsStat{}, nil
 }
 
 var _ Store = &Remote{}
