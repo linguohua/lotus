@@ -540,7 +540,7 @@ func (l *LocalWorker) getWorkerResourceConfig() storiface.WorkerResources {
 		case sealtasks.TTPreCommit2:
 			res.P2 = 1
 		case sealtasks.TTFinalize:
-			res.FIN = 1
+			res.FIN = 4
 		}
 	}
 
