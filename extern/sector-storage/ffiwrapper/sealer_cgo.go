@@ -648,11 +648,24 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	// lingh: clear storage cache, not seal cache?
 	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
 	if err != nil {
-		return xerrors.Errorf("acquiring sector cache path: %w", err)
+		return xerrors.Errorf("FinalizeSector: acquiring sector cache path: %w", err)
 	}
 	defer done()
 
-	return ffi.ClearCache(uint64(ssize), paths.Cache)
+	err = ffi.ClearCache(uint64(ssize), paths.Cache)
+	if err != nil {
+		log.Warnf("FinalizeSector: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
+	}
+
+	// lingh: remove unsealed
+	if len(keepUnsealed) == 0 {
+		err = os.Remove(paths.Unsealed)
+		if err != nil {
+			log.Warnf("FinalizeSector: Remove unsealed file with error:%v, cache maybe removed previous", err)
+		}
+	}
+	// ignore clear cache error
+	return nil
 }
 
 func (sb *Sealer) ReleaseUnsealed(ctx context.Context, sector storage.SectorRef, safeToFree []storage.Range) error {

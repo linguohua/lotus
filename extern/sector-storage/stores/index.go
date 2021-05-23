@@ -111,18 +111,64 @@ func NewIndex() *Index {
 	}
 }
 
+func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID) (StorageInfo, error) {
+	log.Infof("allocStorageForFinalize: sector %s", sector)
+	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
+	i.lk.RLock()
+	defer i.lk.RUnlock()
+
+	var candidates []storageEntry
+	for _, p := range i.stores {
+		// only bind to sealing storage
+		if !p.info.CanStore {
+			log.Infof("allocStorageForFinalize storage %s not a store storage",
+				p.info.ID)
+			continue
+		}
+
+		if time.Since(p.lastHeartbeat) > SkippedHeartbeatThresh {
+			log.Debugf("allocStorageForFinalize not allocating on %s, didn't receive heartbeats for %s",
+				p.info.ID, time.Since(p.lastHeartbeat))
+			continue
+		}
+
+		if p.heartbeatErr != nil {
+			log.Debugf("allocStorageForFinalize not allocating on %s, heartbeat error: %s",
+				p.info.ID, p.heartbeatErr)
+			continue
+		}
+
+		candidates = append(candidates, *p)
+	}
+
+	if len(candidates) < 1 {
+		return StorageInfo{}, xerrors.Errorf("allocStorageForFinalize failed to found storage to bind %s",
+			sector)
+	}
+
+	// random select one
+	candidate := candidates[rand.Int()%len(candidates)]
+	candidate.bindSector = sector
+	// err := i.StorageDeclareSector(ctx, storageID, sector, ft, true)
+	// if err != nil {
+	// 	return StorageInfo{}, err
+	// }
+	log.Infof("allocStorageForFinalize bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
+	return *candidate.info, nil
+}
+
 func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
 	log.Infof("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
-
-	if groupID == "" {
-		log.Errorf("TryBindSector2SealStorage worker GroupID is empty, sector:%s", sector)
-
-		// just continue
-	}
-
 	i.lk.RLock()
 	defer i.lk.RUnlock()
+
+	if groupID == "" {
+		log.Errorf("TryBindSector2SealStorage worker GroupID is empty, sector:%s, return a storage path", sector)
+
+		// just continue
+		return i.allocStorageForFinalize(ctx, sector)
+	}
 
 	emptySectorID := abi.SectorID{}
 	var candidates []storageEntry
