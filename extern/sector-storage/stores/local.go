@@ -80,6 +80,7 @@ type Local struct {
 	paths map[ID]*path
 
 	localLk sync.RWMutex
+	groupID string
 }
 
 type path struct {
@@ -161,13 +162,15 @@ func (p *path) sectorPath(sid abi.SectorID, fileType storiface.SectorFileType) s
 	return filepath.Join(p.local, fileType.String(), storiface.SectorName(sid))
 }
 
-func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []string) (*Local, error) {
+func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []string, groupID string) (*Local, error) {
 	l := &Local{
 		localStorage: ls,
 		index:        index,
 		urls:         urls,
 
 		paths: map[ID]*path{},
+
+		groupID: groupID,
 	}
 	return l, l.open(ctx)
 }
@@ -427,96 +430,28 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 	if existing|allocate != existing^allocate {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")
 	}
+	paths := storiface.SectorPaths{}
+	stores := storiface.SectorPaths{}
+	groupID := st.groupID
+	if pathType != storiface.PathSealing {
+		//return paths, stores, xerrors.Errorf("-lin- this version only supply remote.AcquireSector with sealing type:%s", pathType)
+		groupID = "" // use empty groupID to alloc store type storage
+	}
 
-	ssize, err := sid.ProofType.SectorSize()
+	// get the local path, lock storage by sector
+	si, err := st.index.TryBindSector2SealStorage(ctx, sid.ID, groupID)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
 
-	st.localLk.RLock()
-	defer st.localLk.RUnlock()
-
-	var out storiface.SectorPaths
-	var storageIDs storiface.SectorPaths
-
+	loclpath := si.URLs[0]
 	for _, fileType := range storiface.PathTypes {
-		if fileType&existing == 0 {
-			continue
-		}
-
-		si, err := st.index.StorageFindSector(ctx, sid.ID, fileType, ssize, false)
-		if err != nil {
-			log.Warnf("finding existing sector %d(t:%d) failed: %+v", sid, fileType, err)
-			continue
-		}
-
-		for _, info := range si {
-			p, ok := st.paths[info.ID]
-			if !ok {
-				continue
-			}
-
-			if p.local == "" { // TODO: can that even be the case?
-				continue
-			}
-
-			spath := p.sectorPath(sid.ID, fileType)
-			storiface.SetPathByType(&out, fileType, spath)
-			storiface.SetPathByType(&storageIDs, fileType, string(info.ID))
-
-			existing ^= fileType
-			break
-		}
+		dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(sid.ID))
+		storiface.SetPathByType(&paths, fileType, dest)
+		storiface.SetPathByType(&stores, fileType, string(si.ID))
 	}
 
-	for _, fileType := range storiface.PathTypes {
-		if fileType&allocate == 0 {
-			continue
-		}
-
-		sis, err := st.index.StorageBestAlloc(ctx, fileType, ssize, pathType)
-		if err != nil {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("finding best storage for allocating : %w", err)
-		}
-
-		var best string
-		var bestID ID
-
-		for _, si := range sis {
-			p, ok := st.paths[si.ID]
-			if !ok {
-				continue
-			}
-
-			if p.local == "" { // TODO: can that even be the case?
-				continue
-			}
-
-			if (pathType == storiface.PathSealing) && !si.CanSeal {
-				continue
-			}
-
-			if (pathType == storiface.PathStorage) && !si.CanStore {
-				continue
-			}
-
-			// TODO: Check free space
-
-			best = p.sectorPath(sid.ID, fileType)
-			bestID = si.ID
-			break
-		}
-
-		if best == "" {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("couldn't find a suitable path for a sector")
-		}
-
-		storiface.SetPathByType(&out, fileType, best)
-		storiface.SetPathByType(&storageIDs, fileType, string(bestID))
-		allocate ^= fileType
-	}
-
-	return out, storageIDs, nil
+	return paths, stores, nil
 }
 
 func (st *Local) Local(ctx context.Context) ([]StoragePath, error) {
@@ -637,7 +572,8 @@ func (st *Local) MoveStorage(ctx context.Context, s storage.SectorRef, types sto
 		return xerrors.Errorf("acquire dest storage: %w", err)
 	}
 
-	src, srcIds, err := st.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+	// lingh: PathStorage -> PathSealing
+	src, srcIds, err := st.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathSealing, storiface.AcquireMove)
 	if err != nil {
 		return xerrors.Errorf("acquire src storage: %w", err)
 	}

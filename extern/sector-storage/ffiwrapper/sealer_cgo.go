@@ -646,7 +646,8 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	}
 
 	// lingh: clear storage cache, not seal cache?
-	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	//paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathSealing)
 	if err != nil {
 		return xerrors.Errorf("FinalizeSector: acquiring sector cache path: %w", err)
 	}
@@ -661,9 +662,10 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	if len(keepUnsealed) == 0 {
 		err = os.Remove(paths.Unsealed)
 		if err != nil {
-			log.Warnf("FinalizeSector: Remove unsealed file with error:%v, cache maybe removed previous", err)
+			log.Warnf("FinalizeSector: Remove unsealed file with error:%v", err)
 		}
 	}
+
 	// ignore clear cache error
 	return nil
 }

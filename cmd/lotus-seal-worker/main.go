@@ -393,7 +393,8 @@ var runCmd = &cli.Command{
 			}
 		}
 
-		localStore, err := stores.NewLocal(ctx, lr, nodeApi, []string{"http://" + address + "/remote"})
+		groupID := cctx.String("group")
+		localStore, err := stores.NewLocal(ctx, lr, nodeApi, []string{"http://" + address + "/remote"}, groupID)
 		if err != nil {
 			return err
 		}
@@ -404,7 +405,6 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("could not get api info: %w", err)
 		}
 
-		groupID := cctx.String("group")
 		remote := stores.NewRemote(localStore, nodeApi, sminfo.AuthHeader(), cctx.Int("parallel-fetch-limit"), groupID)
 
 		fh := &stores.FetchHandler{Local: localStore}
