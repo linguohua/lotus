@@ -97,6 +97,9 @@ var storageAttachCmd = &cli.Command{
 			}
 
 			groupID := cctx.String("group")
+			if groupID == "" {
+				return xerrors.Errorf("worker manage storage must specify group id")
+			}
 
 			cfg := &stores.LocalStorageMeta{
 				ID:         stores.ID(uuid.New().String()),
