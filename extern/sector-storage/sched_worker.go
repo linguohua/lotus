@@ -277,7 +277,7 @@ func (sw *schedWorker) requestWindowsByTasktype(taskType sealtasks.TaskType, i i
 func (sw *schedWorker) releaseWindowOfTasktype(taskType sealtasks.TaskType) {
 	sw.worker.wndLk.Lock()
 	count, _ := sw.worker.requestedWindowsCounter[taskType]
-	count = count + 1
+	count = count - 1
 	sw.worker.requestedWindowsCounter[taskType] = count
 	sw.worker.wndLk.Unlock()
 }
@@ -290,17 +290,15 @@ func (sw *schedWorker) requestWindows() bool {
 
 		sw.worker.wndLk.Lock()
 		count, _ := sw.worker.requestedWindowsCounter[t]
-		sw.worker.wndLk.Unlock()
 		diff := int(x) - count
+		sw.worker.requestedWindowsCounter[t] = count + diff
+		sw.worker.wndLk.Unlock()
+
 		if diff > 0 {
 			b := sw.requestWindowsByTasktype(t, diff)
 			if !b {
 				return false
 			}
-
-			sw.worker.wndLk.Lock()
-			sw.worker.requestedWindowsCounter[t] = count + diff
-			sw.worker.wndLk.Unlock()
 		}
 	}
 
@@ -314,15 +312,6 @@ func (sw *schedWorker) waitForUpdates() (update bool, sched bool, ok bool) {
 	case w := <-sw.scheduledWindows:
 		sw.worker.wndLk.Lock()
 		sw.worker.activeWindows = append(sw.worker.activeWindows, w)
-		taskType := w.todo.taskType
-		count, _ := sw.worker.requestedWindowsCounter[taskType]
-		count = count - 1
-		if count >= 0 {
-			sw.worker.requestedWindowsCounter[taskType] = count
-		} else {
-			log.Errorf("waitForUpdates error, worker request window counter:%d < 0, tasktype:%s",
-				count, taskType)
-		}
 		sw.worker.wndLk.Unlock()
 		return true, false, true
 	case <-sw.taskDone:
@@ -459,6 +448,8 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 			// w.preparing.free(w.info.Resources, needRes)
 			// w.lk.Unlock()
 			sh.workersLk.Unlock()
+			// release window
+			sw.releaseWindowOfTasktype(window.todo.taskType)
 
 			select {
 			case taskDone <- struct{}{}:
