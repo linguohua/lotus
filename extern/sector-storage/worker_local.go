@@ -396,7 +396,8 @@ func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storage.SectorR
 		// 	}
 		// }
 
-		return nil, err
+		// lingh: do move also
+		return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed)
 	})
 }
 

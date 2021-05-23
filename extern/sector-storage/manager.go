@@ -585,17 +585,17 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		return xerrors.Errorf("acquiring sector lock: %w", err)
 	}
 
-	unsealed := storiface.FTUnsealed
-	{
-		unsealedStores, err := m.index.StorageFindSector(ctx, sector.ID, storiface.FTUnsealed, 0, false)
-		if err != nil {
-			return xerrors.Errorf("finding unsealed sector: %w", err)
-		}
+	// unsealed := storiface.FTUnsealed
+	// {
+	// 	unsealedStores, err := m.index.StorageFindSector(ctx, sector.ID, storiface.FTUnsealed, 0, false)
+	// 	if err != nil {
+	// 		return xerrors.Errorf("finding unsealed sector: %w", err)
+	// 	}
 
-		if len(unsealedStores) == 0 { // Is some edge-cases unsealed sector may not exist already, that's fine
-			unsealed = storiface.FTNone
-		}
-	}
+	// 	if len(unsealedStores) == 0 { // Is some edge-cases unsealed sector may not exist already, that's fine
+	// 		unsealed = storiface.FTNone
+	// 	}
+	// }
 
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, false)
 
@@ -609,24 +609,24 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		return err
 	}
 
-	fetchSel := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathStorage)
-	moveUnsealed := unsealed
-	{
-		if len(keepUnsealed) == 0 {
-			moveUnsealed = storiface.FTNone
-		}
-	}
+	// fetchSel := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathStorage)
+	// moveUnsealed := unsealed
+	// {
+	// 	if len(keepUnsealed) == 0 {
+	// 		moveUnsealed = storiface.FTNone
+	// 	}
+	// }
 
-	// lingh: do move to ceph
-	err = m.sched.Schedule(ctx, sector, sealtasks.TTFetch, fetchSel,
-		schedNop,
-		func(ctx context.Context, w Worker) error {
-			_, err := m.waitSimpleCall(ctx)(w.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed|moveUnsealed))
-			return err
-		})
-	if err != nil {
-		return xerrors.Errorf("moving sector to storage: %w", err)
-	}
+	// // lingh: do move to ceph
+	// err = m.sched.Schedule(ctx, sector, sealtasks.TTFetch, fetchSel,
+	// 	schedNop,
+	// 	func(ctx context.Context, w Worker) error {
+	// 		_, err := m.waitSimpleCall(ctx)(w.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed|moveUnsealed))
+	// 		return err
+	// 	})
+	// if err != nil {
+	// 	return xerrors.Errorf("moving sector to storage: %w", err)
+	// }
 
 	// lingh: release seal storage
 	m.index.UnBindSector2SealStorage(ctx, sector.ID)

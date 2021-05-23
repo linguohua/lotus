@@ -310,11 +310,12 @@ func (r *Remote) fetch(ctx context.Context, url, outname string) error {
 }
 
 func (r *Remote) MoveStorage(ctx context.Context, s storage.SectorRef, types storiface.SectorFileType) error {
+	// lingh: the data must be local!
 	// Make sure we have the data local
-	_, _, err := r.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
-	if err != nil {
-		return xerrors.Errorf("acquire src storage (remote): %w", err)
-	}
+	// _, _, err := r.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+	// if err != nil {
+	// 	return xerrors.Errorf("acquire src storage (remote): %w", err)
+	// }
 
 	return r.local.MoveStorage(ctx, s, types)
 }
