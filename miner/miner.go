@@ -435,16 +435,18 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg,
 	// always write out a log from this point out
 	var winner *types.ElectionProof
 	defer func() {
-		log.Infow(
-			"completed mineOne",
-			"forRound", int64(round),
-			"baseEpoch", int64(base.TipSet.Height()),
-			"lookbackEpochs", int64(policy.ChainFinality), // hardcoded as it is unlikely to change again: https://github.com/filecoin-project/lotus/blob/v1.8.0/chain/actors/policy/policy.go#L180-L186
-			"networkPowerAtLookback", mbi.NetworkPower.String(),
-			"minerPowerAtLookback", mbi.MinerPower.String(),
-			"isEligible", mbi.EligibleForMining,
-			"isWinner", (winner != nil),
-		)
+		if winner != nil {
+			log.Infow(
+				"completed mineOne",
+				"forRound", int64(round),
+				"baseEpoch", int64(base.TipSet.Height()),
+				"lookbackEpochs", int64(policy.ChainFinality), // hardcoded as it is unlikely to change again: https://github.com/filecoin-project/lotus/blob/v1.8.0/chain/actors/policy/policy.go#L180-L186
+				"networkPowerAtLookback", mbi.NetworkPower.String(),
+				"minerPowerAtLookback", mbi.MinerPower.String(),
+				"isEligible", mbi.EligibleForMining,
+				"isWinner", (winner != nil),
+			)
+		}
 	}()
 
 	if !mbi.EligibleForMining {
