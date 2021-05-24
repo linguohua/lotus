@@ -121,8 +121,8 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 	for _, p := range i.stores {
 		// only bind to sealing storage
 		if !p.info.CanStore {
-			log.Infof("allocStorageForFinalize storage %s not a store storage",
-				p.info.ID)
+			///log.Infof("allocStorageForFinalize storage %s not a store storage",
+			//p.info.ID)
 			continue
 		}
 
@@ -175,32 +175,32 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 	for _, p := range i.stores {
 		// only bind to sealing storage
 		if !p.info.CanSeal {
-			log.Infof("TryBindSector2SealStorage storage %s not a seal storage",
-				p.info.ID)
+			// log.Infof("TryBindSector2SealStorage storage %s not a seal storage",
+			// 	p.info.ID)
 			continue
 		}
 
 		if p.info.GroupID == "" {
-			log.Errorf("TryBindSector2SealStorage storage %s is seal storage but without GroupID",
-				p.info.ID)
+			// log.Errorf("TryBindSector2SealStorage storage %s is seal storage but without GroupID",
+			// 	p.info.ID)
 			continue
 		}
 
 		if p.info.GroupID != groupID {
-			log.Infof("TryBindSector2SealStorage group not match, require:%s, p:%s",
-				groupID, p.info.GroupID)
+			// log.Infof("TryBindSector2SealStorage group not match, require:%s, p:%s",
+			// 	groupID, p.info.GroupID)
 			continue
 		}
 
 		if p.bindSector != emptySectorID {
 			if p.bindSector == sector {
-				log.Infof("TryBindSector2SealStorage bind ok, already bind: sector %s, storage ID:%s",
-					sector, p.info.ID)
+				// log.Infof("TryBindSector2SealStorage bind ok, already bind: sector %s, storage ID:%s",
+				// 	sector, p.info.ID)
 				return *p.info, nil
 			}
 
-			log.Infof("TryBindSector2SealStorage storage %s already bind to sector:%s",
-				p.info.ID, p.bindSector)
+			// log.Infof("TryBindSector2SealStorage storage %s already bind to sector:%s",
+			// 	p.info.ID, p.bindSector)
 			continue
 		}
 
@@ -580,7 +580,7 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 		}
 
 		if p.bindSector != emptySectorID {
-			log.Debugf("not allocating on %s, it already bind to sector:%s", p.info.ID, p.bindSector)
+			//log.Debugf("not allocating on %s, it already bind to sector:%s", p.info.ID, p.bindSector)
 			continue
 		}
 

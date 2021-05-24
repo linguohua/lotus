@@ -58,7 +58,7 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 	}
 
 	if len(best) < 1 {
-		log.Errorf("existingSelector.ok StorageFindSector found none, sector:%s task type:%s", s.sector, task)
+		// log.Errorf("existingSelector.ok StorageFindSector found none, sector:%s task type:%s", s.sector, task)
 		return false, nil
 	}
 
@@ -69,7 +69,7 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		// }
 		if info.GroupID == "" {
 			// can bind to any worker
-			log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
+			//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
 			return true, nil
 		} else {
 			if info.GroupID == workerGroupID {
@@ -77,10 +77,10 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 			}
 		}
 
-		log.Infof("existingSelector.ok group id not match info:%s != worker:%d", info.GroupID, workerGroupID)
+		//log.Infof("existingSelector.ok group id not match info:%s != worker:%d", info.GroupID, workerGroupID)
 	}
 
-	log.Infof("existingSelector.ok return false, task type:%s", task)
+	//log.Infof("existingSelector.ok return false, task type:%s", task)
 	return false, nil
 }
 

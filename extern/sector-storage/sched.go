@@ -398,7 +398,7 @@ func (sh *scheduler) trySched() {
 			task.indexHeap = sqi
 			for wnd, windowRequest := range sh.openWindows {
 				if windowRequest.acceptTaskType != task.taskType {
-					log.Debugf("skipping window, task type not match %s != %s", windowRequest.acceptTaskType, task.taskType)
+					// log.Debugf("skipping window, task type not match %s != %s", windowRequest.acceptTaskType, task.taskType)
 					continue
 				}
 
