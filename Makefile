@@ -63,7 +63,8 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+#build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+build-devnets: lotus lotus-miner lotus-worker
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
