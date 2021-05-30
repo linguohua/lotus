@@ -422,13 +422,19 @@ var runCmd = &cli.Command{
 
 		log.Infof("worker group id %s", groupID)
 
+		ext := &sectorstorage.LocalWorkerExtParams{}
+		ext.GroupID = groupID
+		ext.PieceTemplateDir = os.Getenv("PIECE_TEMPLATE_DIR")
+		ext.PieceTemplateSize = 68719476736
+		ext.MerkleTreecache = os.Getenv("MERKLE_TREE_CACHE")
+
 		wsts := statestore.New(namespace.Wrap(ds, modules.WorkerCallsPrefix))
 
 		workerApi := &worker{
 			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
 				TaskTypes: taskTypes,
 				NoSwap:    cctx.Bool("no-swap"),
-			}, remote, localStore, nodeApi, nodeApi, wsts, groupID),
+			}, remote, localStore, nodeApi, nodeApi, wsts, ext),
 			localStore: localStore,
 			ls:         lr,
 		}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -35,8 +37,21 @@ type WorkerConfig struct {
 // used do provide custom proofs impl (mostly used in testing)
 type ExecutorFunc func() (ffiwrapper.Storage, error)
 
+type LocalWorkerExtParams struct {
+	PieceTemplateSize abi.SectorSize
+	PieceTemplateDir  string
+	MerkleTreecache   string
+
+	GroupID string
+}
+
 type LocalWorker struct {
-	groupID    string
+	pieceTemplateSize abi.SectorSize
+	pieceTemplateDir  string
+	merkleTreecache   string
+
+	groupID string
+
 	storage    stores.Store
 	localStore *stores.Local
 	sindex     stores.SectorIndex
@@ -56,14 +71,13 @@ type LocalWorker struct {
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 	store stores.Store, local *stores.Local, sindex stores.SectorIndex,
-	ret storiface.WorkerReturn, cst *statestore.StateStore, groupID string) *LocalWorker {
+	ret storiface.WorkerReturn, cst *statestore.StateStore, ext *LocalWorkerExtParams) *LocalWorker {
 	acceptTasks := map[sealtasks.TaskType]struct{}{}
 	for _, taskType := range wcfg.TaskTypes {
 		acceptTasks[taskType] = struct{}{}
 	}
 
 	w := &LocalWorker{
-		groupID:    groupID,
 		storage:    store,
 		localStore: local,
 		sindex:     sindex,
@@ -78,6 +92,13 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 
 		session: uuid.New(),
 		closing: make(chan struct{}),
+	}
+
+	if ext != nil {
+		w.groupID = ext.GroupID
+		w.pieceTemplateDir = ext.PieceTemplateDir
+		w.pieceTemplateSize = ext.PieceTemplateSize
+		w.merkleTreecache = ext.MerkleTreecache
 	}
 
 	if w.executor == nil {
@@ -108,8 +129,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 }
 
 func NewLocalWorker(wcfg WorkerConfig, store stores.Store, local *stores.Local, sindex stores.SectorIndex,
-	ret storiface.WorkerReturn, cst *statestore.StateStore, groupID string) *LocalWorker {
-	return newLocalWorker(nil, wcfg, store, local, sindex, ret, cst, groupID)
+	ret storiface.WorkerReturn, cst *statestore.StateStore, ext *LocalWorkerExtParams) *LocalWorker {
+	return newLocalWorker(nil, wcfg, store, local, sindex, ret, cst, ext)
 }
 
 type localWorkerPathProvider struct {
@@ -148,7 +169,7 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 }
 
 func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {
-	return ffiwrapper.New(&localWorkerPathProvider{w: l})
+	return ffiwrapper.New(&localWorkerPathProvider{w: l}, l.merkleTreecache)
 }
 
 type ReturnType string
@@ -306,9 +327,80 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 		return storiface.UndefCall, err
 	}
 
+	size, _ := sector.ProofType.SectorSize()
+	if l.hasPieceTemplate() && size == l.pieceTemplateSize {
+		return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
+			return l.loadPieceTemplate(ctx, sector)
+		})
+	}
+
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		return sb.AddPiece(ctx, sector, epcs, sz, r)
 	})
+}
+
+func (l *LocalWorker) hasPieceTemplate() bool {
+	if l.pieceTemplateDir == "" {
+		return false
+	}
+
+	pieceFilePath := path.Join(l.pieceTemplateDir, "staged-file")
+	pieceinfos := path.Join(l.pieceTemplateDir, "piece-info.json")
+
+	_, err := os.Stat(pieceFilePath)
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	_, err = os.Stat(pieceinfos)
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
+func (l *LocalWorker) loadPieceTemplate(ctx context.Context, sector storage.SectorRef) (abi.PieceInfo, error) {
+	log.Debugf("loadPieceTemplate call, sector:%v", sector)
+
+	stagedPath, done, err := (&localWorkerPathProvider{w: l}).AcquireSector(ctx, sector, 0, storiface.FTUnsealed, storiface.PathSealing)
+	if err != nil {
+		log.Errorf("loadPieceTemplate AcquireSector failed:%v", err)
+		return abi.PieceInfo{}, err
+	}
+
+	defer func() {
+		if done != nil {
+			done()
+		}
+	}()
+
+	pieceFilePath := path.Join(l.pieceTemplateDir, "staged-file")
+	pieceinfos := path.Join(l.pieceTemplateDir, "piece-info.json")
+
+	// soft link file to staged path
+	err = os.Symlink(pieceFilePath, stagedPath.Unsealed)
+	if err != nil {
+		log.Errorf("loadPieceTemplate Symlink failed:%v", err)
+		return abi.PieceInfo{}, xerrors.Errorf("loadPieceTemplate %w", err)
+	}
+
+	// read pieceCID from json file
+	bb, err := ioutil.ReadFile(pieceinfos)
+	if err != nil {
+		log.Errorf("loadPieceTemplate ReadAll failed:%v", err)
+		return abi.PieceInfo{}, xerrors.Errorf("loadPieceTemplate: %w", err)
+	}
+
+	pi := abi.PieceInfo{}
+	err = json.Unmarshal(bb, &pi)
+	if err != nil {
+		log.Errorf("loadPieceTemplate Unmarshal failed:%v", err)
+		return abi.PieceInfo{}, xerrors.Errorf("loadPieceTemplate: %w", err)
+	}
+
+	log.Debugf("loadPieceTemplate completed, sector:%v", sector)
+	return pi, nil
 }
 
 func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileType storiface.SectorFileType, ptype storiface.PathType, am storiface.AcquireMode) (storiface.CallID, error) {
@@ -527,7 +619,7 @@ func (l *LocalWorker) getWorkerResourceConfig() storiface.WorkerResources {
 	l.taskLk.Lock()
 	defer l.taskLk.Unlock()
 	res := storiface.WorkerResources{}
-	for k, _ := range l.acceptTasks {
+	for k := range l.acceptTasks {
 		switch k {
 		case sealtasks.TTAddPiece:
 			res.AP = 1

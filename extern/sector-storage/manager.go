@@ -112,7 +112,7 @@ func New(ctx context.Context, ls stores.LocalStorage, si stores.SectorIndex, sc 
 	}
 
 	// lingh:make sure use local storage
-	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si})
+	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, "")
 	if err != nil {
 		return nil, xerrors.Errorf("creating prover instance: %w", err)
 	}

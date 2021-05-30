@@ -6,9 +6,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"math/bits"
 	"os"
+	"path"
 	"runtime"
 
 	"github.com/ipfs/go-cid"
@@ -28,11 +30,11 @@ import (
 
 var _ Storage = &Sealer{}
 
-func New(sectors SectorProvider) (*Sealer, error) {
+func New(sectors SectorProvider, merkleTreecache string) (*Sealer, error) {
 	sb := &Sealer{
-		sectors: sectors,
-
-		stopping: make(chan struct{}),
+		sectors:         sectors,
+		merkleTreecache: merkleTreecache,
+		stopping:        make(chan struct{}),
 	}
 
 	return sb, nil
@@ -226,10 +228,17 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		pieceCID = paddedCid
 	}
 
-	return abi.PieceInfo{
+	pi := abi.PieceInfo{
 		Size:     pieceSize.Padded(),
 		PieceCID: pieceCID,
-	}, nil
+	}
+
+	v, err := json.Marshal(&pi)
+	if err == nil {
+		log.Info("add piece completed, pieceInfo:\n", string(v))
+	}
+
+	return pi, nil
 }
 
 func (sb *Sealer) pieceCid(spt abi.RegisteredSealProof, in []byte) (cid.Cid, error) {
@@ -498,6 +507,21 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 			}
 		} else {
 			return nil, err
+		}
+	}
+
+	// lingh: soft link to merkle cache file
+	if sb.merkleTreecache != "" {
+		_, err := os.Stat(sb.merkleTreecache)
+		if !os.IsNotExist(err) {
+			// exists
+			targetMerkleTreeCache := path.Join(paths.Cache, "sc-02-data-tree-d.dat")
+			err = os.Symlink(sb.merkleTreecache, targetMerkleTreeCache)
+			if err != nil {
+				log.Errorf("sb.SealPreCommit1 Symlink merkleTreecache failed:%v", err)
+			} else {
+				log.Info("sb.SealPreCommit1 link merkleTreecache ok")
+			}
 		}
 	}
 
