@@ -235,7 +235,7 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 
 	v, err := json.Marshal(&pi)
 	if err == nil {
-		log.Info("add piece completed, pieceInfo:\n %s", string(v))
+		log.Info("add piece completed, pieceInfo:\n", string(v))
 	}
 
 	return pi, nil
