@@ -374,7 +374,7 @@ func (l *LocalWorker) loadPieceTemplate(ctx context.Context, sector storage.Sect
 	}()
 
 	pieceFilePath := path.Join(l.pieceTemplateDir, "piece-file")
-	pieceinfos := path.Join(l.pieceTemplateDir, "piece-infos")
+	pieceinfos := path.Join(l.pieceTemplateDir, "piece-infos.json")
 
 	// soft link file to staged path
 	err = os.Symlink(pieceFilePath, stagedPath.Unsealed)
