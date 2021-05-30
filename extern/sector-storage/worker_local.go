@@ -361,6 +361,8 @@ func (l *LocalWorker) hasPieceTemplate() bool {
 }
 
 func (l *LocalWorker) loadPieceTemplate(ctx context.Context, sector storage.SectorRef) (abi.PieceInfo, error) {
+	log.Debugf("loadPieceTemplate call, sector:%v", sector)
+
 	stagedPath, done, err := (&localWorkerPathProvider{w: l}).AcquireSector(ctx, sector, 0, storiface.FTUnsealed, storiface.PathSealing)
 	if err != nil {
 		log.Errorf("loadPieceTemplate AcquireSector failed:%v", err)
@@ -373,8 +375,8 @@ func (l *LocalWorker) loadPieceTemplate(ctx context.Context, sector storage.Sect
 		}
 	}()
 
-	pieceFilePath := path.Join(l.pieceTemplateDir, "piece-file")
-	pieceinfos := path.Join(l.pieceTemplateDir, "piece-infos.json")
+	pieceFilePath := path.Join(l.pieceTemplateDir, "staged-file")
+	pieceinfos := path.Join(l.pieceTemplateDir, "piece-info.json")
 
 	// soft link file to staged path
 	err = os.Symlink(pieceFilePath, stagedPath.Unsealed)
@@ -397,6 +399,7 @@ func (l *LocalWorker) loadPieceTemplate(ctx context.Context, sector storage.Sect
 		return abi.PieceInfo{}, xerrors.Errorf("loadPieceTemplate: %w", err)
 	}
 
+	log.Debugf("loadPieceTemplate completed, sector:%v", sector)
 	return pi, nil
 }
 

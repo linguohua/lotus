@@ -519,6 +519,8 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 			err = os.Symlink(sb.merkleTreecache, targetMerkleTreeCache)
 			if err != nil {
 				log.Errorf("sb.SealPreCommit1 Symlink merkleTreecache failed:%v", err)
+			} else {
+				log.Info("sb.SealPreCommit1 link merkleTreecache ok")
 			}
 		}
 	}
