@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/bits"
 	"os"
+	"path"
 	"runtime"
 
 	"github.com/ipfs/go-cid"
@@ -28,11 +29,11 @@ import (
 
 var _ Storage = &Sealer{}
 
-func New(sectors SectorProvider) (*Sealer, error) {
+func New(sectors SectorProvider, merkleTreecache string) (*Sealer, error) {
 	sb := &Sealer{
-		sectors: sectors,
-
-		stopping: make(chan struct{}),
+		sectors:         sectors,
+		merkleTreecache: merkleTreecache,
+		stopping:        make(chan struct{}),
 	}
 
 	return sb, nil
@@ -498,6 +499,19 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 			}
 		} else {
 			return nil, err
+		}
+	}
+
+	// lingh: soft link to merkle cache file
+	if sb.merkleTreecache != "" {
+		_, err := os.Stat(sb.merkleTreecache)
+		if !os.IsNotExist(err) {
+			// exists
+			targetMerkleTreeCache := path.Join(paths.Cache, "sc-02-data-tree-d.dat")
+			err = os.Symlink(sb.merkleTreecache, targetMerkleTreeCache)
+			if err != nil {
+				log.Errorf("sb.SealPreCommit1 Symlink merkleTreecache failed:%v", err)
+			}
 		}
 	}
 
