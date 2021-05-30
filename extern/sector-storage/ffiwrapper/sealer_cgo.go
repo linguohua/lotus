@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"math/bits"
 	"os"
@@ -227,10 +228,17 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		pieceCID = paddedCid
 	}
 
-	return abi.PieceInfo{
+	pi := abi.PieceInfo{
 		Size:     pieceSize.Padded(),
 		PieceCID: pieceCID,
-	}, nil
+	}
+
+	v, err := json.Marshal(&pi)
+	if err == nil {
+		log.Info("add piece completed, pieceInfo:\n %s", string(v))
+	}
+
+	return pi, nil
 }
 
 func (sb *Sealer) pieceCid(spt abi.RegisteredSealProof, in []byte) (cid.Cid, error) {
