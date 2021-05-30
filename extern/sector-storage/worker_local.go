@@ -344,8 +344,8 @@ func (l *LocalWorker) hasPieceTemplate() bool {
 		return false
 	}
 
-	pieceFilePath := path.Join(l.pieceTemplateDir, "piece-file")
-	pieceinfos := path.Join(l.pieceTemplateDir, "piece-infos")
+	pieceFilePath := path.Join(l.pieceTemplateDir, "staged-file")
+	pieceinfos := path.Join(l.pieceTemplateDir, "piece-info.json")
 
 	_, err := os.Stat(pieceFilePath)
 	if os.IsNotExist(err) {
