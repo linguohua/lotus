@@ -51,9 +51,15 @@ type WorkerSelector interface {
 	Cmp(ctx context.Context, task sealtasks.TaskType, a, b *workerHandle) (bool, error) // true if a is preferred over b
 }
 
+type groupBuckets struct {
+	groupID string
+	tikets  int
+}
+
 type scheduler struct {
-	workersLk sync.RWMutex
-	workers   map[WorkerID]*workerHandle
+	workersLk      sync.RWMutex
+	workers        map[WorkerID]*workerHandle
+	p1GroupBuckets map[string]*groupBuckets
 
 	schedule       chan *workerRequest
 	windowRequests chan *schedWindowRequest
@@ -104,9 +110,12 @@ type schedWindowRequest struct {
 	acceptTaskType sealtasks.TaskType
 
 	done chan *schedWindow
+
+	groupID string
 }
 
 type schedWindow struct {
+	groupID string
 	//allocated activeResources
 
 	// todo []*workerRequest
@@ -235,6 +244,30 @@ type SchedDiagInfo struct {
 func (sh *scheduler) runSched() {
 	defer close(sh.closed)
 
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				ticker.Stop()
+				sh.workersLk.Lock()
+				changed := false
+				for _, g := range sh.p1GroupBuckets {
+					if g.tikets < 5 {
+						g.tikets = 5
+						changed = true
+					}
+				}
+				sh.workersLk.Unlock()
+				if changed {
+					sh.workerChange <- struct{}{}
+				}
+			case <-sh.closing:
+				return
+			}
+		}
+	}()
+
 	iw := time.After(InitWait)
 	var initialised bool
 
@@ -268,57 +301,58 @@ func (sh *scheduler) runSched() {
 		case <-sh.closing:
 			sh.schedClose()
 			return
-		}
 
-		if doSched && initialised {
-			// First gather any pending tasks, so we go through the scheduling loop
-			// once for every added task
-		loop:
-			for {
-				select {
-				case <-sh.workerChange:
-				case dreq := <-sh.workerDisable:
-					toDisable = append(toDisable, dreq)
-				case req := <-sh.schedule:
-					sh.schedQueue.Push(req)
-					if sh.testSync != nil {
-						sh.testSync <- struct{}{}
+			if doSched && initialised {
+				// First gather any pending tasks, so we go through the scheduling loop
+				// once for every added task
+			loop:
+				for {
+					select {
+					case <-sh.workerChange:
+					case dreq := <-sh.workerDisable:
+						toDisable = append(toDisable, dreq)
+					case req := <-sh.schedule:
+						sh.schedQueue.Push(req)
+						if sh.testSync != nil {
+							sh.testSync <- struct{}{}
+						}
+					case req := <-sh.windowRequests:
+						sh.openWindows = append(sh.openWindows, req)
+
+					default:
+						break loop
 					}
-				case req := <-sh.windowRequests:
-					sh.openWindows = append(sh.openWindows, req)
-				default:
-					break loop
 				}
+
+				for _, req := range toDisable {
+					for _, window := range req.activeWindows {
+						// for _, request := range window.todo {
+						// 	sh.schedQueue.Push(request)
+						// }
+						if window.todo != nil {
+							sh.schedQueue.Push(window.todo)
+						}
+					}
+
+					openWindows := make([]*schedWindowRequest, 0, len(sh.openWindows))
+					for _, window := range sh.openWindows {
+						if window.worker != req.wid {
+							openWindows = append(openWindows, window)
+						}
+					}
+					sh.openWindows = openWindows
+
+					sh.workersLk.Lock()
+					sh.workers[req.wid].enabled = false
+					sh.workersLk.Unlock()
+
+					req.done()
+				}
+
+				sh.trySched()
 			}
 
-			for _, req := range toDisable {
-				for _, window := range req.activeWindows {
-					// for _, request := range window.todo {
-					// 	sh.schedQueue.Push(request)
-					// }
-					if window.todo != nil {
-						sh.schedQueue.Push(window.todo)
-					}
-				}
-
-				openWindows := make([]*schedWindowRequest, 0, len(sh.openWindows))
-				for _, window := range sh.openWindows {
-					if window.worker != req.wid {
-						openWindows = append(openWindows, window)
-					}
-				}
-				sh.openWindows = openWindows
-
-				sh.workersLk.Lock()
-				sh.workers[req.wid].enabled = false
-				sh.workersLk.Unlock()
-
-				req.done()
-			}
-
-			sh.trySched()
 		}
-
 	}
 }
 
@@ -492,6 +526,18 @@ func (sh *scheduler) trySched() {
 			}
 
 			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d", sqi, task.sector.ID.Number, task.taskType, wnd)
+
+			if task.taskType == sealtasks.TTPreCommit1 {
+				groupID := sh.openWindows[wnd].groupID
+				bucket, ok := sh.p1GroupBuckets[groupID]
+				if ok {
+					if bucket.tikets < 1 {
+						continue
+					}
+
+					bucket.tikets--
+				}
+			}
 
 			// windows[wnd].allocated.add(wr, needRes)
 			// TODO: We probably want to re-sort acceptableWindows here based on new

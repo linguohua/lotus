@@ -21,6 +21,15 @@ type schedWorker struct {
 	taskDone         chan struct{}
 }
 
+func hasTaskType(acceptTaskTypes []sealtasks.TaskType, target sealtasks.TaskType) bool {
+	for _, r := range acceptTaskTypes {
+		if r == target {
+			return true
+		}
+	}
+	return false
+}
+
 // context only used for startup
 func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 	info, err := w.Info(ctx)
@@ -66,6 +75,17 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 	}
 
 	sh.workers[wid] = worker
+
+	if info.GroupID != "" && hasTaskType(acceptTaskTypes, sealtasks.TTPreCommit1) {
+		_, exist = sh.p1GroupBuckets[info.GroupID]
+		if !exist {
+			sh.p1GroupBuckets[info.GroupID] = &groupBuckets{
+				tikets:  5,
+				groupID: info.GroupID,
+			}
+		}
+	}
+
 	sh.workersLk.Unlock()
 
 	schedWindowsCount := worker.info.Resources.Windows()
@@ -264,6 +284,7 @@ func (sw *schedWorker) requestWindowsByTasktype(taskType sealtasks.TaskType, i i
 			acceptTaskType: taskType,
 			worker:         sw.wid,
 			done:           sw.scheduledWindows,
+			groupID:        sw.worker.info.GroupID,
 		}:
 		case <-sw.sched.closing:
 			return false
