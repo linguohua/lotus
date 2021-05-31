@@ -30,11 +30,12 @@ import (
 
 var _ Storage = &Sealer{}
 
-func New(sectors SectorProvider, merkleTreecache string) (*Sealer, error) {
+func New(sectors SectorProvider, merkleTreecache string, ccfunc cacheClearFunc) (*Sealer, error) {
 	sb := &Sealer{
 		sectors:         sectors,
 		merkleTreecache: merkleTreecache,
 		stopping:        make(chan struct{}),
+		ccfunc:          ccfunc,
 	}
 
 	return sb, nil
@@ -599,19 +600,15 @@ func (sb *Sealer) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 	}
 
 	cache := paths.Cache
-	go func() {
+	if sb.ccfunc == nil {
 		ssize, err := sector.ProofType.SectorSize()
 		if err != nil {
 			log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v", err)
-			return
+		} else {
+			// clear cache
+			sb.ccfunc(cache, uint64(ssize))
 		}
-
-		// lingh: we clear cache after C1 completed
-		err = ffi.ClearCache(uint64(ssize), cache)
-		if err != nil {
-			log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
-		}
-	}()
+	}
 
 	return output, nil
 }

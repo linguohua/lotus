@@ -17,6 +17,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
+	ffi "github.com/filecoin-project/filecoin-ffi"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-statestore"
 	storage "github.com/filecoin-project/specs-storage/storage"
@@ -67,6 +68,11 @@ type LocalWorker struct {
 	session     uuid.UUID
 	testDisable int64
 	closing     chan struct{}
+
+	chanCacheClear chan struct {
+		string
+		uint64
+	}
 }
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
@@ -92,6 +98,11 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 
 		session: uuid.New(),
 		closing: make(chan struct{}),
+
+		chanCacheClear: make(chan struct {
+			string
+			uint64
+		}, 16),
 	}
 
 	if ext != nil {
@@ -121,6 +132,21 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 				if err := w.ct.onReturned(call.ID); err != nil {
 					log.Errorf("marking call as returned failed: %s: %+v", call.RetType, err)
 				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			cached, ok := <-w.chanCacheClear
+			if !ok {
+				break
+			}
+
+			// lingh: we clear cache after C1 completed
+			err = ffi.ClearCache(uint64(cached.uint64), cached.string)
+			if err != nil {
+				log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
 			}
 		}
 	}()
@@ -169,7 +195,28 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 }
 
 func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {
-	return ffiwrapper.New(&localWorkerPathProvider{w: l}, l.merkleTreecache)
+	ccfunc := func(cache string, size uint64) {
+		l.clearLocalCache(cache, size)
+	}
+
+	return ffiwrapper.New(&localWorkerPathProvider{w: l}, l.merkleTreecache, ccfunc)
+}
+
+func (l *LocalWorker) clearLocalCache(cache string, size uint64) {
+	if l.chanCacheClear != nil {
+		go func() {
+			defer func() {
+				if recover() == nil {
+					return
+				}
+			}()
+
+			l.chanCacheClear <- struct {
+				string
+				uint64
+			}{cache, size}
+		}()
+	}
 }
 
 type ReturnType string
@@ -653,6 +700,7 @@ func (l *LocalWorker) Session(ctx context.Context) (uuid.UUID, error) {
 }
 
 func (l *LocalWorker) Close() error {
+	close(l.chanCacheClear)
 	close(l.closing)
 	return nil
 }
