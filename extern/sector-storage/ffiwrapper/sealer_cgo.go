@@ -597,6 +597,22 @@ func (sb *Sealer) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 
 		return nil, xerrors.Errorf("StandaloneSealCommit: %w", err)
 	}
+
+	cache := paths.Cache
+	go func() {
+		ssize, err := sector.ProofType.SectorSize()
+		if err != nil {
+			log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v", err)
+			return
+		}
+
+		// lingh: we clear cache after C1 completed
+		err = ffi.ClearCache(uint64(ssize), cache)
+		if err != nil {
+			log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
+		}
+	}()
+
 	return output, nil
 }
 
