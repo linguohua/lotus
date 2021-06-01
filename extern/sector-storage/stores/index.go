@@ -152,7 +152,9 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 
 	// random select one
 	candidate := candidates[rand.Int()%len(candidates)]
-	candidate.bindSectors[sector] = struct{}{}
+	if candidate.info.MaxSealingSectors != 0 {
+		candidate.bindSectors[sector] = struct{}{}
+	}
 
 	// err := i.StorageDeclareSector(ctx, storageID, sector, ft, true)
 	// if err != nil {
@@ -196,7 +198,7 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 			continue
 		}
 
-		if len(p.bindSectors) >= p.info.MaxSealingSectors {
+		if p.info.MaxSealingSectors != 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
 			_, ok := p.bindSectors[sector]
 			if ok {
 				// log.Infof("TryBindSector2SealStorage bind ok, already bind: sector %s, storage ID:%s",
@@ -231,7 +233,9 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 
 	// random select one
 	candidate := candidates[rand.Int()%len(candidates)]
-	candidate.bindSectors[sector] = struct{}{}
+	if candidate.info.MaxSealingSectors != 0 {
+		candidate.bindSectors[sector] = struct{}{}
+	}
 
 	// err := i.StorageDeclareSector(ctx, storageID, sector, ft, true)
 	// if err != nil {
@@ -383,6 +387,7 @@ loop:
 
 	store, exist := i.stores[storageID]
 	if exist && store.info.GroupID != "" {
+		// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
 		_, ok := store.bindSectors[s]
 		if ok {
 			log.Infof("sector %v declared in %s, store already bind to it", s, storageID)
@@ -433,6 +438,7 @@ func (i *Index) StorageDropSector(ctx context.Context, storageID ID, s abi.Secto
 
 	store, exist := i.stores[storageID]
 	if exist && store.info.GroupID != "" {
+		// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
 		_, ok := store.bindSectors[s]
 		if ok {
 			log.Infof("sector %v drop in %s, unbind",
@@ -589,7 +595,7 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 			continue
 		}
 
-		if len(p.bindSectors) >= p.info.MaxSealingSectors {
+		if p.info.MaxSealingSectors != 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
 			//log.Debugf("not allocating on %s, it already bind full", p.info.ID)
 			continue
 		}
