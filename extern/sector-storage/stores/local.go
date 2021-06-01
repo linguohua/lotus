@@ -34,6 +34,9 @@ type StoragePath struct {
 type LocalStorageMeta struct {
 	GroupID string
 
+	// when as sealing storage, how many sealing instances can this storage support
+	MaxSealingSectors int
+
 	ID ID
 
 	// A high weight means data is more likely to be stored in this path
@@ -204,14 +207,19 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 		return err
 	}
 
+	if meta.CanSeal && meta.MaxSealingSectors < 1 {
+		meta.MaxSealingSectors = 1
+	}
+
 	sinfo := StorageInfo{
-		GroupID:    meta.GroupID,
-		ID:         meta.ID,
-		URLs:       []string{p},
-		Weight:     meta.Weight,
-		MaxStorage: meta.MaxStorage,
-		CanSeal:    meta.CanSeal,
-		CanStore:   meta.CanStore,
+		GroupID:           meta.GroupID,
+		MaxSealingSectors: meta.MaxSealingSectors,
+		ID:                meta.ID,
+		URLs:              []string{p},
+		Weight:            meta.Weight,
+		MaxStorage:        meta.MaxStorage,
+		CanSeal:           meta.CanSeal,
+		CanStore:          meta.CanStore,
 	}
 
 	log.Infof("local stores call remote index StorageAttach with:%+v", sinfo)
@@ -272,14 +280,19 @@ func (st *Local) Redeclare(ctx context.Context) error {
 			continue
 		}
 
+		if meta.CanSeal && meta.MaxSealingSectors < 1 {
+			meta.MaxSealingSectors = 1
+		}
+
 		err = st.index.StorageAttach(ctx, StorageInfo{
-			GroupID:    meta.GroupID,
-			ID:         id,
-			URLs:       []string{p.local},
-			Weight:     meta.Weight,
-			MaxStorage: meta.MaxStorage,
-			CanSeal:    meta.CanSeal,
-			CanStore:   meta.CanStore,
+			GroupID:           meta.GroupID,
+			MaxSealingSectors: meta.MaxSealingSectors,
+			ID:                id,
+			URLs:              []string{p.local},
+			Weight:            meta.Weight,
+			MaxStorage:        meta.MaxStorage,
+			CanSeal:           meta.CanSeal,
+			CanStore:          meta.CanStore,
 		}, fst)
 		if err != nil {
 			return xerrors.Errorf("redeclaring storage in index: %w", err)

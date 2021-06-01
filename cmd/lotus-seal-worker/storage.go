@@ -101,13 +101,19 @@ var storageAttachCmd = &cli.Command{
 				return xerrors.Errorf("worker manage storage must specify group id")
 			}
 
+			maxSealingSectors := cctx.Int("maxsealing")
+			if maxSealingSectors < 1 {
+				return xerrors.Errorf("worker manage storage must specify maxsealing > 0")
+			}
+
 			cfg := &stores.LocalStorageMeta{
-				ID:         stores.ID(uuid.New().String()),
-				Weight:     cctx.Uint64("weight"),
-				CanSeal:    cctx.Bool("seal"),
-				CanStore:   cctx.Bool("store"),
-				MaxStorage: uint64(maxStor),
-				GroupID:    groupID,
+				ID:                stores.ID(uuid.New().String()),
+				Weight:            cctx.Uint64("weight"),
+				CanSeal:           cctx.Bool("seal"),
+				CanStore:          cctx.Bool("store"),
+				MaxStorage:        uint64(maxStor),
+				GroupID:           groupID,
+				MaxSealingSectors: maxSealingSectors,
 			}
 
 			if !(cfg.CanStore || cfg.CanSeal) {
