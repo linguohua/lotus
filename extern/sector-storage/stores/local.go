@@ -616,7 +616,7 @@ func (st *Local) MoveStorage(ctx context.Context, s storage.SectorRef, types sto
 			continue
 		}
 
-		log.Debugf("moving %v(%d) to storage: %s(se:%t; st:%t) -> %s(se:%t; st:%t)", s, fileType, sst.ID, sst.CanSeal, sst.CanStore, dst.ID, dst.CanSeal, dst.CanStore)
+		log.Infof("moving %v(%d) to storage: %s(se:%t; st:%t) -> %s(se:%t; st:%t)", s, fileType, sst.ID, sst.CanSeal, sst.CanStore, dst.ID, dst.CanSeal, dst.CanStore)
 
 		if err := move(storiface.PathByType(src, fileType), storiface.PathByType(dest, fileType)); err != nil {
 			// TODO: attempt some recovery (check if src is still there, re-declare)
