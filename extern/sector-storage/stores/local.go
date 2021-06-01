@@ -623,15 +623,28 @@ func (st *Local) MoveStorage(ctx context.Context, s storage.SectorRef, types sto
 			return xerrors.Errorf("moving sector %v(%d): %w", s, fileType, err)
 		}
 
+		// if err := st.index.StorageDropSector(ctx, ID(storiface.PathByType(srcIds, fileType)), s.ID, fileType); err != nil {
+		// 	return xerrors.Errorf("dropping source sector from index: %w", err)
+		// }
+
+		// if err := st.index.StorageDeclareSector(ctx, ID(storiface.PathByType(destIds, fileType)), s.ID, fileType, true); err != nil {
+		// 	return xerrors.Errorf("declare sector %d(t:%d) -> %s: %w", s, fileType, ID(storiface.PathByType(destIds, fileType)), err)
+		// }
+	}
+
+	for _, fileType := range storiface.PathTypes {
+		if fileType&types == 0 {
+			continue
+		}
+
 		if err := st.index.StorageDropSector(ctx, ID(storiface.PathByType(srcIds, fileType)), s.ID, fileType); err != nil {
-			return xerrors.Errorf("dropping source sector from index: %w", err)
+			log.Errorf("dropping source sector from index: %w", err)
 		}
 
 		if err := st.index.StorageDeclareSector(ctx, ID(storiface.PathByType(destIds, fileType)), s.ID, fileType, true); err != nil {
-			return xerrors.Errorf("declare sector %d(t:%d) -> %s: %w", s, fileType, ID(storiface.PathByType(destIds, fileType)), err)
+			log.Errorf("declare sector %d(t:%d) -> %s: %w", s, fileType, ID(storiface.PathByType(destIds, fileType)), err)
 		}
 	}
-
 	st.reportStorage(ctx) // report space use changes
 
 	return nil

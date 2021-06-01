@@ -436,17 +436,20 @@ func (i *Index) StorageDropSector(ctx context.Context, storageID ID, s abi.Secto
 		i.sectors[d] = rewritten
 	}
 
-	store, exist := i.stores[storageID]
-	if exist && store.info.GroupID != "" {
-		// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
-		_, ok := store.bindSectors[s]
-		if ok {
-			log.Infof("sector %v drop in %s, unbind",
-				s, storageID)
-			delete(store.bindSectors, s)
-		} else {
-			log.Infof("sector %v drop in %s, but store has not bind to it",
-				s, storageID)
+	// only remove bind when release sealed
+	if ft == storiface.FTSealed {
+		store, exist := i.stores[storageID]
+		if exist && store.info.GroupID != "" {
+			// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
+			_, ok := store.bindSectors[s]
+			if ok {
+				log.Infof("sector %v drop in %s, unbind",
+					s, storageID)
+				delete(store.bindSectors, s)
+			} else {
+				log.Infof("sector %v drop in %s, but store has not bind to it",
+					s, storageID)
+			}
 		}
 	}
 
