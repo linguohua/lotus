@@ -301,59 +301,59 @@ func (sh *scheduler) runSched() {
 		case <-sh.closing:
 			sh.schedClose()
 			return
-
-			if doSched && initialised {
-				// First gather any pending tasks, so we go through the scheduling loop
-				// once for every added task
-			loop:
-				for {
-					select {
-					case <-sh.workerChange:
-					case dreq := <-sh.workerDisable:
-						toDisable = append(toDisable, dreq)
-					case req := <-sh.schedule:
-						sh.schedQueue.Push(req)
-						if sh.testSync != nil {
-							sh.testSync <- struct{}{}
-						}
-					case req := <-sh.windowRequests:
-						sh.openWindows = append(sh.openWindows, req)
-
-					default:
-						break loop
+		}
+		if doSched && initialised {
+			// First gather any pending tasks, so we go through the scheduling loop
+			// once for every added task
+		loop:
+			for {
+				select {
+				case <-sh.workerChange:
+				case dreq := <-sh.workerDisable:
+					toDisable = append(toDisable, dreq)
+				case req := <-sh.schedule:
+					sh.schedQueue.Push(req)
+					if sh.testSync != nil {
+						sh.testSync <- struct{}{}
 					}
+				case req := <-sh.windowRequests:
+					sh.openWindows = append(sh.openWindows, req)
+
+				default:
+					break loop
 				}
-
-				for _, req := range toDisable {
-					for _, window := range req.activeWindows {
-						// for _, request := range window.todo {
-						// 	sh.schedQueue.Push(request)
-						// }
-						if window.todo != nil {
-							sh.schedQueue.Push(window.todo)
-						}
-					}
-
-					openWindows := make([]*schedWindowRequest, 0, len(sh.openWindows))
-					for _, window := range sh.openWindows {
-						if window.worker != req.wid {
-							openWindows = append(openWindows, window)
-						}
-					}
-					sh.openWindows = openWindows
-
-					sh.workersLk.Lock()
-					sh.workers[req.wid].enabled = false
-					sh.workersLk.Unlock()
-
-					req.done()
-				}
-
-				sh.trySched()
 			}
 
+			for _, req := range toDisable {
+				for _, window := range req.activeWindows {
+					// for _, request := range window.todo {
+					// 	sh.schedQueue.Push(request)
+					// }
+					if window.todo != nil {
+						sh.schedQueue.Push(window.todo)
+					}
+				}
+
+				openWindows := make([]*schedWindowRequest, 0, len(sh.openWindows))
+				for _, window := range sh.openWindows {
+					if window.worker != req.wid {
+						openWindows = append(openWindows, window)
+					}
+				}
+				sh.openWindows = openWindows
+
+				sh.workersLk.Lock()
+				sh.workers[req.wid].enabled = false
+				sh.workersLk.Unlock()
+
+				req.done()
+			}
+
+			sh.trySched()
 		}
+
 	}
+
 }
 
 func (sh *scheduler) diag() SchedDiagInfo {
