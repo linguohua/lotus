@@ -55,7 +55,13 @@ var storageAttachCmd = &cli.Command{
 			Name:  "group",
 			Usage: "group id when use in sealing",
 		},
+
+		&cli.IntFlag{
+			Name:  "maxsealing",
+			Usage: "max parrallel sealing in this storage",
+		},
 	},
+
 	Action: func(cctx *cli.Context) error {
 		nodeApi, closer, err := lcli.GetWorkerAPI(cctx)
 		if err != nil {
