@@ -250,13 +250,13 @@ func (sh *scheduler) runSched() {
 		for {
 			select {
 			case <-ticker.C:
-				// ticker.Stop()
 				sh.workersLk.Lock()
 				changed := false
 				for _, g := range sh.p1GroupBuckets {
 					if g.tikets < 5 {
 						g.tikets = 5
 						changed = true
+						log.Infof("reset group %s P1 tickets to %d", g.groupID, g.tikets)
 					}
 				}
 				sh.workersLk.Unlock()
@@ -264,6 +264,8 @@ func (sh *scheduler) runSched() {
 					sh.workerChange <- struct{}{}
 				}
 			case <-sh.closing:
+				ticker.Stop()
+				log.Infof("ticket reset goroutine end")
 				return
 			}
 		}
@@ -531,10 +533,12 @@ func (sh *scheduler) trySched() {
 				bucket, ok := sh.p1GroupBuckets[groupID]
 				if ok {
 					if bucket.tikets < 1 {
+						log.Infof("task acquire P1 ticket, group:%s, no ticket remain", groupID)
 						continue
 					}
 
 					bucket.tikets--
+					log.Infof("task acquire P1 ticket, group:%s, remain:%d", groupID, bucket.tikets)
 				}
 			}
 
