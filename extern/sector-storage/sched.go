@@ -250,7 +250,7 @@ func (sh *scheduler) runSched() {
 		for {
 			select {
 			case <-ticker.C:
-				ticker.Stop()
+				// ticker.Stop()
 				sh.workersLk.Lock()
 				changed := false
 				for _, g := range sh.p1GroupBuckets {
@@ -526,8 +526,6 @@ func (sh *scheduler) trySched() {
 				continue
 			}
 
-			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d", sqi, task.sector.ID.Number, task.taskType, wnd)
-
 			if task.taskType == sealtasks.TTPreCommit1 {
 				groupID := sh.openWindows[wnd].groupID
 				bucket, ok := sh.p1GroupBuckets[groupID]
@@ -540,6 +538,7 @@ func (sh *scheduler) trySched() {
 				}
 			}
 
+			log.Debugf("SCHED ASSIGNED sqi:%d sector %d task %s to window %d", sqi, task.sector.ID.Number, task.taskType, wnd)
 			// windows[wnd].allocated.add(wr, needRes)
 			// TODO: We probably want to re-sort acceptableWindows here based on new
 			//  workerHandle.utilization + windows[wnd].allocated.utilization (workerHandle.utilization is used in all
