@@ -143,11 +143,15 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 				break
 			}
 
+			log.Info("LocalWorker.chanCacheClear, do:", cached.string)
+
 			// lingh: we clear cache after C1 completed
 			err = ffi.ClearCache(uint64(cached.uint64), cached.string)
 			if err != nil {
 				log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
 			}
+
+			log.Infof("LocalWorker.chanCacheClear, do:%s completed", cached.string)
 		}
 	}()
 
@@ -204,6 +208,7 @@ func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {
 
 func (l *LocalWorker) clearLocalCache(cache string, size uint64) {
 	if l.chanCacheClear != nil {
+		log.Info("LocalWorker.clearLocalCache:", cache)
 		go func() {
 			defer func() {
 				if recover() == nil {
@@ -216,6 +221,8 @@ func (l *LocalWorker) clearLocalCache(cache string, size uint64) {
 				uint64
 			}{cache, size}
 		}()
+	} else {
+		log.Infof("LocalWorker.clearLocalCache:%s, but no chanCacheClear avalible", cache)
 	}
 }
 
