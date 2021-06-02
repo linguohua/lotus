@@ -33,11 +33,13 @@ func move(from, to string) error {
 	//  can do better
 
 	var errOut bytes.Buffer
+	log.Infof("util_unix.call /usr/bin/env mv bein:%s ----> %s", from, to)
 	cmd := exec.Command("/usr/bin/env", "mv", "-t", toDir, from) // nolint
 	cmd.Stderr = &errOut
 	if err := cmd.Run(); err != nil {
+		log.Infof("util_unix.call /usr/bin/env mv failed:%s ----> %s, error:%v", from, to, err)
 		return xerrors.Errorf("exec mv (stderr: %s): %w", strings.TrimSpace(errOut.String()), err)
 	}
-
+	log.Infof("util_unix.call /usr/bin/env mv end:%s ----> %s", from, to)
 	return nil
 }
