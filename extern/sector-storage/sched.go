@@ -174,7 +174,8 @@ func newScheduler() *scheduler {
 		workerChange:   make(chan struct{}, 20),
 		workerDisable:  make(chan workerDisableReq),
 
-		schedQueue: &requestQueue{},
+		schedQueue:     &requestQueue{},
+		p1GroupBuckets: make(map[string]*groupBuckets),
 
 		workTracker: &workTracker{
 			done:    map[storiface.CallID]struct{}{},
