@@ -44,6 +44,7 @@ type LocalWorkerExtParams struct {
 	MerkleTreecache   string
 
 	GroupID string
+	Role    string
 }
 
 type LocalWorker struct {
@@ -154,6 +155,21 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 			log.Infof("LocalWorker.chanCacheClear, do:%s completed", cached.string)
 		}
 	}()
+
+	if ext.Role == "P1" {
+		log.Info("LocalWorker.New role is P1, try allocate hugepages")
+		sn := abi.SectorNumber(0)
+		mid := abi.ActorID(0)
+		ti := abi.SealRandomness([]byte{0})
+		pi := []abi.PieceInfo{}
+		_, err = ffi.SealPreCommitPhase1(abi.RegisteredSealProof_StackedDrg64GiBV1,
+			"hpalloc", "hpalloc", "hpalloc", sn, mid, ti, pi)
+		if err != nil && err.Error() != "ok" {
+			log.Infof("LocalWorker.New role is P1, allocate hugepages failed:%v", err)
+		} else {
+			log.Info("LocalWorker.New role is P1, try allocate completed")
+		}
+	}
 
 	return w
 }

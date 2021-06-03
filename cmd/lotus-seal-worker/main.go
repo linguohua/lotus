@@ -427,6 +427,7 @@ var runCmd = &cli.Command{
 		ext.PieceTemplateDir = os.Getenv("PIECE_TEMPLATE_DIR")
 		ext.PieceTemplateSize = 68719476736
 		ext.MerkleTreecache = os.Getenv("MERKLE_TREE_CACHE")
+		ext.Role = role
 
 		wsts := statestore.New(namespace.Wrap(ds, modules.WorkerCallsPrefix))
 
