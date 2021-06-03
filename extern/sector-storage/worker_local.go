@@ -167,7 +167,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		if err != nil && err.Error() != "ok" {
 			log.Infof("LocalWorker.New role is P1, allocate hugepages failed:%v", err)
 		} else {
-			log.Info("LocalWorker.New role is P1, try allocate completed")
+			log.Info("LocalWorker.New role is P1, try allocate completed:%v", err)
 		}
 	}
 
