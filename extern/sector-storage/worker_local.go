@@ -156,7 +156,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		}
 	}()
 
-	if ext.Role == "P1" {
+	if ext != nil && ext.Role == "P1" {
 		log.Info("LocalWorker.New role is P1, try allocate hugepages")
 		sn := abi.SectorNumber(0)
 		mid := abi.ActorID(0)
