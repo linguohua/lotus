@@ -157,7 +157,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 	}()
 
 	if ext != nil && ext.Role == "P1" {
-		log.Info("LocalWorker.New role is P1, try allocate hugepages")
+		log.Info("LocalWorker.New role is P1, try allocate hugepages for 64GB sectors")
 		sn := abi.SectorNumber(0)
 		mid := abi.ActorID(0)
 		ti := abi.SealRandomness([]byte{0})
