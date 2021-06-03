@@ -165,9 +165,9 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		_, err = ffi.SealPreCommitPhase1(abi.RegisteredSealProof_StackedDrg64GiBV1,
 			"hpalloc", "hpalloc", "hpalloc", sn, mid, ti, pi)
 		if err != nil && err.Error() != "ok" {
-			log.Infof("LocalWorker.New role is P1, allocate hugepages failed:%v", err)
+			log.Fatalf("LocalWorker.New role is P1, allocate hugepages failed:%v", err)
 		} else {
-			log.Info("LocalWorker.New role is P1, try allocate completed: ", err)
+			log.Infof("LocalWorker.New role is P1, try allocate completed: ", err)
 		}
 	}
 
