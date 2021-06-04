@@ -171,7 +171,7 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 	defer i.lk.RUnlock()
 
 	if groupID == "" {
-		log.Errorf("TryBindSector2SealStorage worker GroupID is empty, sector:%s, return a storage path", sector)
+		log.Debugf("TryBindSector2SealStorage worker GroupID is empty, sector:%s, return a storage path", sector)
 
 		// just continue
 		return i.allocStorageForFinalize(ctx, sector)
