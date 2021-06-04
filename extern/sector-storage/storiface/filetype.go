@@ -73,7 +73,7 @@ func (t SectorFileType) SealSpaceUse(ssize abi.SectorSize) (uint64, error) {
 	return need, nil
 }
 
-func (t SectorFileType) All() [storiface.FileTypes]bool {
+func (t SectorFileType) All() [FileTypes]bool {
 	var out [FileTypes]bool
 
 	for i := range out {
