@@ -116,7 +116,7 @@ func NewIndex() *Index {
 }
 
 func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID) (StorageInfo, error) {
-	log.Infof("allocStorageForFinalize: sector %s", sector)
+	log.Debugf("allocStorageForFinalize: sector %s", sector)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 	i.lk.RLock()
 	defer i.lk.RUnlock()
@@ -160,12 +160,12 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 	// if err != nil {
 	// 	return StorageInfo{}, err
 	// }
-	log.Infof("allocStorageForFinalize bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
+	log.Debugf("allocStorageForFinalize bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
 	return *candidate.info, nil
 }
 
 func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
-	log.Infof("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
+	log.Debugf("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 	i.lk.RLock()
 	defer i.lk.RUnlock()
@@ -246,7 +246,7 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 }
 
 func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
-	log.Infof("UnBindSector2SealStorage: %s", sector)
+	log.Debugf("UnBindSector2SealStorage: %s", sector)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 
 	i.lk.RLock()
@@ -256,12 +256,12 @@ func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorI
 		_, ok := p.bindSectors[sector]
 		if ok {
 			delete(p.bindSectors, sector)
-			log.Infof("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
+			log.Debugf("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
 			return nil
 		}
 	}
 
-	log.Infof("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
+	log.Debugf("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
 	return nil
 }
 

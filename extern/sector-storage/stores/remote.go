@@ -236,7 +236,7 @@ func (r *Remote) acquireFromRemote(ctx context.Context, s abi.SectorID, fileType
 }
 
 func (r *Remote) fetch(ctx context.Context, url, outname string) error {
-	log.Infof("Fetch %s -> %s", url, outname)
+	log.Debugf("Fetch %s -> %s", url, outname)
 
 	// if len(r.limit) >= cap(r.limit) {
 	// 	log.Infof("Throttling fetch, %d already running", len(r.limit))
@@ -348,7 +348,7 @@ func (r *Remote) Remove(ctx context.Context, sid abi.SectorID, typ storiface.Sec
 }
 
 func (r *Remote) deleteFromRemote(ctx context.Context, url string) error {
-	log.Infof("Delete %s", url)
+	log.Debugf("Delete %s", url)
 	// req, err := http.NewRequest("DELETE", url, nil)
 	// if err != nil {
 	// 	return xerrors.Errorf("request: %w", err)
@@ -365,7 +365,7 @@ func (r *Remote) deleteFromRemote(ctx context.Context, url string) error {
 	// if resp.StatusCode != 200 {
 	// 	return xerrors.Errorf("non-200 code: %d", resp.StatusCode)
 	// }
-	log.Infof("-lin- this version not support Delete %s", url)
+	log.Debugf("-lin- this version not support Delete %s", url)
 	return nil
 }
 
@@ -429,7 +429,7 @@ func (r *Remote) FsStat(ctx context.Context, id ID) (fsutil.FsStat, error) {
 	// defer resp.Body.Close() // nolint
 
 	// return fsutil.FsStat{}, xerrors.Errorf("-lin- this version not support remote FsStat")
-	log.Error("-lin- this version not support remote FsStat")
+	log.Debugf("-lin- this version not support remote FsStat")
 	return fsutil.FsStat{}, nil
 }
 
