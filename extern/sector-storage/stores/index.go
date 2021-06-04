@@ -241,12 +241,12 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 	// if err != nil {
 	// 	return StorageInfo{}, err
 	// }
-	log.Infof("TryBindSector2SealStorage bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
+	log.Debugf("TryBindSector2SealStorage bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
 	return *candidate.info, nil
 }
 
 func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
-	log.Infof("UnBindSector2SealStorage: %s", sector)
+	log.Debugf("UnBindSector2SealStorage: %s", sector)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 
 	i.lk.RLock()
@@ -256,12 +256,12 @@ func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorI
 		_, ok := p.bindSectors[sector]
 		if ok {
 			delete(p.bindSectors, sector)
-			log.Infof("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
+			log.Debugf("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
 			return nil
 		}
 	}
 
-	log.Infof("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
+	log.Debugf("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
 	return nil
 }
 
