@@ -241,7 +241,7 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.Sector
 	// if err != nil {
 	// 	return StorageInfo{}, err
 	// }
-	log.Infof("TryBindSector2SealStorage bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
+	log.Debugf("TryBindSector2SealStorage bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
 	return *candidate.info, nil
 }
 
