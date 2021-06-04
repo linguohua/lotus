@@ -502,8 +502,9 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 		}
 
 		// done, remove that open window
-		openWindowsTT = append(openWindowsTT[0:wnd], openWindowsTT[wnd+1:]...)
-		sh.openWindows[taskType] = openWindowsTT
+		l := len(openWindowsTT)
+		openWindowsTT[l-1], openWindowsTT[wnd] = openWindowsTT[wnd], openWindowsTT[l-1]
+		sh.openWindows[taskType] = openWindowsTT[0:(l - 1)]
 
 		break
 	}
