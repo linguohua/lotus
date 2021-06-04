@@ -82,6 +82,11 @@ type WorkerStats struct {
 	Info    WorkerInfo
 	Enabled bool
 
+	Url  string
+	UUID string
+
+	Paused bool
+
 	MemUsedMin uint64
 	MemUsedMax uint64
 	GpuUsed    bool   // nolint

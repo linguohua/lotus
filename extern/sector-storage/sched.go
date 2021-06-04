@@ -95,6 +95,9 @@ type workerHandle struct {
 	// count all request windows
 	requestedWindowsCounter map[sealtasks.TaskType]int
 
+	paused bool
+	url    string
+
 	enabled bool
 
 	// for sync manager goroutine closing
@@ -444,6 +447,11 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 
 		if !worker.enabled {
 			log.Debugw("skipping disabled worker", "worker", windowRequest.worker)
+			continue
+		}
+
+		if worker.paused {
+			log.Debugw("skipping paused worker", "worker", windowRequest.worker)
 			continue
 		}
 

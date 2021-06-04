@@ -162,7 +162,7 @@ func addTestWorker(t *testing.T, sched *scheduler, index *stores.Index, name str
 		require.NoError(t, err)
 	}
 
-	require.NoError(t, sched.runWorker(context.TODO(), w))
+	require.NoError(t, sched.runWorker(context.TODO(), w, ""))
 }
 
 func TestSchedStartStop(t *testing.T) {

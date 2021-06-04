@@ -8,6 +8,7 @@ import (
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
+	"github.com/google/uuid"
 )
 
 type schedWorker struct {
@@ -31,7 +32,7 @@ func hasTaskType(acceptTaskTypes []sealtasks.TaskType, target sealtasks.TaskType
 }
 
 // context only used for startup
-func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
+func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error {
 	info, err := w.Info(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting worker info: %w", err)
@@ -55,6 +56,8 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 		//preparing: &activeResources{},
 		active:  &activeResources{},
 		enabled: true,
+		paused:  false,
+		url:     url,
 
 		closingMgr: make(chan struct{}),
 		closedMgr:  make(chan struct{}),
@@ -104,6 +107,36 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 	log.Infof("schedWorker.runWorker, group id:%s, host name:%s", info.GroupID, info.Hostname)
 
 	go sw.handleWorker()
+
+	return nil
+}
+
+func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool) error {
+	sh.workersLk.Lock()
+	defer sh.workersLk.Unlock()
+
+	wid, err := uuid.Parse(uuid2)
+	if err != nil {
+		return xerrors.Errorf("pauseWorker failed: parse uuid %s error %v", uuid2, err)
+	}
+
+	worker, exist := sh.workers[WorkerID(wid)]
+	if !exist {
+		return xerrors.Errorf("pauseWorker failed:no worker with session id %s found in scheduler", uuid2)
+	}
+
+	old := worker.paused
+	worker.paused = paused
+	if paused {
+		log.Debugf("scheduler worker with session id %s has been paused, it can not receive new task anymore", uuid2)
+	} else {
+		log.Debugf("scheduler worker with session id %s has been resume, it can receive new task now", uuid2)
+	}
+
+	if !paused && old {
+		// need to re-sched work
+		sh.workerChange <- struct{}{}
+	}
 
 	return nil
 }

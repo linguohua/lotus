@@ -96,6 +96,9 @@ type StorageMiner interface {
 	WorkerConnect(context.Context, string) error                              //perm:admin retry:true
 	WorkerStats(context.Context) (map[uuid.UUID]storiface.WorkerStats, error) //perm:admin
 	WorkerJobs(context.Context) (map[uuid.UUID][]storiface.WorkerJob, error)  //perm:admin
+	// go run gen/api/proxygen.go
+	WorkerPause(context.Context, string) error  //perm:admin
+	WorkerResume(context.Context, string) error //perm:admin
 
 	//storiface.WorkerReturn
 	ReturnAddPiece(ctx context.Context, callID storiface.CallID, pi abi.PieceInfo, err *storiface.CallError) error                //perm:admin retry:true

@@ -383,9 +383,23 @@ func (sm *StorageMinerAPI) WorkerConnect(ctx context.Context, url string) error 
 		return xerrors.Errorf("connecting remote storage failed: %w", err)
 	}
 
-	log.Infof("Connected to a remote worker at %s", url)
+	sessID, _ := w.Session(ctx)
 
-	return sm.StorageMgr.AddWorker(ctx, w)
+	log.Infof("Connected to a remote worker at url:%s, session-id:%s", url, sessID)
+
+	return sm.StorageMgr.AddWorker(ctx, w, url)
+}
+
+func (sm *StorageMinerAPI) WorkerPause(ctx context.Context, uuid string) error {
+	log.Infof("WorkerPause:%s", uuid)
+
+	return sm.StorageMgr.PauseWorker(ctx, uuid)
+}
+
+func (sm *StorageMinerAPI) WorkerResume(ctx context.Context, uuid string) error {
+	log.Infof("WorkerResume:%s", uuid)
+
+	return sm.StorageMgr.ResumeWorker(ctx, uuid)
 }
 
 func (sm *StorageMinerAPI) SealingSchedDiag(ctx context.Context, doSched bool) (interface{}, error) {

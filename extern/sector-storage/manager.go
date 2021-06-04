@@ -190,8 +190,16 @@ func (m *Manager) AddLocalStorage(ctx context.Context, path string) error {
 	return nil
 }
 
-func (m *Manager) AddWorker(ctx context.Context, w Worker) error {
-	return m.sched.runWorker(ctx, w)
+func (m *Manager) AddWorker(ctx context.Context, w Worker, url string) error {
+	return m.sched.runWorker(ctx, w, url)
+}
+
+func (m *Manager) PauseWorker(ctx context.Context, uuid string) error {
+	return m.sched.pauseWorker(ctx, uuid, true)
+}
+
+func (m *Manager) ResumeWorker(ctx context.Context, uuid string) error {
+	return m.sched.pauseWorker(ctx, uuid, false)
 }
 
 func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -138,7 +138,7 @@ func TestSimple(t *testing.T) {
 
 	err := m.AddWorker(ctx, newTestWorker(WorkerConfig{
 		TaskTypes: localTasks,
-	}, lstor, m))
+	}, lstor, m), "")
 	require.NoError(t, err)
 
 	sid := storage.SectorRef{
@@ -177,7 +177,7 @@ func TestRedoPC1(t *testing.T) {
 		TaskTypes: localTasks,
 	}, lstor, m)
 
-	err := m.AddWorker(ctx, tw)
+	err := m.AddWorker(ctx, tw, "")
 	require.NoError(t, err)
 
 	sid := storage.SectorRef{
@@ -231,7 +231,7 @@ func TestRestartManager(t *testing.T) {
 				TaskTypes: localTasks,
 			}, lstor, m)
 
-			err := m.AddWorker(ctx, tw)
+			err := m.AddWorker(ctx, tw, "")
 			require.NoError(t, err)
 
 			sid := storage.SectorRef{
@@ -276,7 +276,7 @@ func TestRestartManager(t *testing.T) {
 			defer cleanup2()
 
 			tw.ret = m // simulate jsonrpc auto-reconnect
-			err = m.AddWorker(ctx, tw)
+			err = m.AddWorker(ctx, tw, "")
 			require.NoError(t, err)
 
 			if returnBeforeCall {
@@ -334,7 +334,7 @@ func TestRestartWorker(t *testing.T) {
 		TaskTypes: localTasks,
 	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	sid := storage.SectorRef{
@@ -370,7 +370,7 @@ func TestRestartWorker(t *testing.T) {
 		TaskTypes: localTasks,
 	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err = m.AddWorker(ctx, w)
+	err = m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	<-apDone
@@ -406,7 +406,7 @@ func TestReenableWorker(t *testing.T) {
 		TaskTypes: localTasks,
 	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	time.Sleep(time.Millisecond * 100)

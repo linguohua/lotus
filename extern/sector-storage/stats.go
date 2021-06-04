@@ -18,6 +18,9 @@ func (m *Manager) WorkerStats() map[uuid.UUID]storiface.WorkerStats {
 		out[uuid.UUID(id)] = storiface.WorkerStats{
 			Info:    handle.info,
 			Enabled: handle.enabled,
+			Url:     handle.url,
+			UUID:    id.String(),
+			Paused:  handle.paused,
 
 			// MemUsedMin: handle.active.memUsedMin,
 			// MemUsedMax: handle.active.memUsedMax,
