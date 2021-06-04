@@ -551,13 +551,16 @@ func (sh *scheduler) workerCleanup(wid WorkerID, w *workerHandle) {
 	if !w.cleanupStarted {
 		w.cleanupStarted = true
 
-		newWindows := make([]*schedWindowRequest, 0, len(sh.openWindows))
-		for _, window := range sh.openWindows {
-			if window.worker != wid {
-				newWindows = append(newWindows, window)
+		for _, tt := range w.acceptTaskTypes {
+			openWindows := sh.openWindows[tt]
+			newWindows := make([]*schedWindowRequest, 0, len(openWindows))
+			for _, window := range openWindows {
+				if window.worker != wid {
+					newWindows = append(newWindows, window)
+				}
 			}
+			sh.openWindows[tt] = newWindows
 		}
-		sh.openWindows = newWindows
 
 		log.Debugf("worker %s dropped", wid)
 	}

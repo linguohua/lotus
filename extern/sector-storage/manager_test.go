@@ -92,10 +92,10 @@ func newTestMgr(ctx context.Context, t *testing.T, ds datastore.Datastore) (*Man
 
 	si := stores.NewIndex()
 
-	lstor, err := stores.NewLocal(ctx, st, si, nil)
+	lstor, err := stores.NewLocal(ctx, st, si, nil, "")
 	require.NoError(t, err)
 
-	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si})
+	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, "", nil)
 	require.NoError(t, err)
 
 	stor := stores.NewRemote(lstor, si, nil, 6000, "")
@@ -332,7 +332,7 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, idx, m, statestore.New(wds), "")
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
 	err := m.AddWorker(ctx, w)
 	require.NoError(t, err)
@@ -368,7 +368,7 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, idx, m, statestore.New(wds), "")
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
 	err = m.AddWorker(ctx, w)
 	require.NoError(t, err)
@@ -404,7 +404,7 @@ func TestReenableWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, stor, lstor, idx, m, statestore.New(wds), "")
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
 	err := m.AddWorker(ctx, w)
 	require.NoError(t, err)

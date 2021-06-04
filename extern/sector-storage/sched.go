@@ -425,6 +425,81 @@ func (sh *scheduler) trySched() {
 }
 
 func (sh *scheduler) schedOne(schReq *workerRequest) bool {
+	taskType := schReq.taskType
+	openWindowsTT, _ := sh.openWindows[taskType]
+	if len(openWindowsTT) < 1 {
+		log.Debugf("SCHED sector %d, taskType:%s, no available open window", schReq.sector.ID.Number,
+			taskType)
+
+		return false
+	}
+
+	for wnd, windowRequest := range openWindowsTT {
+		worker, ok := sh.workers[windowRequest.worker]
+		if !ok {
+			log.Errorf("worker referenced by windowRequest not found (worker: %s)", windowRequest.worker)
+			// TODO: How to move forward here?
+			continue
+		}
+
+		if !worker.enabled {
+			log.Debugw("skipping disabled worker", "worker", windowRequest.worker)
+			continue
+		}
+
+		rpcCtx, cancel := context.WithTimeout(schReq.ctx, SelectorTimeout)
+		ok, err := schReq.sel.Ok(rpcCtx, schReq.taskType, schReq.sector.ProofType, worker)
+		cancel()
+		if err != nil {
+			log.Errorf("trySched(1) sector:%d, group:%s req.sel.Ok error: %+v", err,
+				schReq.sector.ID.Number, windowRequest.groupID)
+			continue
+		}
+
+		if !ok {
+			// selector not allow
+			continue
+		}
+
+		if schReq.taskType == sealtasks.TTPreCommit1 {
+			groupID := windowRequest.groupID
+			bucket, ok := sh.p1GroupBuckets[groupID]
+			if ok {
+				if bucket.tikets < 1 {
+					log.Debugf("task acquire P1 ticket, sector:%d group:%s, no ticket remain", schReq.sector.ID.Number,
+						groupID)
+					continue
+				}
+
+				bucket.tikets--
+				log.Debugf("task acquire P1 ticket, sector:%d group:%s, remain:%d", schReq.sector.ID.Number,
+					groupID, bucket.tikets)
+			}
+		}
+
+		log.Debugf("SCHED assign sector %d to window %d, group:%s", schReq.sector.ID.Number,
+			wnd, windowRequest.groupID)
+
+		window := schedWindow{
+			todo:    schReq,
+			groupID: windowRequest.groupID,
+		}
+
+		select {
+		case windowRequest.done <- &window:
+		default:
+			log.Error("expected sh.openWindows[wnd].done to be buffered")
+			// found next available window
+			continue
+		}
+
+		// done, remove that open window
+		openWindowsTT = append(openWindowsTT[0:wnd], openWindowsTT[wnd+1:]...)
+		sh.openWindows[taskType] = openWindowsTT
+
+		break
+	}
+
 	return false
 }
 

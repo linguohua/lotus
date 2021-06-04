@@ -542,10 +542,13 @@ func BenchmarkTrySched(b *testing.B) {
 				}
 
 				for i := 0; i < windows; i++ {
-					sched.openWindows = append(sched.openWindows, &schedWindowRequest{
+					openWindows := make([]*schedWindowRequest, 0, windows)
+					openWindows = append(openWindows, &schedWindowRequest{
 						worker: WorkerID{},
 						done:   make(chan *schedWindow, 1000),
 					})
+
+					sched.openWindows[sealtasks.TTPreCommit1] = openWindows
 				}
 
 				for i := 0; i < queue; i++ {
