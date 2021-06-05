@@ -509,7 +509,7 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 		break
 	}
 
-	return false
+	return true
 }
 
 func (sh *scheduler) schedClose() {
