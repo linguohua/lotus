@@ -60,6 +60,8 @@ func main() {
 		setCmd,
 		waitQuietCmd,
 		tasksCmd,
+		lcli.PauseWorkerCmd,
+		lcli.ResumeWorkerCmd,
 	}
 
 	app := &cli.App{
