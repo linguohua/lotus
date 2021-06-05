@@ -462,8 +462,8 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 		ok, err := schReq.sel.Ok(rpcCtx, schReq.taskType, schReq.sector.ProofType, worker)
 		cancel()
 		if err != nil {
-			log.Errorf("trySched(1) sector:%d, group:%s req.sel.Ok error: %+v", schReq.sector.ID.Number,
-				windowRequest.groupID, err)
+			log.Errorf("trySched(1) sector:%d, group:%s, task-type:%s, req.sel.Ok error: %+v", schReq.sector.ID.Number,
+				windowRequest.groupID, schReq.taskType, err)
 			continue
 		}
 
@@ -488,8 +488,8 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 			}
 		}
 
-		log.Debugf("SCHED assign sector %d to window %d, group:%s", schReq.sector.ID.Number,
-			wnd, windowRequest.groupID)
+		log.Debugf("SCHED assign sector %d to window %d, group:%s, task-type:%s", schReq.sector.ID.Number,
+			wnd, windowRequest.groupID, schReq.taskType)
 
 		window := schedWindow{
 			todo:    schReq,
