@@ -126,7 +126,7 @@ var ListWorkersCmd = &cli.Command{
 				disabled = color.RedString(" (disabled)")
 			}
 
-			if !stat.Paused {
+			if stat.Paused {
 				paused = color.RedString(" (paused)")
 			}
 
