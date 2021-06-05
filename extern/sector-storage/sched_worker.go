@@ -112,11 +112,13 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 }
 
 func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool) error {
+	log.Infof("pauseWorker call with uuid:%s, paused: %v", uuid2, paused)
 	wid, err := uuid.Parse(uuid2)
 	if err != nil {
 		return xerrors.Errorf("pauseWorker failed: parse uuid %s error %v", uuid2, err)
 	}
 
+	log.Infof("pauseWorker call wait RLock")
 	sh.workersLk.RLock()
 	worker, exist := sh.workers[WorkerID(wid)]
 	defer sh.workersLk.RUnlock()
@@ -125,6 +127,7 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool)
 		return xerrors.Errorf("pauseWorker failed:no worker with session id %s found in scheduler", uuid2)
 	}
 
+	log.Infof("pauseWorker call wait Lock")
 	sh.workersLk.Lock()
 	old := worker.paused
 	worker.paused = paused
@@ -140,7 +143,7 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool)
 		// need to re-sched work
 		sh.workerChange <- struct{}{}
 	}
-
+	log.Infof("pauseWorker call completed")
 	return nil
 }
 
