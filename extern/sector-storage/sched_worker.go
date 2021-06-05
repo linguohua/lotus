@@ -112,21 +112,24 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 }
 
 func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool) error {
-	sh.workersLk.Lock()
-	defer sh.workersLk.Unlock()
-
 	wid, err := uuid.Parse(uuid2)
 	if err != nil {
 		return xerrors.Errorf("pauseWorker failed: parse uuid %s error %v", uuid2, err)
 	}
 
+	sh.workersLk.RLock()
 	worker, exist := sh.workers[WorkerID(wid)]
+	defer sh.workersLk.RUnlock()
+
 	if !exist {
 		return xerrors.Errorf("pauseWorker failed:no worker with session id %s found in scheduler", uuid2)
 	}
 
+	sh.workersLk.Lock()
 	old := worker.paused
 	worker.paused = paused
+	sh.workersLk.Unlock()
+
 	if paused {
 		log.Debugf("scheduler worker with session id %s has been paused, it can not receive new task anymore", uuid2)
 	} else {
