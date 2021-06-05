@@ -509,10 +509,10 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 		openWindowsTT[l-1], openWindowsTT[wnd] = openWindowsTT[wnd], openWindowsTT[l-1]
 		sh.openWindows[taskType] = openWindowsTT[0:(l - 1)]
 
-		break
+		return true
 	}
 
-	return true
+	return false
 }
 
 func (sh *scheduler) schedClose() {
