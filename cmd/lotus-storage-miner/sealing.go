@@ -76,11 +76,23 @@ var sealingWorkersCmd = &cli.Command{
 			// }
 
 			var disabled string
+			var paused string
 			if !stat.Enabled {
 				disabled = color.RedString(" (disabled)")
 			}
 
-			fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
+			if !stat.Paused {
+				paused = color.RedString(" (paused)")
+			}
+
+			fmt.Printf("Worker %s, host %s%s%s group:%s\n", stat.id,
+				color.MagentaString(stat.Info.Hostname), disabled, paused, stat.Info.GroupID)
+			fmt.Printf("url: %s\n", stat.Url)
+			fmt.Printf("Task type: %s\n", stat.Url)
+
+			for i, tt := range stat.TaskTypes {
+				fmt.Printf("%s: %d\n", tt, stat.TaskCounts[i])
+			}
 
 			// var barCols = uint64(64)
 			// cpuBars := int(stat.CpuUse * barCols / stat.Info.Resources.CPUs)

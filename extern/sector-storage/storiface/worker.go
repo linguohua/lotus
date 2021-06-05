@@ -82,6 +82,9 @@ type WorkerStats struct {
 	Info    WorkerInfo
 	Enabled bool
 
+	TaskTypes  []sealtasks.TaskType
+	TaskCounts []uint32
+
 	Url  string
 	UUID string
 

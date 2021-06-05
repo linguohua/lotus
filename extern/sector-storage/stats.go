@@ -16,12 +16,13 @@ func (m *Manager) WorkerStats() map[uuid.UUID]storiface.WorkerStats {
 
 	for id, handle := range m.sched.workers {
 		out[uuid.UUID(id)] = storiface.WorkerStats{
-			Info:    handle.info,
-			Enabled: handle.enabled,
-			Url:     handle.url,
-			UUID:    id.String(),
-			Paused:  handle.paused,
-
+			Info:       handle.info,
+			Enabled:    handle.enabled,
+			Url:        handle.url,
+			UUID:       id.String(),
+			Paused:     handle.paused,
+			TaskTypes:  handle.acceptTaskTypes,
+			TaskCounts: handle.taskTypeValidcounts,
 			// MemUsedMin: handle.active.memUsedMin,
 			// MemUsedMax: handle.active.memUsedMax,
 			// GpuUsed:    handle.active.gpuUsed,
