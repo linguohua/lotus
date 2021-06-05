@@ -620,7 +620,8 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 	}
 
 	if len(candidates) == 0 {
-		return nil, xerrors.New("no good path found")
+		log.Debugf("StorageBestAlloc, no good path found found")
+		return nil, nil
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
