@@ -118,9 +118,6 @@ func NewIndex() *Index {
 func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID) (StorageInfo, error) {
 	log.Debugf("allocStorageForFinalize: sector %s", sector)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
-	i.lk.RLock()
-	defer i.lk.RUnlock()
-
 	var candidates []*storageEntry
 	for _, p := range i.stores {
 		// only bind to sealing storage
@@ -167,8 +164,8 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
 	log.Debugf("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
-	i.lk.RLock()
-	defer i.lk.RUnlock()
+	i.lk.Lock()
+	defer i.lk.Unlock()
 
 	if groupID == "" {
 		log.Debugf("TryBindSector2SealStorage worker GroupID is empty, sector:%s, return a storage path", sector)
@@ -249,8 +246,8 @@ func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorI
 	log.Debugf("UnBindSector2SealStorage: %s", sector)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 
-	i.lk.RLock()
-	defer i.lk.RUnlock()
+	i.lk.Lock()
+	defer i.lk.Unlock()
 
 	for _, p := range i.stores {
 		_, ok := p.bindSectors[sector]
