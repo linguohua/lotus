@@ -462,8 +462,8 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 		ok, err := schReq.sel.Ok(rpcCtx, schReq.taskType, schReq.sector.ProofType, worker)
 		cancel()
 		if err != nil {
-			log.Errorf("trySched(1) sector:%d, group:%s req.sel.Ok error: %+v", err,
-				schReq.sector.ID.Number, windowRequest.groupID)
+			log.Errorf("trySched(1) sector:%d, group:%s req.sel.Ok error: %+v", schReq.sector.ID.Number,
+				windowRequest.groupID, err)
 			continue
 		}
 

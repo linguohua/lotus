@@ -591,6 +591,8 @@ func (st *Local) MoveStorage(ctx context.Context, s storage.SectorRef, types sto
 		return xerrors.Errorf("acquire src storage: %w", err)
 	}
 
+	pathNeedRemove := make([]string, 0, len(storiface.PathTypes))
+
 	for _, fileType := range storiface.PathTypes {
 		if fileType&types == 0 {
 			continue
@@ -618,18 +620,20 @@ func (st *Local) MoveStorage(ctx context.Context, s storage.SectorRef, types sto
 
 		log.Infof("moving %v(%d) to storage: %s(se:%t; st:%t) -> %s(se:%t; st:%t)", s, fileType, sst.ID, sst.CanSeal, sst.CanStore, dst.ID, dst.CanSeal, dst.CanStore)
 
-		if err := move(storiface.PathByType(src, fileType), storiface.PathByType(dest, fileType)); err != nil {
+		srcPath := storiface.PathByType(src, fileType)
+		if err := utilCopy(srcPath, storiface.PathByType(dest, fileType)); err != nil {
 			// TODO: attempt some recovery (check if src is still there, re-declare)
 			return xerrors.Errorf("moving sector %v(%d): %w", s, fileType, err)
 		}
 
-		// if err := st.index.StorageDropSector(ctx, ID(storiface.PathByType(srcIds, fileType)), s.ID, fileType); err != nil {
-		// 	return xerrors.Errorf("dropping source sector from index: %w", err)
-		// }
+		pathNeedRemove = append(pathNeedRemove, srcPath)
+	}
 
-		// if err := st.index.StorageDeclareSector(ctx, ID(storiface.PathByType(destIds, fileType)), s.ID, fileType, true); err != nil {
-		// 	return xerrors.Errorf("declare sector %d(t:%d) -> %s: %w", s, fileType, ID(storiface.PathByType(destIds, fileType)), err)
-		// }
+	for _, pathStr := range pathNeedRemove {
+		if err := utilRemove(pathStr); err != nil {
+			// TODO: attempt some recovery (check if src is still there, re-declare)
+			log.Warnf("moving sector: remove path %s failed: %v", s, pathStr, err)
+		}
 	}
 
 	for _, fileType := range storiface.PathTypes {
