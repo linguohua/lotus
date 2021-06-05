@@ -410,8 +410,9 @@ func (sh *scheduler) trySched() {
 
 	sh.workersLk.RLock()
 	defer sh.workersLk.RUnlock()
-
 	queuneLen := sh.schedQueue.Len()
+	log.Debugf("trySched begin, queue len:%d", queuneLen)
+
 	hasDoneSched := make([]int, 0, queuneLen)
 	for i := 0; i < queuneLen; i++ {
 		schReq := (*sh.schedQueue)[i]
@@ -425,6 +426,8 @@ func (sh *scheduler) trySched() {
 			sh.schedQueue.Remove(hasDoneSched[i])
 		}
 	}
+
+	log.Debugf("trySched completed, sched done:%d", len(hasDoneSched))
 }
 
 func (sh *scheduler) schedOne(schReq *workerRequest) bool {
