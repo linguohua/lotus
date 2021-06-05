@@ -121,7 +121,7 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool)
 	log.Infof("pauseWorker call wait RLock")
 	sh.workersLk.RLock()
 	worker, exist := sh.workers[WorkerID(wid)]
-	defer sh.workersLk.RUnlock()
+	sh.workersLk.RUnlock()
 
 	if !exist {
 		return xerrors.Errorf("pauseWorker failed:no worker with session id %s found in scheduler", uuid2)
