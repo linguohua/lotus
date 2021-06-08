@@ -29,11 +29,20 @@ func newExistingSelector(index stores.SectorIndex, sector abi.SectorID, alloc st
 }
 
 func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
-	tasks, err := whnd.workerRpc.TaskTypes(ctx)
-	if err != nil {
-		return false, xerrors.Errorf("getting supported worker task types: %w", err)
+	//tasks, err := whnd.workerRpc.TaskTypes(ctx)
+	//if err != nil {
+	//	return false, xerrors.Errorf("getting supported worker task types: %w", err)
+	//}
+	supported := false
+	tasks := whnd.acceptTaskTypes
+	for _, t := range tasks {
+		if t == task {
+			supported = true
+			break
+		}
 	}
-	if _, supported := tasks[task]; !supported {
+
+	if !supported {
 		return false, nil
 	}
 
