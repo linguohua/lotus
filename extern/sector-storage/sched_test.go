@@ -518,6 +518,10 @@ func (s slowishSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b 
 	return true, nil
 }
 
+func (s slowishSelector) GroupID() string {
+	return ""
+}
+
 var _ WorkerSelector = slowishSelector(true)
 
 func BenchmarkTrySched(b *testing.B) {
@@ -548,7 +552,7 @@ func BenchmarkTrySched(b *testing.B) {
 						done:   make(chan *schedWindow, 1000),
 					})
 
-					sched.openWindows[sealtasks.TTPreCommit1] = openWindows
+					sched.openWindowsC2 = openWindows
 				}
 
 				for i := 0; i < queue; i++ {

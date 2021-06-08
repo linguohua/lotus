@@ -79,4 +79,8 @@ func (s *allocSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *
 	return a.utilization() < b.utilization(), nil
 }
 
+func (s *allocSelector) GroupID() string {
+	return ""
+}
+
 var _ WorkerSelector = &allocSelector{}

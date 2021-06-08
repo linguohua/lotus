@@ -45,4 +45,8 @@ func (s *taskSelector) Cmp(ctx context.Context, _ sealtasks.TaskType, a, b *work
 	return a.utilization() < b.utilization(), nil
 }
 
+func (s *taskSelector) GroupID() string {
+	return ""
+}
+
 var _ WorkerSelector = &taskSelector{}

@@ -243,6 +243,7 @@ func (sw *schedWorker) disable(ctx context.Context) error {
 	case sw.sched.workerDisable <- workerDisableReq{
 		activeWindows: sw.worker.activeWindows,
 		wid:           sw.wid,
+		groupID:       sw.worker.info.GroupID,
 		done: func() {
 			close(done)
 		},
@@ -590,15 +591,25 @@ func (sh *scheduler) workerCleanup(wid WorkerID, w *workerHandle) {
 	if !w.cleanupStarted {
 		w.cleanupStarted = true
 
-		for _, tt := range w.acceptTaskTypes {
-			openWindows := sh.openWindows[tt]
+		groupID := w.info.GroupID
+		if groupID != "" {
+			openWindows := sh.openWindowsByGroup[groupID]
 			newWindows := make([]*schedWindowRequest, 0, len(openWindows))
 			for _, window := range openWindows {
 				if window.worker != wid {
 					newWindows = append(newWindows, window)
 				}
 			}
-			sh.openWindows[tt] = newWindows
+			sh.openWindowsByGroup[groupID] = newWindows
+		} else {
+			openWindows := sh.openWindowsC2
+			newWindows := make([]*schedWindowRequest, 0, len(openWindows))
+			for _, window := range openWindows {
+				if window.worker != wid {
+					newWindows = append(newWindows, window)
+				}
+			}
+			sh.openWindowsC2 = newWindows
 		}
 
 		log.Debugf("worker %s dropped", wid)
