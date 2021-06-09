@@ -56,6 +56,10 @@ type groupBuckets struct {
 	tikets  int
 }
 
+type groupSchedWindowRequests struct {
+	openWindows map[sealtasks.TaskType][]*schedWindowRequest
+}
+
 type scheduler struct {
 	workersLk      sync.RWMutex
 	workers        map[WorkerID]*workerHandle
@@ -69,7 +73,7 @@ type scheduler struct {
 	// owned by the sh.runSched goroutine
 	schedQueue *requestQueue
 
-	openWindowsByGroup map[string][]*schedWindowRequest
+	openWindowsByGroup map[string]*groupSchedWindowRequests
 	openWindowsC2      []*schedWindowRequest
 
 	workTracker *workTracker
@@ -183,7 +187,7 @@ func newScheduler() *scheduler {
 
 		schedQueue:         &requestQueue{},
 		p1GroupBuckets:     make(map[string]*groupBuckets),
-		openWindowsByGroup: make(map[string][]*schedWindowRequest),
+		openWindowsByGroup: make(map[string]*groupSchedWindowRequests),
 		openWindowsC2:      make([]*schedWindowRequest, 0, 16),
 
 		workTracker: &workTracker{
@@ -251,6 +255,25 @@ type SchedDiagInfo struct {
 	OpenWindows []string
 }
 
+func (g *groupSchedWindowRequests) addWindow(req *schedWindowRequest) {
+	openWindows, _ := g.openWindows[req.acceptTaskType]
+	openWindows = append(openWindows, req)
+	g.openWindows[req.acceptTaskType] = openWindows
+}
+
+func (g *groupSchedWindowRequests) removeByWorkerID(wid WorkerID) {
+	for k, windowOfTT := range g.openWindows {
+		openWindows := make([]*schedWindowRequest, 0, len(windowOfTT))
+		for _, window := range windowOfTT {
+			if window.worker != wid {
+				openWindows = append(openWindows, window)
+			}
+		}
+
+		g.openWindows[k] = openWindows
+	}
+}
+
 func (sh *scheduler) acceptReqWindow(req *schedWindowRequest) {
 	if req.acceptTaskType == sealtasks.TTCommit2 {
 		if req.groupID != "" {
@@ -263,9 +286,15 @@ func (sh *scheduler) acceptReqWindow(req *schedWindowRequest) {
 			log.Errorf("non-C2 worker should use group tag:%s, task type:%s, workerID:%s",
 				req.groupID, req.acceptTaskType, req.worker)
 		} else {
-			openWindowsOfTT, _ := sh.openWindowsByGroup[req.groupID]
-			openWindowsOfTT = append(openWindowsOfTT, req)
-			sh.openWindowsByGroup[req.groupID] = openWindowsOfTT
+			openWindowsOfGroup, _ := sh.openWindowsByGroup[req.groupID]
+			if openWindowsOfGroup == nil {
+				sh.openWindowsByGroup[req.groupID] = &groupSchedWindowRequests{
+					openWindows: make(map[sealtasks.TaskType][]*schedWindowRequest),
+				}
+				openWindowsOfGroup, _ = sh.openWindowsByGroup[req.groupID]
+			}
+
+			openWindowsOfGroup.addWindow(req)
 		}
 	}
 }
@@ -366,14 +395,10 @@ func (sh *scheduler) runSched() {
 
 				groupID := req.groupID
 				if groupID != "" {
-					windowOfTT, _ := sh.openWindowsByGroup[groupID]
-					openWindows := make([]*schedWindowRequest, 0, len(windowOfTT))
-					for _, window := range windowOfTT {
-						if window.worker != req.wid {
-							openWindows = append(openWindows, window)
-						}
+					openWindowsGroup, _ := sh.openWindowsByGroup[groupID]
+					if openWindowsGroup != nil {
+						openWindowsGroup.removeByWorkerID(req.wid)
 					}
-					sh.openWindowsByGroup[groupID] = openWindows
 				} else {
 					windowOfTT := sh.openWindowsC2
 					openWindows := make([]*schedWindowRequest, 0, len(windowOfTT))
@@ -414,9 +439,11 @@ func (sh *scheduler) diag() SchedDiagInfo {
 	sh.workersLk.RLock()
 	defer sh.workersLk.RUnlock()
 
-	for _, windowOfTT := range sh.openWindowsByGroup {
-		for _, window := range windowOfTT {
-			out.OpenWindows = append(out.OpenWindows, uuid.UUID(window.worker).String())
+	for _, windowOfG := range sh.openWindowsByGroup {
+		for _, windowOfTT := range windowOfG.openWindows {
+			for _, window := range windowOfTT {
+				out.OpenWindows = append(out.OpenWindows, uuid.UUID(window.worker).String())
+			}
 		}
 	}
 
@@ -470,15 +497,20 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 	taskType := schReq.taskType
 	groupID := schReq.sel.GroupID()
 
+	var openWindowsOfG *groupSchedWindowRequests
 	var openWindowsTT []*schedWindowRequest
 	if groupID != "" {
-		openWindowsTT, _ = sh.openWindowsByGroup[groupID]
 		log.Debugf("schedOne sector %d, task type:%s, groupID:%s use group-openwindows",
 			schReq.sector.ID.Number, taskType, groupID)
 
 		if taskType == sealtasks.TTCommit2 {
 			log.Errorf("schedOne sector %d, task type:%s, groupID:%s C2 task should not use group-openwindows",
 				schReq.sector.ID.Number, taskType, groupID)
+		}
+
+		openWindowsOfG, _ = sh.openWindowsByGroup[groupID]
+		if openWindowsOfG != nil {
+			openWindowsTT, _ = openWindowsOfG.openWindows[schReq.taskType]
 		}
 	} else {
 		openWindowsTT = sh.openWindowsC2
@@ -566,8 +598,8 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 		l := len(openWindowsTT)
 		openWindowsTT[l-1], openWindowsTT[wnd] = openWindowsTT[wnd], openWindowsTT[l-1]
 		// update windows
-		if groupID != "" {
-			sh.openWindowsByGroup[groupID] = openWindowsTT[0:(l - 1)]
+		if openWindowsOfG != nil {
+			openWindowsOfG.openWindows[schReq.taskType] = openWindowsTT[0:(l - 1)]
 		} else {
 			sh.openWindowsC2 = openWindowsTT[0:(l - 1)]
 		}

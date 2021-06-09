@@ -593,14 +593,10 @@ func (sh *scheduler) workerCleanup(wid WorkerID, w *workerHandle) {
 
 		groupID := w.info.GroupID
 		if groupID != "" {
-			openWindows := sh.openWindowsByGroup[groupID]
-			newWindows := make([]*schedWindowRequest, 0, len(openWindows))
-			for _, window := range openWindows {
-				if window.worker != wid {
-					newWindows = append(newWindows, window)
-				}
+			openWindowsG := sh.openWindowsByGroup[groupID]
+			if openWindowsG != nil {
+				openWindowsG.removeByWorkerID(wid)
 			}
-			sh.openWindowsByGroup[groupID] = newWindows
 		} else {
 			openWindows := sh.openWindowsC2
 			newWindows := make([]*schedWindowRequest, 0, len(openWindows))
