@@ -503,8 +503,8 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 		log.Debugf("schedOne sector %d, task type:%s, groupID:%s use group-openwindows",
 			schReq.sector.ID.Number, taskType, groupID)
 
-		if taskType == sealtasks.TTCommit2 {
-			log.Errorf("schedOne sector %d, task type:%s, groupID:%s C2 task should not use group-openwindows",
+		if taskType == sealtasks.TTCommit2 || taskType == sealtasks.TTAddPiece {
+			log.Errorf("schedOne sector %d, task type:%s, groupID:%s C2/addPiece task should not use group-openwindows",
 				schReq.sector.ID.Number, taskType, groupID)
 		}
 
@@ -513,12 +513,26 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 			openWindowsTT, _ = openWindowsOfG.openWindows[schReq.taskType]
 		}
 	} else {
-		openWindowsTT = sh.openWindowsC2
-		log.Debugf("schedOne sector %d, task type:%s, groupID:%s use c2-openwindows",
-			schReq.sector.ID.Number, taskType, groupID)
+		if taskType == sealtasks.TTCommit2 {
+			openWindowsTT = sh.openWindowsC2
+			log.Debugf("schedOne sector %d, task type:%s, groupID:%s use c2-openwindows",
+				schReq.sector.ID.Number, taskType, groupID)
 
-		if taskType != sealtasks.TTCommit2 {
-			log.Errorf("schedOne sector %d, task type:%s, groupID:%s non-C2 task should not use C2-openwindows",
+			if taskType != sealtasks.TTCommit2 {
+				log.Errorf("schedOne sector %d, task type:%s, groupID:%s non-C2 task should not use C2-openwindows",
+					schReq.sector.ID.Number, taskType, groupID)
+			}
+		} else if taskType == sealtasks.TTAddPiece {
+			for _, v := range sh.openWindowsByGroup {
+				tt, ok := v.openWindows[taskType]
+				if ok && len(tt) > 0 {
+					openWindowsOfG = v
+					openWindowsTT = tt
+					break
+				}
+			}
+		} else {
+			log.Errorf("schedOne sector %d, task type:%s, non-group-task only support addPiece/C2",
 				schReq.sector.ID.Number, taskType, groupID)
 		}
 	}
