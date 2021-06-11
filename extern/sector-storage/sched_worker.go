@@ -83,7 +83,7 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 		_, exist = sh.p1GroupBuckets[info.GroupID]
 		if !exist {
 			sh.p1GroupBuckets[info.GroupID] = &groupBuckets{
-				tikets:  5,
+				tikets:  sh.p1TicketsPerInterval,
 				groupID: info.GroupID,
 			}
 		}
