@@ -2,6 +2,8 @@ package sectorstorage
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -61,9 +63,11 @@ type groupSchedWindowRequests struct {
 }
 
 type scheduler struct {
-	workersLk      sync.RWMutex
-	workers        map[WorkerID]*workerHandle
-	p1GroupBuckets map[string]*groupBuckets
+	workersLk            sync.RWMutex
+	workers              map[WorkerID]*workerHandle
+	p1GroupBuckets       map[string]*groupBuckets
+	p1TicketsPerInterval int
+	p1TicketInterval     int
 
 	schedule       chan *workerRequest
 	windowRequests chan *schedWindowRequest
@@ -177,6 +181,25 @@ type workerResponse struct {
 }
 
 func newScheduler() *scheduler {
+	var p1TicketInterval int = 4
+	var p1TicketsPerInterval int = 2
+
+	str := os.Getenv("FIL_PROOFS_P1_TICKETS")
+	if str != "" {
+		i, err := strconv.Atoi(str)
+		if err == nil {
+			p1TicketsPerInterval = i
+		}
+	}
+
+	str = os.Getenv("FIL_PROOFS_P1_TICKET_INTERVAL")
+	if str != "" {
+		i, err := strconv.Atoi(str)
+		if err == nil {
+			p1TicketInterval = i
+		}
+	}
+
 	return &scheduler{
 		workers: map[WorkerID]*workerHandle{},
 
@@ -185,8 +208,12 @@ func newScheduler() *scheduler {
 		workerChange:   make(chan struct{}, 20),
 		workerDisable:  make(chan workerDisableReq),
 
-		schedQueue:         &requestQueue{},
-		p1GroupBuckets:     make(map[string]*groupBuckets),
+		schedQueue: &requestQueue{},
+
+		p1GroupBuckets:       make(map[string]*groupBuckets),
+		p1TicketsPerInterval: p1TicketsPerInterval,
+		p1TicketInterval:     p1TicketInterval,
+
 		openWindowsByGroup: make(map[string]*groupSchedWindowRequests),
 		openWindowsC2:      make([]*schedWindowRequest, 0, 16),
 
@@ -303,15 +330,15 @@ func (sh *scheduler) runSched() {
 	defer close(sh.closed)
 
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(time.Duration(sh.p1TicketInterval) * time.Minute)
 		for {
 			select {
 			case <-ticker.C:
 				sh.workersLk.Lock()
 				changed := false
 				for _, g := range sh.p1GroupBuckets {
-					if g.tikets < 5 {
-						g.tikets = 5
+					if g.tikets < sh.p1TicketsPerInterval {
+						g.tikets = sh.p1TicketsPerInterval
 						changed = true
 						log.Infof("reset group %s P1 tickets to %d", g.groupID, g.tikets)
 					}
