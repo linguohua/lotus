@@ -186,6 +186,7 @@ func newScheduler() *scheduler {
 
 	str := os.Getenv("FIL_PROOFS_P1_TICKETS")
 	if str != "" {
+		log.Infof("FIL_PROOFS_P1_TICKETS:%s", str)
 		i, err := strconv.Atoi(str)
 		if err == nil {
 			p1TicketsPerInterval = i
@@ -194,12 +195,14 @@ func newScheduler() *scheduler {
 
 	str = os.Getenv("FIL_PROOFS_P1_TICKET_INTERVAL")
 	if str != "" {
+		log.Infof("FIL_PROOFS_P1_TICKET_INTERVAL:%s", str)
 		i, err := strconv.Atoi(str)
 		if err == nil {
 			p1TicketInterval = i
 		}
 	}
 
+	log.Infof("newScheduler, p1TicketsPerInterval:%d, p1TicketInterval:%d", p1TicketsPerInterval, p1TicketInterval)
 	return &scheduler{
 		workers: map[WorkerID]*workerHandle{},
 
