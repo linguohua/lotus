@@ -116,14 +116,14 @@ func NewIndex() *Index {
 }
 
 func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID, ft storiface.SectorFileType) (StorageInfo, error) {
-	log.Debugf("allocStorageForFinalize: sector %s", sector)
+	log.Debugf("allocStorageForFinalize: sector %s, ft:%d", sector, ft)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 	for _, fileType := range storiface.PathTypes {
 		if fileType&ft == 0 {
 			continue
 		}
 
-		d := Decl{sector, ft}
+		d := Decl{sector, fileType}
 		dd, exist := i.sectors[d]
 		if exist {
 			for _, d := range dd {
