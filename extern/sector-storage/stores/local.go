@@ -308,7 +308,8 @@ func (st *Local) Redeclare(ctx context.Context) error {
 
 func (st *Local) declareSectors(ctx context.Context, p string, id ID, primary bool) error {
 	for _, t := range storiface.PathTypes {
-		ents, err := ioutil.ReadDir(filepath.Join(p, t.String()))
+		pp := filepath.Join(p, t.String())
+		ents, err := ioutil.ReadDir(pp)
 		if err != nil {
 			if os.IsNotExist(err) {
 				if err := os.MkdirAll(filepath.Join(p, t.String()), 0755); err != nil { // nolint
@@ -320,6 +321,7 @@ func (st *Local) declareSectors(ctx context.Context, p string, id ID, primary bo
 			return xerrors.Errorf("listing %s: %w", filepath.Join(p, t.String()), err)
 		}
 
+		log.Debugf("Local.declareSectors into path:", pp)
 		for _, ent := range ents {
 			if ent.Name() == FetchTempSubdir {
 				continue
@@ -330,6 +332,7 @@ func (st *Local) declareSectors(ctx context.Context, p string, id ID, primary bo
 				return xerrors.Errorf("parse sector id %s: %w", ent.Name(), err)
 			}
 
+			log.Debugf("Local.declareSectors declare sector id:%d", sid)
 			if err := st.index.StorageDeclareSector(ctx, id, sid, t, primary); err != nil {
 				return xerrors.Errorf("declare sector %d(t:%d) -> %s: %w", sid, t, id, err)
 			}
