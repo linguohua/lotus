@@ -127,7 +127,7 @@ type StorageMiner interface {
 	StorageBestAlloc(ctx context.Context, allocate storiface.SectorFileType, ssize abi.SectorSize, pathType storiface.PathType) ([]stores.StorageInfo, error)           //perm:admin
 	StorageLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) error                                          //perm:admin
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)                               //perm:admin
-	TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (stores.StorageInfo, error)
+	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) (stores.StorageInfo, error)
 	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 
 	StorageList(ctx context.Context) (map[stores.ID][]stores.Decl, error) //perm:admin

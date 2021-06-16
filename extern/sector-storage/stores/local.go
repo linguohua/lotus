@@ -321,7 +321,7 @@ func (st *Local) declareSectors(ctx context.Context, p string, id ID, primary bo
 			return xerrors.Errorf("listing %s: %w", filepath.Join(p, t.String()), err)
 		}
 
-		log.Debugf("Local.declareSectors into path:", pp)
+		log.Debugf("Local.declareSectors into path:%s, storage id:%s", pp, id)
 		for _, ent := range ents {
 			if ent.Name() == FetchTempSubdir {
 				continue
@@ -455,7 +455,7 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 	}
 
 	// get the local path, lock storage by sector
-	si, err := st.index.TryBindSector2SealStorage(ctx, sid.ID, groupID)
+	si, err := st.index.TryBindSector2SealStorage(ctx, existing, pathType, sid.ID, groupID)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}

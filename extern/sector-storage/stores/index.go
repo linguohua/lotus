@@ -73,7 +73,7 @@ type SectorIndex interface { // part of storage-miner api
 	StorageLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) error
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)
 
-	TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error)
+	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) (StorageInfo, error)
 	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 }
 
@@ -115,9 +115,29 @@ func NewIndex() *Index {
 	}
 }
 
-func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID) (StorageInfo, error) {
+func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID, ft storiface.SectorFileType) (StorageInfo, error) {
 	log.Debugf("allocStorageForFinalize: sector %s", sector)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
+	for _, fileType := range storiface.PathTypes {
+		if fileType&ft == 0 {
+			continue
+		}
+
+		d := Decl{sector, ft}
+		dd, exist := i.sectors[d]
+		if exist {
+			for _, d := range dd {
+				s, exist := i.stores[d.storage]
+				if exist {
+					log.Debugf("allocStorageForFinalize found sector: %d bind to storage %s, path:%v , filetype:%d, return it",
+						sector, s.info.ID, s.info.URLs, ft)
+
+					return *s.info, nil
+				}
+			}
+		}
+	}
+
 	var candidates []*storageEntry
 	for _, p := range i.stores {
 		// only bind to sealing storage
@@ -161,17 +181,18 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 	return *candidate.info, nil
 }
 
-func (i *Index) TryBindSector2SealStorage(ctx context.Context, sector abi.SectorID, groupID string) (StorageInfo, error) {
+func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType,
+	sector abi.SectorID, groupID string) (StorageInfo, error) {
 	log.Debugf("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 	i.lk.Lock()
 	defer i.lk.Unlock()
 
-	if groupID == "" {
-		log.Debugf("TryBindSector2SealStorage worker GroupID is empty, sector:%s, return a storage path", sector)
+	if pathType == storiface.PathStorage {
+		log.Debugf("TryBindSector2SealStorage worker pathType is PathStorage, sector:%s, return a storage path", sector)
 
 		// just continue
-		return i.allocStorageForFinalize(ctx, sector)
+		return i.allocStorageForFinalize(ctx, sector, fileType)
 	}
 
 	var candidates []*storageEntry

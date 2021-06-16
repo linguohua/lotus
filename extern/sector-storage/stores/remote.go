@@ -159,7 +159,7 @@ func (r *Remote) AcquireSector(ctx context.Context, s storage.SectorRef, existin
 	}
 
 	// get the local path, lock storage by sector
-	si, err := r.index.TryBindSector2SealStorage(ctx, s.ID, groupID)
+	si, err := r.index.TryBindSector2SealStorage(ctx, existing, pathType, s.ID, groupID)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
