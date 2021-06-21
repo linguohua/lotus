@@ -317,7 +317,7 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 }
 
 func (sw *schedWorker) requestWindowsByTasktype(taskType sealtasks.TaskType, i int) bool {
-	log.Infof("schedWorker.requestWindowsByTasktype task type:%s, window count:%d", taskType, i)
+	log.Infof("schedWorker.requestWindowsByTasktype task type:%s, window count:%d, worker url:%s", taskType, i, sw.worker.url)
 	for idx := 0; idx < i; idx++ {
 		select {
 		case sw.sched.windowRequests <- &schedWindowRequest{
