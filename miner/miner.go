@@ -432,6 +432,11 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg,
 		return nil, nil
 	}
 
+	sectorNumber := abi.SectorNumber(0)
+	if len(mbi.Sectors) > 0 {
+		sectorNumber = mbi.Sectors[0].SectorNumber
+	}
+
 	// always write out a log from this point out
 	var winner *types.ElectionProof
 	defer func() {
@@ -475,6 +480,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg,
 		return nil, xerrors.Errorf("scratching ticket failed: %w", err)
 	}
 
+	// lingh: how to ensure exactly 5 winners a round?
 	winner, err = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to check if we win next round: %w", err)
@@ -528,7 +534,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg,
 	for i, header := range base.TipSet.Blocks() {
 		parentMiners[i] = header.Miner
 	}
-	log.Infow("mined new block", "cid", b.Cid(), "height", int64(b.Header.Height), "miner", b.Header.Miner, "parents", parentMiners, "parentTipset", base.TipSet.Key().String(), "took", dur)
+
+	log.Infow("mined new block", "sector-number", sectorNumber,
+		"cid", b.Cid(), "height", int64(b.Header.Height),
+		"miner", b.Header.Miner, "parents", parentMiners, "parentTipset",
+		base.TipSet.Key().String(), "took", dur)
+
 	if dur > time.Second*time.Duration(build.BlockDelaySecs) {
 		log.Warnw("CAUTION: block production took longer than the block delay. Your computer may not be fast enough to keep up",
 			"tMinerBaseInfo ", tMBI.Sub(start),
@@ -538,7 +549,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (*types.BlockMsg,
 			"tSeed ", tSeed.Sub(tTicket),
 			"tProof ", tProof.Sub(tSeed),
 			"tPending ", tPending.Sub(tProof),
-			"tCreateBlock ", tCreateBlock.Sub(tPending))
+			"tCreateBlock ", tCreateBlock.Sub(tPending),
+			"sector-number", sectorNumber,
+		)
 	}
 
 	return b, nil
