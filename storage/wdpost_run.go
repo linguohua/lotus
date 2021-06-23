@@ -597,7 +597,7 @@ func (s *WindowPoStScheduler) runPost(ctx context.Context, di dline.Info, ts *ty
 			postOut, ps, err := s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), sinfos, append(abi.PoStRandomness{}, rand...))
 			elapsed := time.Since(tsStart)
 
-			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed)
+			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed, "deadline", di)
 
 			if err == nil {
 				// If we proved nothing, something is very wrong.
