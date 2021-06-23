@@ -720,6 +720,8 @@ type StorageMinerStruct struct {
 
 		WorkerResume func(p0 context.Context, p1 string) error `perm:"admin"`
 
+		WorkerRemove func(p0 context.Context, p1 string) error `perm:"admin"`
+
 		WorkerStats func(p0 context.Context) (map[uuid.UUID]storiface.WorkerStats, error) `perm:"admin"`
 	}
 }
@@ -3353,6 +3355,14 @@ func (s *StorageMinerStruct) WorkerResume(p0 context.Context, p1 string) error {
 }
 
 func (s *StorageMinerStub) WorkerResume(p0 context.Context, p1 string) error {
+	return xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) WorkerRemove(p0 context.Context, p1 string) error {
+	return s.Internal.WorkerRemove(p0, p1)
+}
+
+func (s *StorageMinerStub) WorkerRemove(p0 context.Context, p1 string) error {
 	return xerrors.New("method not supported")
 }
 

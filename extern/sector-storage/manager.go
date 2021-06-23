@@ -202,6 +202,10 @@ func (m *Manager) ResumeWorker(ctx context.Context, uuid string) error {
 	return m.sched.pauseWorker(ctx, uuid, false)
 }
 
+func (m *Manager) RemoveWorker(ctx context.Context, uuid string) error {
+	return m.sched.removeWorker(ctx, uuid, false)
+}
+
 func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.remoteHnd.ServeHTTP(w, r)
 }

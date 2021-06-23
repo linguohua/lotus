@@ -143,3 +143,52 @@ var ListWorkersCmd = &cli.Command{
 		return nil
 	},
 }
+
+var RemoveWorkerCmd = &cli.Command{
+	Name:  "worker-remove",
+	Usage: "Remove a worker",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "uuid",
+			Usage: "specify the worker session uuid",
+		},
+	},
+
+	Action: func(cctx *cli.Context) error {
+		return workerRemove(cctx, false)
+	},
+}
+
+func workerRemove(cctx *cli.Context, v bool) error {
+	nodeApi, closer, err := GetStorageMinerAPI(cctx)
+	if err != nil {
+		return err
+	}
+	defer closer()
+	uuid := cctx.String("uuid")
+	if uuid == "" {
+		return xerrors.Errorf("must specify a valid uuid")
+	}
+
+	uuids := make([]string, 0, 16)
+	if uuid == "all" {
+		stats, err := nodeApi.WorkerStats(ReqContext(cctx))
+		if err != nil {
+			return err
+		}
+		for _, st := range stats {
+			uuids = append(uuids, st.UUID)
+		}
+	} else {
+		uuids = append(uuids, uuid)
+	}
+
+	for _, uuid := range uuids {
+		err = nodeApi.WorkerRemove(ReqContext(cctx), uuid)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

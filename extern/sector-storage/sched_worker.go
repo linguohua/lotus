@@ -147,6 +147,11 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool)
 	return nil
 }
 
+func (sh *scheduler) removeWorker(ctx context.Context, uuid2 string, paused bool) error {
+
+	return nil
+}
+
 func (sw *schedWorker) handleWorker() {
 	worker, sched := sw.worker, sw.sched
 

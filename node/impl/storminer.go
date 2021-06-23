@@ -402,6 +402,12 @@ func (sm *StorageMinerAPI) WorkerResume(ctx context.Context, uuid string) error 
 	return sm.StorageMgr.ResumeWorker(ctx, uuid)
 }
 
+func (sm *StorageMinerAPI) WorkerRemove(ctx context.Context, uuid string) error {
+	log.Infof("WorkerResume:%s", uuid)
+
+	return sm.StorageMgr.RemoveWorker(ctx, uuid)
+}
+
 func (sm *StorageMinerAPI) SealingSchedDiag(ctx context.Context, doSched bool) (interface{}, error) {
 	return sm.StorageMgr.SchedDiag(ctx, doSched)
 }
