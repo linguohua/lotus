@@ -203,7 +203,7 @@ func (m *Manager) ResumeWorker(ctx context.Context, uuid string) error {
 }
 
 func (m *Manager) RemoveWorker(ctx context.Context, uuid string) error {
-	return m.sched.removeWorker(ctx, uuid, false)
+	return m.sched.removeWorker(ctx, uuid)
 }
 
 func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {

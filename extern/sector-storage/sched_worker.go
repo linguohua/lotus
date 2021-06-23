@@ -147,8 +147,29 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool)
 	return nil
 }
 
-func (sh *scheduler) removeWorker(ctx context.Context, uuid2 string, paused bool) error {
+func (sh *scheduler) removeWorker(ctx context.Context, uuid2 string) error {
+	log.Infof("removeWorker call with uuid:%s, removed: %v", uuid2)
+	wid, err := uuid.Parse(uuid2)
+	if err != nil {
+		return xerrors.Errorf("removeWorker failed: parse uuid %s error %v", uuid2, err)
+	}
 
+	log.Infof("removeWorker call wait RLock")
+	sh.workersLk.RLock()
+	worker, exist := sh.workers[WorkerID(wid)]
+	sh.workersLk.RUnlock()
+
+	if !exist {
+		return xerrors.Errorf("removeWorker failed:no worker with session id %s found in scheduler", uuid2)
+	}
+
+	log.Infof("removeWorker call wait Lock")
+	sh.workersLk.Lock()
+	worker.removed = true
+	url := worker.url
+	sh.workersLk.Unlock()
+
+	log.Infof("removeWorker %s call completed", url)
 	return nil
 }
 
@@ -286,6 +307,12 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 
 			if err := sw.disable(ctx); err != nil {
 				log.Warnw("failed to disable worker with session error", "worker", sw.wid, "error", err)
+			}
+
+			if sw.worker.removed {
+				log.Warnf("failed to check worker session and worker %s is removed by user, exit schedule goroutine",
+					sw.worker.url)
+				return false
 			}
 
 			select {

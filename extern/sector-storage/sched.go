@@ -107,8 +107,9 @@ type workerHandle struct {
 	// count all request windows
 	requestedWindowsCounter map[sealtasks.TaskType]int
 
-	paused bool
-	url    string
+	paused  bool
+	removed bool
+	url     string
 
 	enabled bool
 
