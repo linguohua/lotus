@@ -130,7 +130,7 @@ var ListWorkersCmd = &cli.Command{
 				paused = color.RedString(" (paused)")
 			}
 
-			fmt.Printf("Worker %s, host %s%s%s, group:%s, url:\n", stat.id,
+			fmt.Printf("Worker %s, host %s%s%s, group:%s, url:%s\n", stat.id,
 				color.MagentaString(stat.Info.Hostname), disabled, paused, stat.Info.GroupID, stat.Url)
 
 			fmt.Printf("Task type:\n")
