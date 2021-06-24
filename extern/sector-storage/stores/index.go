@@ -147,6 +147,11 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 			continue
 		}
 
+		// readonly storage
+		if p.info.Weight == 0 {
+			continue
+		}
+
 		if time.Since(p.lastHeartbeat) > SkippedHeartbeatThresh {
 			log.Debugf("allocStorageForFinalize not allocating on %s, didn't receive heartbeats for %s",
 				p.info.ID, time.Since(p.lastHeartbeat))
