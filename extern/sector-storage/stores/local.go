@@ -84,6 +84,7 @@ type Local struct {
 
 	localLk sync.RWMutex
 	groupID string
+	role    string
 }
 
 type path struct {
@@ -165,7 +166,9 @@ func (p *path) sectorPath(sid abi.SectorID, fileType storiface.SectorFileType) s
 	return filepath.Join(p.local, fileType.String(), storiface.SectorName(sid))
 }
 
-func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []string, groupID string) (*Local, error) {
+func NewLocal(ctx context.Context, ls LocalStorage,
+	index SectorIndex, urls []string,
+	role string, groupID string) (*Local, error) {
 	l := &Local{
 		localStorage: ls,
 		index:        index,
@@ -173,8 +176,10 @@ func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []st
 
 		paths: map[ID]*path{},
 
+		role:    role,
 		groupID: groupID,
 	}
+
 	return l, l.open(ctx)
 }
 
@@ -220,6 +225,11 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 		MaxStorage:        meta.MaxStorage,
 		CanSeal:           meta.CanSeal,
 		CanStore:          meta.CanStore,
+	}
+
+	if st.role == "miner" && sinfo.CanSeal {
+		sinfo.CanSeal = false
+		log.Warnf("miner local stores should not can-seal, rewirte to false, %s", p)
 	}
 
 	log.Infof("local stores call remote index StorageAttach with:%+v", sinfo)

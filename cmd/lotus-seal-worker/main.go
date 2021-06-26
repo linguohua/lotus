@@ -396,7 +396,8 @@ var runCmd = &cli.Command{
 		}
 
 		groupID := cctx.String("group")
-		localStore, err := stores.NewLocal(ctx, lr, nodeApi, []string{"http://" + address + "/remote"}, groupID)
+		localStore, err := stores.NewLocal(ctx, lr, nodeApi,
+			[]string{"http://" + address + "/remote"}, role, groupID)
 		if err != nil {
 			return err
 		}

@@ -106,7 +106,7 @@ type WorkerStateStore *statestore.StateStore
 type ManagerStateStore *statestore.StateStore
 
 func New(ctx context.Context, ls stores.LocalStorage, si stores.SectorIndex, sc SealerConfig, urls URLs, sa StorageAuth, wss WorkerStateStore, mss ManagerStateStore) (*Manager, error) {
-	lstor, err := stores.NewLocal(ctx, ls, si, urls, "")
+	lstor, err := stores.NewLocal(ctx, ls, si, urls, "miner", "")
 	if err != nil {
 		return nil, err
 	}

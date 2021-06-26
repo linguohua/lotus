@@ -92,7 +92,7 @@ func newTestMgr(ctx context.Context, t *testing.T, ds datastore.Datastore) (*Man
 
 	si := stores.NewIndex()
 
-	lstor, err := stores.NewLocal(ctx, st, si, nil, "")
+	lstor, err := stores.NewLocal(ctx, st, si, nil, "test", "")
 	require.NoError(t, err)
 
 	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, "", nil)
