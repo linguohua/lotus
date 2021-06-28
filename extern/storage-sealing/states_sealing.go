@@ -71,6 +71,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		log.Warnf("Creating %d filler pieces for sector %d", len(fillerSizes), sector.SectorNumber)
 	}
 
+	// lingh: pledge AddPiece call
 	fillerPieces, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
 	if err != nil {
 		return xerrors.Errorf("filling up the sector (%v): %w", fillerSizes, err)
@@ -427,7 +428,9 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 
 	randHeight := pci.PreCommitEpoch + policy.GetPreCommitChallengeDelay()
 
+	log.Infof("handleWaitSeed, call ChainAt begin, sector number:%d", sector.SectorNumber)
 	err = m.events.ChainAt(func(ectx context.Context, _ TipSetToken, curH abi.ChainEpoch) error {
+		log.Infof("handleWaitSeed, call ChainAt completed, sector number:%d", sector.SectorNumber)
 		// in case of null blocks the randomness can land after the tipset we
 		// get from the events API
 		tok, _, err := m.api.ChainHead(ctx.Context())
@@ -452,12 +455,14 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 
 		return nil
 	}, func(ctx context.Context, ts TipSetToken) error {
-		log.Warn("revert in interactive commit sector step")
+		log.Warnf("handleWaitSeed, call ChainAt completed, revert in interactive commit sector step, sector:%d",
+			sector.SectorNumber)
 		// TODO: need to cancel running process and restart...
 		return nil
 	}, InteractivePoRepConfidence, randHeight)
 	if err != nil {
-		log.Warn("waitForPreCommitMessage ChainAt errored: ", err)
+		log.Warnf("handleWaitSeed, call ChainAt completed, waitForPreCommitMessage ChainAt errored:%v, sector:%d",
+			err, sector.SectorNumber)
 	}
 
 	return nil
@@ -679,12 +684,17 @@ func (m *Sealing) handleCommitWait(ctx statemachine.Context, sector SectorInfo) 
 func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorInfo) error {
 	// TODO: Maybe wait for some finality
 
-	cfg, err := m.getConfig()
-	if err != nil {
-		return xerrors.Errorf("getting sealing config: %w", err)
-	}
+	// never keep unsealed
+	// cfg, err := m.getConfig()
+	// if err != nil {
+	// 	return xerrors.Errorf("getting sealing config: %w", err)
+	// }
 
-	if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
+	// never keep unsealed
+	// if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
+	// 	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
+	// }
+	if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), nil); err != nil {
 		return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
 	}
 

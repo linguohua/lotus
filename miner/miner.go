@@ -462,7 +462,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		} else if isLate {
 			log.Warnw("completed mineOne", logStruct...)
 		} else {
-			log.Infow("completed mineOne", logStruct...)
+			if winner != nil {
+				log.Infow("completed mineOne", logStruct...)
+			}
 		}
 	}()
 
@@ -478,6 +480,11 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	if !mbi.EligibleForMining {
 		// slashed or just have no power yet
 		return nil, nil
+	}
+
+	sectorNumber := abi.SectorNumber(0)
+	if len(mbi.Sectors) > 0 {
+		sectorNumber = mbi.Sectors[0].SectorNumber
 	}
 
 	tMBI := build.Clock.Now()
@@ -558,7 +565,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	for i, header := range base.TipSet.Blocks() {
 		parentMiners[i] = header.Miner
 	}
-	log.Infow("mined new block", "cid", minedBlock.Cid(), "height", int64(minedBlock.Header.Height), "miner", minedBlock.Header.Miner, "parents", parentMiners, "parentTipset", base.TipSet.Key().String(), "took", dur)
+	// log.Infow("mined new block", "cid", minedBlock.Cid(), "height", int64(minedBlock.Header.Height), "miner", minedBlock.Header.Miner, "parents", parentMiners, "parentTipset", base.TipSet.Key().String(), "took", dur)
+	log.Infow("mined new block", "sector-number", sectorNumber,
+		"cid", b.Cid(), "height", int64(b.Header.Height),
+		"miner", b.Header.Miner, "parents", parentMiners, "parentTipset",
+		base.TipSet.Key().String(), "took", dur)
+
 	if dur > time.Second*time.Duration(build.BlockDelaySecs) {
 		log.Warnw("CAUTION: block production took longer than the block delay. Your computer may not be fast enough to keep up",
 			"tMinerBaseInfo ", tMBI.Sub(start),

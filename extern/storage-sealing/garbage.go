@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 )
 
+// lingh: pledge
 func (m *Sealing) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
 	m.startupWait.Wait()
 

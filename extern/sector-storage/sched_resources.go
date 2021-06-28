@@ -3,22 +3,24 @@ package sectorstorage
 import (
 	"sync"
 
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 )
 
-func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerResources, r Resources, locker sync.Locker, cb func() error) error {
-	for !a.canHandleRequest(r, id, "withResources", wr) {
+func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerResources,
+	taskType sealtasks.TaskType, locker sync.Locker, cb func() error) error {
+	for !a.canHandleRequest(wr, taskType, id, "withResources") {
 		if a.cond == nil {
 			a.cond = sync.NewCond(locker)
 		}
 		a.cond.Wait()
 	}
 
-	a.add(wr, r)
+	a.add(wr, taskType)
 
 	err := cb()
 
-	a.free(wr, r)
+	a.free(wr, taskType)
 	if a.cond != nil {
 		a.cond.Broadcast()
 	}
@@ -26,70 +28,123 @@ func (a *activeResources) withResources(id WorkerID, wr storiface.WorkerResource
 	return err
 }
 
-func (a *activeResources) add(wr storiface.WorkerResources, r Resources) {
-	if r.CanGPU {
-		a.gpuUsed = true
+func (a *activeResources) add(wr storiface.WorkerResources, taskType sealtasks.TaskType) {
+	switch taskType {
+	case sealtasks.TTAddPiece:
+		a.AP = a.AP + 1
+		if a.AP > wr.AP {
+			log.Errorf("activeResources.add error, a.AP %d > wr.AP %d", a.AP, wr.AP)
+		}
+	case sealtasks.TTCommit1:
+		a.C1 = a.C1 + 1
+		if a.C1 > wr.C1 {
+			log.Errorf("activeResources.add error, a.C1 %d > wr.C1 %d", a.C1, wr.C1)
+		}
+	case sealtasks.TTCommit2:
+		a.C2 = a.C2 + 1
+		if a.C2 > wr.C2 {
+			log.Errorf("activeResources.add error, a.C2 %d > wr.C2 %d", a.C2, wr.C2)
+		}
+	case sealtasks.TTPreCommit1:
+		a.P1 = a.P1 + 1
+		if a.P1 > wr.P1 {
+			log.Errorf("activeResources.add error, a.P1 %d > wr.P1 %d", a.P1, wr.P1)
+		}
+	case sealtasks.TTPreCommit2:
+		a.P2 = a.P2 + 1
+		if a.P2 > wr.P2 {
+			log.Errorf("activeResources.add error, a.P2 %d > wr.P2 %d", a.P2, wr.P2)
+		}
+	case sealtasks.TTFinalize:
+		a.FIN = a.FIN + 1
+		if a.FIN > wr.FIN {
+			log.Errorf("activeResources.add error, a.FIN %d > wr.FIN %d", a.FIN, wr.FIN)
+		}
 	}
-	a.cpuUse += r.Threads(wr.CPUs)
-	a.memUsedMin += r.MinMemory
-	a.memUsedMax += r.MaxMemory
 }
 
-func (a *activeResources) free(wr storiface.WorkerResources, r Resources) {
-	if r.CanGPU {
-		a.gpuUsed = false
+func (a *activeResources) free(wr storiface.WorkerResources, taskType sealtasks.TaskType) {
+	switch taskType {
+	case sealtasks.TTAddPiece:
+		a.AP = a.AP - 1
+		if a.AP > wr.AP {
+			log.Errorf("activeResources.free error, a.AP %d > wr.AP %d", a.AP, wr.AP)
+		}
+	case sealtasks.TTCommit1:
+		a.C1 = a.C1 - 1
+		if a.C1 > wr.C1 {
+			log.Errorf("activeResources.free error, a.C1 %d > wr.C1 %d", a.C1, wr.C1)
+		}
+	case sealtasks.TTCommit2:
+		a.C2 = a.C2 - 1
+		if a.C2 > wr.C2 {
+			log.Errorf("activeResources.free error, a.C2 %d > wr.C2 %d", a.C2, wr.C2)
+		}
+	case sealtasks.TTPreCommit1:
+		a.P1 = a.P1 - 1
+		if a.P1 > wr.P1 {
+			log.Errorf("activeResources.free error, a.P1 %d > wr.P1 %d", a.P1, wr.P1)
+		}
+	case sealtasks.TTPreCommit2:
+		a.P2 = a.P2 - 1
+		if a.P2 > wr.P2 {
+			log.Errorf("activeResources.free error, a.P2 %d > wr.P2 %d", a.P2, wr.P2)
+		}
+	case sealtasks.TTFinalize:
+		a.FIN = a.FIN - 1
+		if a.FIN > wr.FIN {
+			log.Errorf("activeResources.free error, a.FIN %d > wr.FIN %d", a.FIN, wr.FIN)
+		}
 	}
-	a.cpuUse -= r.Threads(wr.CPUs)
-	a.memUsedMin -= r.MinMemory
-	a.memUsedMax -= r.MaxMemory
 }
 
-func (a *activeResources) canHandleRequest(needRes Resources, wid WorkerID, caller string, res storiface.WorkerResources) bool {
-
-	// TODO: dedupe needRes.BaseMinMemory per task type (don't add if that task is already running)
-	minNeedMem := res.MemReserved + a.memUsedMin + needRes.MinMemory + needRes.BaseMinMemory
-	if minNeedMem > res.MemPhysical {
-		log.Debugf("sched: not scheduling on worker %s for %s; not enough physical memory - need: %dM, have %dM", wid, caller, minNeedMem/mib, res.MemPhysical/mib)
-		return false
-	}
-
-	maxNeedMem := res.MemReserved + a.memUsedMax + needRes.MaxMemory + needRes.BaseMinMemory
-
-	if maxNeedMem > res.MemSwap+res.MemPhysical {
-		log.Debugf("sched: not scheduling on worker %s for %s; not enough virtual memory - need: %dM, have %dM", wid, caller, maxNeedMem/mib, (res.MemSwap+res.MemPhysical)/mib)
-		return false
-	}
-
-	if a.cpuUse+needRes.Threads(res.CPUs) > res.CPUs {
-		log.Debugf("sched: not scheduling on worker %s for %s; not enough threads, need %d, %d in use, target %d", wid, caller, needRes.Threads(res.CPUs), a.cpuUse, res.CPUs)
-		return false
-	}
-
-	if len(res.GPUs) > 0 && needRes.CanGPU {
-		if a.gpuUsed {
-			log.Debugf("sched: not scheduling on worker %s for %s; GPU in use", wid, caller)
-			return false
+func (a *activeResources) canHandleRequest(wr storiface.WorkerResources, taskType sealtasks.TaskType, wid WorkerID, caller string) bool {
+	switch taskType {
+	case sealtasks.TTAddPiece:
+		if a.AP < wr.AP {
+			return true
+		}
+	case sealtasks.TTCommit1:
+		if a.C1 < wr.C1 {
+			return true
+		}
+	case sealtasks.TTCommit2:
+		if a.C2 < wr.C2 {
+			return true
+		}
+	case sealtasks.TTPreCommit1:
+		if a.P1 < wr.P1 {
+			return true
+		}
+	case sealtasks.TTPreCommit2:
+		if a.P2 < wr.P2 {
+			return true
+		}
+	case sealtasks.TTFinalize:
+		if a.FIN < wr.FIN {
+			return true
 		}
 	}
 
-	return true
+	log.Debugf("activeResources.canHandleRequest no %s resource valid for worker:%s, caller:%s", taskType, wid, caller)
+	return false
 }
 
 func (a *activeResources) utilization(wr storiface.WorkerResources) float64 {
 	var max float64
 
-	cpu := float64(a.cpuUse) / float64(wr.CPUs)
-	max = cpu
+	// cpu := float64(a.cpuUse) / float64(wr.CPUs)
+	// max = cpu
 
-	memMin := float64(a.memUsedMin+wr.MemReserved) / float64(wr.MemPhysical)
-	if memMin > max {
-		max = memMin
-	}
+	// memMin := float64(a.memUsedMin+wr.MemReserved) / float64(wr.MemPhysical)
+	// if memMin > max {
+	// 	max = memMin
+	// }
 
-	memMax := float64(a.memUsedMax+wr.MemReserved) / float64(wr.MemPhysical+wr.MemSwap)
-	if memMax > max {
-		max = memMax
-	}
+	// memMax := float64(a.memUsedMax+wr.MemReserved) / float64(wr.MemPhysical+wr.MemSwap)
+	// if memMax > max {
+	// 	max = memMax
+	// }
 
 	return max
 }
@@ -97,12 +152,12 @@ func (a *activeResources) utilization(wr storiface.WorkerResources) float64 {
 func (wh *workerHandle) utilization() float64 {
 	wh.lk.Lock()
 	u := wh.active.utilization(wh.info.Resources)
-	u += wh.preparing.utilization(wh.info.Resources)
+	// u += wh.preparing.utilization(wh.info.Resources)
 	wh.lk.Unlock()
 	wh.wndLk.Lock()
-	for _, window := range wh.activeWindows {
-		u += window.allocated.utilization(wh.info.Resources)
-	}
+	// for _, window := range wh.activeWindows {
+	// 	u += window.allocated.utilization(wh.info.Resources)
+	// }
 	wh.wndLk.Unlock()
 
 	return u

@@ -17,6 +17,8 @@ MODULES:=
 CLEAN:=
 BINS:=
 
+LDFLAGS=-lnuma
+
 ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
 ifneq ($(strip $(LDFLAGS)),)
 	ldflags+=-extldflags=$(LDFLAGS)
@@ -63,7 +65,8 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+#build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+build-devnets: lotus lotus-miner lotus-worker
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -383,7 +386,13 @@ docsgen-openrpc-worker: docsgen-openrpc-bin
 .PHONY: docsgen docsgen-md-bin docsgen-openrpc-bin
 
 gen: actors-gen type-gen method-gen docsgen api-gen
+
 .PHONY: gen
+
+# separate from gen because it needs binaries
+docsgen-cli: lotus lotus-miner lotus-worker
+	python ./scripts/generate-lotus-cli.py
+.PHONY: docsgen-cli
 
 print-%:
 	@echo $*=$($*)

@@ -602,7 +602,8 @@ func (s *WindowPoStScheduler) runPost(ctx context.Context, di dline.Info, ts *ty
 			postOut, ps, err := s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), sinfos, append(abi.PoStRandomness{}, rand...))
 			elapsed := time.Since(tsStart)
 
-			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed)
+			log.Infow("computing window post", "batch", batchIdx, "elapsed",
+				elapsed, "deadline", di, "sectors", len(sinfos))
 
 			if err == nil {
 				// If we proved nothing, something is very wrong.
@@ -831,7 +832,7 @@ func (s *WindowPoStScheduler) setSender(ctx context.Context, msg *types.Message,
 	// estimate
 	minGasFeeMsg := *msg
 
-	minGasFeeMsg.GasPremium, err = s.api.GasEstimateGasPremium(ctx, 5, msg.From, msg.GasLimit, types.TipSetKey{})
+	minGasFeeMsg.GasPremium, err = s.api.GasEstimateGasPremium(ctx, 5, msg.From, msg.GasLimit, types.EmptyTSK)
 	if err != nil {
 		log.Errorf("failed to estimate minimum gas premium: %+v", err)
 		minGasFeeMsg.GasPremium = msg.GasPremium

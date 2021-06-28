@@ -6,9 +6,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"math/bits"
 	"os"
+	"path"
 	"runtime"
 
 	"github.com/ipfs/go-cid"
@@ -28,11 +30,12 @@ import (
 
 var _ Storage = &Sealer{}
 
-func New(sectors SectorProvider) (*Sealer, error) {
+func New(sectors SectorProvider, merkleTreecache string, ccfunc cacheClearFunc) (*Sealer, error) {
 	sb := &Sealer{
-		sectors: sectors,
-
-		stopping: make(chan struct{}),
+		sectors:         sectors,
+		merkleTreecache: merkleTreecache,
+		stopping:        make(chan struct{}),
+		ccfunc:          ccfunc,
 	}
 
 	return sb, nil
@@ -195,12 +198,16 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		return piecePromises[0]()
 	}
 
+	var payloadRoundedBytes abi.PaddedPieceSize
 	pieceCids := make([]abi.PieceInfo, len(piecePromises))
 	for i, promise := range piecePromises {
-		pieceCids[i], err = promise()
+		pinfo, err := promise()
 		if err != nil {
 			return abi.PieceInfo{}, err
 		}
+
+		pieceCids[i] = pinfo
+		payloadRoundedBytes += pinfo.Size
 	}
 
 	pieceCID, err := ffi.GenerateUnsealedCID(sector.ProofType, pieceCids)
@@ -213,10 +220,26 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		return abi.PieceInfo{}, err
 	}
 
-	return abi.PieceInfo{
+	if payloadRoundedBytes < pieceSize.Padded() {
+		paddedCid, err := commpffi.ZeroPadPieceCommitment(pieceCID, payloadRoundedBytes.Unpadded(), pieceSize)
+		if err != nil {
+			return abi.PieceInfo{}, xerrors.Errorf("failed to pad data: %w", err)
+		}
+
+		pieceCID = paddedCid
+	}
+
+	pi := abi.PieceInfo{
 		Size:     pieceSize.Padded(),
 		PieceCID: pieceCID,
-	}, nil
+	}
+
+	v, err := json.Marshal(&pi)
+	if err == nil {
+		log.Info("add piece completed, pieceInfo:\n", string(v))
+	}
+
+	return pi, nil
 }
 
 func (sb *Sealer) pieceCid(spt abi.RegisteredSealProof, in []byte) (cid.Cid, error) {
@@ -488,6 +511,21 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 		}
 	}
 
+	// lingh: soft link to merkle cache file
+	if sb.merkleTreecache != "" {
+		_, err := os.Stat(sb.merkleTreecache)
+		if !os.IsNotExist(err) {
+			// exists
+			targetMerkleTreeCache := path.Join(paths.Cache, "sc-02-data-tree-d.dat")
+			err = os.Symlink(sb.merkleTreecache, targetMerkleTreeCache)
+			if err != nil {
+				log.Errorf("sb.SealPreCommit1 Symlink merkleTreecache failed:%v", err)
+			} else {
+				log.Info("sb.SealPreCommit1 link merkleTreecache ok")
+			}
+		}
+	}
+
 	var sum abi.UnpaddedPieceSize
 	for _, piece := range pieces {
 		sum += piece.Size.Unpadded()
@@ -560,6 +598,18 @@ func (sb *Sealer) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 
 		return nil, xerrors.Errorf("StandaloneSealCommit: %w", err)
 	}
+
+	cache := paths.Cache
+	if sb.ccfunc == nil {
+		ssize, err := sector.ProofType.SectorSize()
+		if err != nil {
+			log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v", err)
+		} else {
+			// clear cache
+			sb.ccfunc(cache, uint64(ssize))
+		}
+	}
+
 	return output, nil
 }
 
@@ -632,13 +682,29 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 
 	}
 
-	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	// lingh: clear storage cache, not seal cache?
+	//paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathSealing)
 	if err != nil {
-		return xerrors.Errorf("acquiring sector cache path: %w", err)
+		return xerrors.Errorf("FinalizeSector: acquiring sector cache path: %w", err)
 	}
 	defer done()
 
-	return ffi.ClearCache(uint64(ssize), paths.Cache)
+	err = ffi.ClearCache(uint64(ssize), paths.Cache)
+	if err != nil {
+		log.Warnf("FinalizeSector: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
+	}
+
+	// lingh: remove unsealed
+	if len(keepUnsealed) == 0 {
+		err = os.Remove(paths.Unsealed)
+		if err != nil {
+			log.Warnf("FinalizeSector: Remove unsealed file with error:%v", err)
+		}
+	}
+
+	// ignore clear cache error
+	return nil
 }
 
 func (sb *Sealer) ReleaseUnsealed(ctx context.Context, sector storage.SectorRef, safeToFree []storage.Range) error {
