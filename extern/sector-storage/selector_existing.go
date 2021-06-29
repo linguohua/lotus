@@ -35,10 +35,15 @@ func findSectorGroup(ctx context.Context, index stores.SectorIndex, spt abi.Regi
 		return "", xerrors.Errorf("findSectorGroup no valid storage found for sector:%s")
 	}
 
-	groupID := best[0].GroupID
-	log.Debugf("findSectorGroup ok, sector:%s, group:%s", sector, groupID)
+	for _, s := range best {
+		if s.GroupID != "" {
+			log.Debugf("findSectorGroup ok, sector:%s, group:%s", sector, s.GroupID)
+			return s.GroupID, nil
+		}
+	}
 
-	return groupID, nil
+	log.Errorf("findSectorGroup failed, sector:%s, non-group found", sector)
+	return "", nil
 }
 
 func newExistingSelector(index stores.SectorIndex, sector abi.SectorID, alloc storiface.SectorFileType, groupID string) *existingSelector {
