@@ -356,6 +356,29 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 		bindSectors:   make(map[abi.SectorID]struct{}),
 		lastHeartbeat: time.Now(),
 	}
+
+	// remove all decl made by this storage
+	sectors := make(map[Decl]struct{})
+	for decl, ids := range i.sectors {
+		found := false
+		for _, id := range ids {
+			if id.storage == si.ID {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			sectors[decl] = struct{}{}
+		}
+	}
+
+	if len(sectors) > 0 {
+		for k := range sectors {
+			delete(i.sectors, k)
+		}
+	}
+
 	return nil
 }
 
