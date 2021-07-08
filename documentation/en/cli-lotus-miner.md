@@ -9,6 +9,7 @@ USAGE:
 VERSION:
    1.11.1-dev
 
+
 COMMANDS:
    init     Initialize a lotus miner repo
    run      Start a lotus miner process
@@ -74,7 +75,7 @@ OPTIONS:
    --from value                 select which address to send actor creation message from
    --help, -h                   show help (default: false)
    --version, -v                print the version (default: false)
-   
+
 ```
 
 ### lotus-miner init restore
@@ -90,7 +91,7 @@ OPTIONS:
    --config value          config file (config.toml)
    --storage-config value  storage paths config (storage.json)
    --help, -h              show help (default: false)
-   
+
 ```
 
 ## lotus-miner run
@@ -107,7 +108,7 @@ OPTIONS:
    --nosync              don't check full-node sync status (default: false)
    --manage-fdlimit      manage open file limit (default: true)
    --help, -h            show help (default: false)
-   
+
 ```
 
 ## lotus-miner stop
@@ -120,7 +121,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner config
@@ -133,7 +134,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner backup
@@ -155,7 +156,7 @@ this command must be within this base path
 OPTIONS:
    --offline   create backup without the node running (default: false)
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner version
@@ -168,7 +169,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner actor
@@ -193,7 +194,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner actor set-addrs
@@ -208,7 +209,7 @@ OPTIONS:
    --gas-limit value  set gas limit (default: 0)
    --unset            unset address (default: false)
    --help, -h         show help (default: false)
-   
+
 ```
 
 ### lotus-miner actor withdraw
@@ -221,7 +222,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner actor repay-debt
@@ -235,7 +236,7 @@ USAGE:
 OPTIONS:
    --from value  optionally specify the account to send funds from
    --help, -h    show help (default: false)
-   
+
 ```
 
 ### lotus-miner actor set-peer-id
@@ -249,7 +250,7 @@ USAGE:
 OPTIONS:
    --gas-limit value  set gas limit (default: 0)
    --help, -h         show help (default: false)
-   
+
 ```
 
 ### lotus-miner actor set-owner
@@ -263,7 +264,7 @@ USAGE:
 OPTIONS:
    --really-do-it  Actually send transaction performing the action (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner actor control
@@ -282,7 +283,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 #### lotus-miner actor control list
@@ -297,7 +298,7 @@ OPTIONS:
    --verbose   (default: false)
    --color     (default: depends on output being a TTY)
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner actor control set
@@ -311,7 +312,7 @@ USAGE:
 OPTIONS:
    --really-do-it  Actually send transaction performing the action (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner actor propose-change-worker
@@ -325,7 +326,7 @@ USAGE:
 OPTIONS:
    --really-do-it  Actually send transaction performing the action (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner actor confirm-change-worker
@@ -339,7 +340,7 @@ USAGE:
 OPTIONS:
    --really-do-it  Actually send transaction performing the action (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ## lotus-miner info
@@ -358,7 +359,7 @@ OPTIONS:
    --hide-sectors-info  hide sectors info (default: false)
    --help, -h           show help (default: false)
    --version, -v        print the version (default: false)
-   
+
 ```
 
 ### lotus-miner info all
@@ -371,7 +372,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner auth
@@ -390,7 +391,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner auth create-token
@@ -404,7 +405,7 @@ USAGE:
 OPTIONS:
    --perm value  permission to assign to the token, one of: read, write, sign, admin
    --help, -h    show help (default: false)
-   
+
 ```
 
 ### lotus-miner auth api-info
@@ -418,7 +419,7 @@ USAGE:
 OPTIONS:
    --perm value  permission to assign to the token, one of: read, write, sign, admin
    --help, -h    show help (default: false)
-   
+
 ```
 
 ## lotus-miner log
@@ -437,7 +438,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner log list
@@ -450,7 +451,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner log set-level
@@ -484,7 +485,7 @@ DESCRIPTION:
 OPTIONS:
    --system value  limit to log system
    --help, -h      show help (default: false)
-   
+
 ```
 
 ## lotus-miner wait-api
@@ -500,7 +501,7 @@ CATEGORY:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner fetch-params
@@ -516,7 +517,7 @@ CATEGORY:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner storage-deals
@@ -543,7 +544,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals import-data
@@ -556,7 +557,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals list
@@ -571,7 +572,7 @@ OPTIONS:
    --verbose, -v  (default: false)
    --watch        watch deal updates in real-time, rather than a one time list (default: false)
    --help, -h     show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals selection
@@ -591,7 +592,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 #### lotus-miner storage-deals selection list
@@ -604,7 +605,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner storage-deals selection reset
@@ -617,7 +618,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner storage-deals selection reject
@@ -634,7 +635,7 @@ OPTIONS:
    --verified    (default: false)
    --unverified  (default: false)
    --help, -h    show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals set-ask
@@ -651,7 +652,7 @@ OPTIONS:
    --min-piece-size SIZE   Set minimum piece size (w/bit-padding, in bytes) in ask to SIZE (default: 256B)
    --max-piece-size SIZE   Set maximum piece size (w/bit-padding, in bytes) in ask to SIZE (default: miner sector size)
    --help, -h              show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals get-ask
@@ -664,7 +665,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals set-blocklist
@@ -677,7 +678,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals get-blocklist
@@ -690,7 +691,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals reset-blocklist
@@ -703,7 +704,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals set-seal-duration
@@ -716,7 +717,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage-deals pending-publish
@@ -730,7 +731,7 @@ USAGE:
 OPTIONS:
    --publish-now  send a publish message now (default: false)
    --help, -h     show help (default: false)
-   
+
 ```
 
 ## lotus-miner retrieval-deals
@@ -751,7 +752,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner retrieval-deals selection
@@ -771,7 +772,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 #### lotus-miner retrieval-deals selection list
@@ -784,7 +785,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner retrieval-deals selection reset
@@ -797,7 +798,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner retrieval-deals selection reject
@@ -812,7 +813,7 @@ OPTIONS:
    --online    (default: false)
    --offline   (default: false)
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner retrieval-deals list
@@ -825,7 +826,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner retrieval-deals set-ask
@@ -842,7 +843,7 @@ OPTIONS:
    --payment-interval value           Set the payment interval (in bytes) for retrieval (default: 1MiB)
    --payment-interval-increase value  Set the payment interval increase (in bytes) for retrieval (default: 1MiB)
    --help, -h                         show help (default: false)
-   
+
 ```
 
 ### lotus-miner retrieval-deals get-ask
@@ -855,7 +856,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner data-transfers
@@ -875,7 +876,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner data-transfers list
@@ -893,7 +894,7 @@ OPTIONS:
    --watch        watch deal updates in real-time, rather than a one time list (default: false)
    --show-failed  show failed/cancelled transfers (default: false)
    --help, -h     show help (default: false)
-   
+
 ```
 
 ### lotus-miner data-transfers restart
@@ -908,7 +909,7 @@ OPTIONS:
    --peerid value  narrow to transfer with specific peer
    --initiator     specify only transfers where peer is/is not initiator (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner data-transfers cancel
@@ -924,7 +925,7 @@ OPTIONS:
    --initiator             specify only transfers where peer is/is not initiator (default: false)
    --cancel-timeout value  time to wait for cancel to be sent to client (default: 5s)
    --help, -h              show help (default: false)
-   
+
 ```
 
 ## lotus-miner net
@@ -950,7 +951,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner net peers
@@ -965,7 +966,7 @@ OPTIONS:
    --agent, -a     Print agent name (default: false)
    --extended, -x  Print extended peer information in json (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner net connect
@@ -978,7 +979,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner net listen
@@ -991,7 +992,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner net id
@@ -1004,7 +1005,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner net findpeer
@@ -1017,7 +1018,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner net scores
@@ -1031,7 +1032,7 @@ USAGE:
 OPTIONS:
    --extended, -x  print extended peer scores in json (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner net reachability
@@ -1044,7 +1045,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner net bandwidth
@@ -1059,7 +1060,7 @@ OPTIONS:
    --by-peer      list bandwidth usage by peer (default: false)
    --by-protocol  list bandwidth usage by protocol (default: false)
    --help, -h     show help (default: false)
-   
+
 ```
 
 ### lotus-miner net block
@@ -1079,7 +1080,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 #### lotus-miner net block add
@@ -1099,7 +1100,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ##### lotus-miner net block add peer
@@ -1112,7 +1113,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ##### lotus-miner net block add ip
@@ -1125,7 +1126,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ##### lotus-miner net block add subnet
@@ -1138,7 +1139,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner net block remove
@@ -1158,7 +1159,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ##### lotus-miner net block remove peer
@@ -1171,7 +1172,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ##### lotus-miner net block remove ip
@@ -1184,7 +1185,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ##### lotus-miner net block remove subnet
@@ -1197,7 +1198,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner net block list
@@ -1210,7 +1211,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner pieces
@@ -1234,7 +1235,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner pieces list-pieces
@@ -1247,7 +1248,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner pieces list-cids
@@ -1260,7 +1261,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner pieces piece-info
@@ -1273,7 +1274,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner pieces cid-info
@@ -1286,7 +1287,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner sectors
@@ -1316,7 +1317,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner sectors status
@@ -1331,7 +1332,7 @@ OPTIONS:
    --log            display event log (default: false)
    --on-chain-info  show sector on chain info (default: false)
    --help, -h       show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors list
@@ -1350,7 +1351,7 @@ OPTIONS:
    --seal-time     display how long it took for the sector to be sealed (default: false)
    --states value  filter sectors by a comma-separated list of states
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors refs
@@ -1363,7 +1364,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors update-state
@@ -1377,7 +1378,7 @@ USAGE:
 OPTIONS:
    --really-do-it  pass this flag if you know what you are doing (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors pledge
@@ -1390,7 +1391,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors extend
@@ -1406,9 +1407,9 @@ OPTIONS:
    --v1-sectors               renews all v1 sectors up to the maximum possible lifetime (default: false)
    --tolerance value          when extending v1 sectors, don't try to extend sectors by fewer than this number of epochs (default: 20160)
    --expiration-cutoff value  when extending v1 sectors, skip sectors whose current expiration is more than <cutoff> epochs from now (infinity if unspecified) (default: 0)
-                              
+
    --help, -h                 show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors terminate
@@ -1428,7 +1429,7 @@ OPTIONS:
    --really-do-it  pass this flag if you know what you are doing (default: false)
    --help, -h      show help (default: false)
    --version, -v   print the version (default: false)
-   
+
 ```
 
 #### lotus-miner sectors terminate flush
@@ -1441,7 +1442,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 #### lotus-miner sectors terminate pending
@@ -1454,7 +1455,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors remove
@@ -1468,7 +1469,7 @@ USAGE:
 OPTIONS:
    --really-do-it  pass this flag if you know what you are doing (default: false)
    --help, -h      show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors mark-for-upgrade
@@ -1481,7 +1482,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors seal
@@ -1494,7 +1495,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors set-seal-delay
@@ -1507,7 +1508,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors get-cc-collateral
@@ -1521,7 +1522,7 @@ USAGE:
 OPTIONS:
    --expiration value  the epoch when the sector will expire (default: 0)
    --help, -h          show help (default: false)
-   
+
 ```
 
 ### lotus-miner sectors batching
@@ -1540,7 +1541,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 #### lotus-miner sectors batching commit
@@ -1554,7 +1555,7 @@ USAGE:
 OPTIONS:
    --publish-now  send a batch now (default: false)
    --help, -h     show help (default: false)
-   
+
 ```
 
 #### lotus-miner sectors batching precommit
@@ -1568,7 +1569,7 @@ USAGE:
 OPTIONS:
    --publish-now  send a batch now (default: false)
    --help, -h     show help (default: false)
-   
+
 ```
 
 ## lotus-miner proving
@@ -1582,7 +1583,7 @@ USAGE:
 COMMANDS:
    info       View current state information
    deadlines  View the current proving period deadlines information
-   deadline   View the current proving period deadline information by its index 
+   deadline   View the current proving period deadline information by its index
    faults     View the currently known proving faulty sectors information
    check      Check sectors provable
    help, h    Shows a list of commands or help for one command
@@ -1590,7 +1591,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner proving info
@@ -1603,7 +1604,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner proving deadlines
@@ -1616,20 +1617,20 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner proving deadline
 ```
 NAME:
-   lotus-miner proving deadline - View the current proving period deadline information by its index 
+   lotus-miner proving deadline - View the current proving period deadline information by its index
 
 USAGE:
    lotus-miner proving deadline [command options] <deadlineIdx>
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner proving faults
@@ -1642,7 +1643,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner proving check
@@ -1657,7 +1658,7 @@ OPTIONS:
    --only-bad  print only bad sectors (default: false)
    --slow      run slower checks (default: false)
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner storage
@@ -1684,7 +1685,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner storage attach
@@ -1714,7 +1715,7 @@ Data for the sealing process will be stored here
 Store
 Finalized sectors that will be moved here for long term storage and be proven
 over time
-   
+
 
 OPTIONS:
    --init               initialize the path first (default: false)
@@ -1723,7 +1724,7 @@ OPTIONS:
    --store              (for init) use path for long-term storage (default: false)
    --max-storage value  (for init) limit storage space for sectors (expensive for very large paths!)
    --help, -h           show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage list
@@ -1742,7 +1743,7 @@ OPTIONS:
    --color        (default: depends on output being a TTY)
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 #### lotus-miner storage list sectors
@@ -1756,7 +1757,7 @@ USAGE:
 OPTIONS:
    --color     (default: depends on output being a TTY)
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage find
@@ -1769,7 +1770,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner storage cleanup
@@ -1783,7 +1784,7 @@ USAGE:
 OPTIONS:
    --removed   cleanup remaining files from removed sectors (default: true)
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-miner sealing
@@ -1804,7 +1805,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-miner sealing jobs
@@ -1819,7 +1820,7 @@ OPTIONS:
    --color          (default: depends on output being a TTY)
    --show-ret-done  show returned but not consumed calls (default: false)
    --help, -h       show help (default: false)
-   
+
 ```
 
 ### lotus-miner sealing workers
@@ -1833,7 +1834,7 @@ USAGE:
 OPTIONS:
    --color     (default: depends on output being a TTY)
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-miner sealing sched-diag
@@ -1847,7 +1848,7 @@ USAGE:
 OPTIONS:
    --force-sched  (default: false)
    --help, -h     show help (default: false)
-   
+
 ```
 
 ### lotus-miner sealing abort
@@ -1860,5 +1861,5 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```

@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -37,6 +38,10 @@ func (m *Miner) GetSectorInfo(sid abi.SectorNumber) (sealing.SectorInfo, error) 
 }
 
 func (m *Miner) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
+	if m.sealingDisable {
+		return storage.SectorRef{}, xerrors.Errorf("PledgeSector failed, miner is sealing disable")
+	}
+
 	return m.sealing.PledgeSector(ctx)
 }
 

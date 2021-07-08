@@ -27,23 +27,28 @@ func newAllocSelector(index stores.SectorIndex, alloc storiface.SectorFileType, 
 }
 
 func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
-	tasks, err := whnd.workerRpc.TaskTypes(ctx)
-	if err != nil {
-		return false, xerrors.Errorf("getting supported worker task types: %w", err)
+	supported := false
+	tasks := whnd.acceptTaskTypes
+	for _, t := range tasks {
+		if t == task {
+			supported = true
+			break
+		}
 	}
-	if _, supported := tasks[task]; !supported {
+
+	if !supported {
 		return false, nil
 	}
 
-	paths, err := whnd.workerRpc.Paths(ctx)
-	if err != nil {
-		return false, xerrors.Errorf("getting worker paths: %w", err)
-	}
+	// paths, err := whnd.workerRpc.Paths(ctx)
+	// if err != nil {
+	// 	return false, xerrors.Errorf("getting worker paths: %w", err)
+	// }
 
-	have := map[stores.ID]struct{}{}
-	for _, path := range paths {
-		have[path.ID] = struct{}{}
-	}
+	// have := map[stores.ID]struct{}{}
+	// for _, path := range paths {
+	// 	have[path.ID] = struct{}{}
+	// }
 
 	ssize, err := spt.SectorSize()
 	if err != nil {
@@ -55,9 +60,20 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		return false, xerrors.Errorf("finding best alloc storage: %w", err)
 	}
 
+	workerGroupID := whnd.info.GroupID
 	for _, info := range best {
-		if _, ok := have[info.ID]; ok {
+		// if _, ok := have[info.ID]; ok {
+		// 	return true, nil
+		// }
+		if info.GroupID == "" {
+			// can bind to any worker
+			//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
 			return true, nil
+		} else {
+			if info.GroupID == workerGroupID {
+				//log.Infof("found match worker and storage, group id:%s", workerGroupID)
+				return true, nil
+			}
 		}
 	}
 
@@ -66,6 +82,10 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 
 func (s *allocSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *workerHandle) (bool, error) {
 	return a.utilization() < b.utilization(), nil
+}
+
+func (s *allocSelector) GroupID() string {
+	return ""
 }
 
 var _ WorkerSelector = &allocSelector{}

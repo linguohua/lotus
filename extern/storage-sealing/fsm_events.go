@@ -104,7 +104,10 @@ func (evt SectorStartPacking) apply(*SectorInfo) {}
 
 func (evt SectorStartPacking) Ignore() {}
 
-type SectorPacked struct{ FillerPieces []abi.PieceInfo }
+type SectorPacked struct {
+	FillerPieces []abi.PieceInfo
+	GroupID      string
+}
 
 func (evt SectorPacked) apply(state *SectorInfo) {
 	for idx := range evt.FillerPieces {
@@ -113,6 +116,8 @@ func (evt SectorPacked) apply(state *SectorInfo) {
 			DealInfo: nil, // filler pieces don't have deals associated with them
 		})
 	}
+
+	state.SealGroupID = evt.GroupID
 }
 
 type SectorTicket struct {
@@ -280,7 +285,9 @@ func (evt SectorProving) apply(*SectorInfo) {}
 
 type SectorFinalized struct{}
 
-func (evt SectorFinalized) apply(*SectorInfo) {}
+func (evt SectorFinalized) apply(state *SectorInfo) {
+	state.HasFinalized = true
+}
 
 type SectorRetryFinalize struct{}
 

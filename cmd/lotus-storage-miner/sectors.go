@@ -61,6 +61,7 @@ var sectorsPledgeCmd = &cli.Command{
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
 
+		// lingh: pledge beginning
 		id, err := nodeApi.PledgeSector(ctx)
 		if err != nil {
 			return err
@@ -122,6 +123,9 @@ var sectorsStatusCmd = &cli.Command{
 		fmt.Printf("Proof:\t\t%x\n", status.Proof)
 		fmt.Printf("Deals:\t\t%v\n", status.Deals)
 		fmt.Printf("Retries:\t%d\n", status.Retries)
+		fmt.Printf("HasFinalized:\t%v\n", status.HasFinalized)
+		fmt.Printf("SealGroupID:\t%s\n", status.SealGroupID)
+
 		if status.LastErr != "" {
 			fmt.Printf("Last Error:\t\t%s\n", status.LastErr)
 		}

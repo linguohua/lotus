@@ -16,6 +16,7 @@ import (
 	statemachine "github.com/filecoin-project/go-statemachine"
 )
 
+// lingh: call by go-statemachine/group.go s.hnd.Plan
 func (m *Sealing) Plan(events []statemachine.Event, user interface{}) (interface{}, uint64, error) {
 	next, processed, err := m.plan(events, user.(*SectorInfo))
 	if err != nil || next == nil {

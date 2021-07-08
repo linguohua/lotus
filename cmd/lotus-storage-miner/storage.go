@@ -149,6 +149,10 @@ over time
 				return xerrors.Errorf("must specify at least one of --store or --seal")
 			}
 
+			if cfg.CanSeal {
+				return xerrors.Errorf("miner storage should not can-seal, only worker storage can-seal")
+			}
+
 			b, err := json.MarshalIndent(cfg, "", "  ")
 			if err != nil {
 				return xerrors.Errorf("marshaling storage config: %w", err)
