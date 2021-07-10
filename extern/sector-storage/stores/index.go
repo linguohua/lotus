@@ -350,9 +350,12 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 		i.stores[si.ID].info.CanStore = si.CanStore
 		i.stores[si.ID].info.GroupID = si.GroupID
 		i.stores[si.ID].info.MaxSealingSectors = si.MaxSealingSectors
+		// clear bind sectors
+		i.stores[si.ID].bindSectors = make(map[abi.SectorID]struct{})
 
 		return nil
 	}
+
 	i.stores[si.ID] = &storageEntry{
 		info:          &si,
 		fsi:           st,
