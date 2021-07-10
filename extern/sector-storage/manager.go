@@ -360,6 +360,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	log.Info("Manager.SealPreCommit1 getWork, sector id:%s", sector.ID)
 	wk, wait, cancel, err := m.getWork(ctx, sealtasks.TTPreCommit1, sector, ticket, pieces)
 	if err != nil {
 		return nil, xerrors.Errorf("getWork: %w", err)
@@ -383,6 +384,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 		return out, waitErr
 	}
 
+	log.Info("Manager.SealPreCommit1 StorageLock, sector id:%s", sector.ID)
 	if err := m.index.StorageLock(ctx, sector.ID, storiface.FTUnsealed, storiface.FTSealed|storiface.FTCache); err != nil {
 		return nil, xerrors.Errorf("acquiring sector lock: %w", err)
 	}
@@ -392,6 +394,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 	// lingh: not use newAllocSelector
 	// selector := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathSealing)
 	// lingh: not allow fetch
+	log.Info("Manager.SealPreCommit1 findSectorGroup, sector id:%s", sector.ID)
 	groupID, err := findSectorGroup(ctx, m.index, sector.ProofType, sector.ID,
 		storiface.FTUnsealed|storiface.FTCache|storiface.FTSealed)
 	if err != nil {
@@ -404,6 +407,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTUnsealed|storiface.FTCache|storiface.FTSealed, groupID)
 
+	log.Info("Manager.SealPreCommit1 sched.Schedule, sector id:%s", sector.ID)
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.SealPreCommit1(ctx, sector, ticket, pieces))
 		if err != nil {
