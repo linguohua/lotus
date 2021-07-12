@@ -106,7 +106,7 @@ type workerHandle struct {
 	taskTypeValidcounts []uint32
 
 	//preparing *activeResources
-	active *activeResources
+	//active *activeResources
 
 	lk sync.Mutex
 
@@ -152,20 +152,20 @@ type workerDisableReq struct {
 	done func()
 }
 
-type activeResources struct {
-	// memUsedMin uint64
-	// memUsedMax uint64
-	// gpuUsed    bool
-	// cpuUse     uint64
-	P1  uint32
-	P2  uint32
-	C1  uint32
-	C2  uint32
-	AP  uint32
-	FIN uint32
+// type activeResources struct {
+// 	// memUsedMin uint64
+// 	// memUsedMax uint64
+// 	// gpuUsed    bool
+// 	// cpuUse     uint64
+// 	P1  uint32
+// 	P2  uint32
+// 	C1  uint32
+// 	C2  uint32
+// 	AP  uint32
+// 	FIN uint32
 
-	cond *sync.Cond
-}
+// 	cond *sync.Cond
+// }
 
 type workerRequest struct {
 	sector   storage.SectorRef

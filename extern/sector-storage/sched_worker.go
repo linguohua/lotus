@@ -54,7 +54,7 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 		acceptTaskTypes:     acceptTaskTypes,
 		taskTypeValidcounts: taskTypeValidcounts,
 		//preparing: &activeResources{},
-		active:  &activeResources{},
+		//active:  &activeResources{},
 		enabled: true,
 		paused:  false,
 		url:     url,
@@ -569,7 +569,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 		// first run the prepare step (e.g. fetching sector data from other worker)
 		req := window.todo
 		err := req.prepare(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
-		sh.workersLk.Lock()
+		//sh.workersLk.Lock()
 
 		if err != nil {
 			// w.lk.Lock()
@@ -596,19 +596,9 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 		}
 
 		// wait (if needed) for resources in the 'active' window
-		err = w.active.withResources(sw.wid, w.info.Resources, req.taskType, &sh.workersLk, func() error {
-			// w.lk.Lock()
-			// w.preparing.free(w.info.Resources, needRes)
-			// w.lk.Unlock()
+		// err = w.active.withResources(sw.wid, w.info.Resources, req.taskType, &sh.workersLk, )
 
-			sh.workersLk.Unlock()
-			defer sh.workersLk.Lock() // we MUST return locked from this function
-
-			select {
-			case taskDone <- struct{}{}:
-			case <-sh.closing:
-			}
-
+		dowork := func() error {
 			// Do the work!
 			err = req.work(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
 
@@ -620,7 +610,6 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 				log.Warnf("scheduler closed while sending response")
 			}
 
-			// release window
 			sw.releaseWindowOfTasktype(window.todo.taskType)
 			select {
 			// notify request window
@@ -628,9 +617,10 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 			case <-sh.closing:
 			}
 			return nil
-		})
+		}
 
-		sh.workersLk.Unlock()
+		err = dowork()
+		//sh.workersLk.Unlock()
 
 		// This error should always be nil, since nothing is setting it, but just to be safe:
 		if err != nil {
