@@ -474,9 +474,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		} else if isLate || (hasMinPower && !mbi.EligibleForMining) {
 			log.Warnw("completed mineOne", logStruct...)
 		} else {
-			if winner != nil {
-				log.Infow("completed mineOne", logStruct...)
-			}
+			//if winner != nil {
+			log.Infow("completed mineOne", logStruct...)
+			//}
 		}
 	}()
 
