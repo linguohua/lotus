@@ -16,6 +16,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
@@ -685,12 +686,18 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
-		// iw := big.Mul(big.NewInt(candidates[i].fsi.Available), big.NewInt(int64(candidates[i].info.Weight)))
-		// jw := big.Mul(big.NewInt(candidates[j].fsi.Available), big.NewInt(int64(candidates[j].info.Weight)))
+
 		iw := len(candidates[i].bindSectors)
 		jw := len(candidates[j].bindSectors)
 
-		return iw < jw
+		if iw != jw {
+			return iw < jw
+		}
+
+		iiw := big.Mul(big.NewInt(candidates[i].fsi.Available), big.NewInt(int64(candidates[i].info.Weight)))
+		jjw := big.Mul(big.NewInt(candidates[j].fsi.Available), big.NewInt(int64(candidates[j].info.Weight)))
+
+		return iiw.GreaterThan(jjw)
 	})
 
 	out := make([]StorageInfo, len(candidates))
