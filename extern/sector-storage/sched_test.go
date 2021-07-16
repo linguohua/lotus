@@ -577,7 +577,7 @@ func BenchmarkTrySched(b *testing.B) {
 						Resources: decentWorkerResources,
 					},
 					//preparing: &activeResources{},
-					active: &activeResources{},
+					//active: &activeResources{},
 				}
 
 				for i := 0; i < windows; i++ {
