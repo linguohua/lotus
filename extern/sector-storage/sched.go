@@ -632,6 +632,10 @@ func (sh *scheduler) schedOne(schReq *workerRequest) bool {
 				log.Errorf("schedOne sector %d, task type:%s, groupID:%s non-C2 task should not use C2-openwindows",
 					schReq.sector.ID.Number, taskType, groupID)
 			}
+		} else if taskType == sealtasks.TTAddPiece {
+			log.Debugf("schedOne sector %d, taskType:%s, no available storage group found", schReq.sector.ID.Number,
+				taskType)
+			return false
 		} else {
 			log.Errorf("schedOne sector %d, task type:%s, non-group-task only support C2",
 				schReq.sector.ID.Number, taskType, groupID)

@@ -6,6 +6,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/specs-storage/storage"
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
@@ -95,49 +96,20 @@ type addPieceSelector struct {
 	alloc   storiface.SectorFileType
 	ptype   storiface.PathType
 	groupID string
+	sector  storage.SectorRef
 }
 
-func newAddPieceSelector(ctx context.Context, index stores.SectorIndex,
-	spt abi.RegisteredSealProof, sector abi.SectorID,
-	alloc storiface.SectorFileType, ptype storiface.PathType) (*addPieceSelector, error) {
-
-	ssize, err := spt.SectorSize()
-	if err != nil {
-		return nil, xerrors.Errorf("getting sector size: %w", err)
-	}
-
-	// try to find best group
-	best, err := index.StorageBestAlloc(ctx, alloc, ssize, ptype)
-	if err != nil {
-		return nil, xerrors.Errorf("finding best alloc storage: %v", err)
-	}
-
-	groupID := ""
-	for _, info := range best {
-		// if _, ok := have[info.ID]; ok {
-		// 	return true, nil
-		// }
-		if info.GroupID != "" {
-			// can bind to any worker
-			//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
-			_, err = index.TryBindSector2SealStorage(ctx, alloc, ptype, sector, info.GroupID)
-			if err == nil {
-				groupID = info.GroupID
-				break
-			}
-		}
-	}
-
-	if groupID == "" {
-		return nil, xerrors.Errorf("cant found best alloc storage")
-	}
+func newAddPieceSelector(index stores.SectorIndex,
+	sector storage.SectorRef,
+	alloc storiface.SectorFileType, ptype storiface.PathType) *addPieceSelector {
 
 	return &addPieceSelector{
 		index:   index,
 		alloc:   alloc,
 		ptype:   ptype,
-		groupID: groupID,
-	}, nil
+		groupID: "",
+		sector:  sector,
+	}
 }
 
 func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
@@ -154,15 +126,6 @@ func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		return false, nil
 	}
 
-	// paths, err := whnd.workerRpc.Paths(ctx)
-	// if err != nil {
-	// 	return false, xerrors.Errorf("getting worker paths: %w", err)
-	// }
-
-	// have := map[stores.ID]struct{}{}
-	// for _, path := range paths {
-	// 	have[path.ID] = struct{}{}
-	// }
 	workerGroupID := whnd.info.GroupID
 	if workerGroupID == s.groupID {
 		return true, nil
@@ -176,7 +139,34 @@ func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, 
 }
 
 func (s *addPieceSelector) GroupID() string {
-	return s.groupID
+	spt := s.sector.ProofType
+	ssize, err := spt.SectorSize()
+	if err != nil {
+		log.Errorf("addPieceSelector: sector:%v, getting sector size: %v", s.sector.ID, err)
+		return ""
+	}
+
+	// try to find best group
+	ctx := context.TODO()
+	best, err := s.index.StorageBestAlloc(ctx, s.alloc, ssize, s.ptype)
+	if err != nil {
+		log.Errorf("addPieceSelector: sector:%v, finding best alloc storage: %v", s.sector.ID, err)
+		return ""
+	}
+
+	groupID := ""
+	for _, info := range best {
+		// if _, ok := have[info.ID]; ok {
+		// 	return true, nil
+		// }
+		if info.GroupID != "" {
+			groupID = info.GroupID
+			break
+		}
+	}
+
+	s.groupID = groupID
+	return groupID
 }
 
 var _ WorkerSelector = &addPieceSelector{}

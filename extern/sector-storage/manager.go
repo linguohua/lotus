@@ -315,13 +315,12 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	var selector WorkerSelector
 	var err error
 
-	if len(existingPieces) == 0 { // new
-		selector, err = newAddPieceSelector(ctx, m.index, sector.ProofType, sector.ID,
+	if len(existingPieces) == 0 {
+		// new
+		selector = newAddPieceSelector(m.index, sector,
 			storiface.FTUnsealed, storiface.PathSealing)
-		if err != nil {
-			return abi.PieceInfo{}, err
-		}
-	} else { // use existing
+	} else {
+		// use existing
 		groupID, err := findSectorGroup(ctx, m.index, sector.ProofType, sector.ID, storiface.FTUnsealed)
 		if err != nil {
 			return abi.PieceInfo{}, err
