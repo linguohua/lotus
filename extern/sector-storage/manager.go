@@ -316,7 +316,8 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	var err error
 
 	if len(existingPieces) == 0 { // new
-		selector, err = newAddPieceSelector(ctx, m.index, sector.ProofType, storiface.FTUnsealed, storiface.PathSealing)
+		selector, err = newAddPieceSelector(ctx, m.index, sector.ProofType, sector.ID,
+			storiface.FTUnsealed, storiface.PathSealing)
 		if err != nil {
 			return abi.PieceInfo{}, err
 		}

@@ -98,7 +98,8 @@ type addPieceSelector struct {
 }
 
 func newAddPieceSelector(ctx context.Context, index stores.SectorIndex,
-	spt abi.RegisteredSealProof, alloc storiface.SectorFileType, ptype storiface.PathType) (*addPieceSelector, error) {
+	spt abi.RegisteredSealProof, sector abi.SectorID,
+	alloc storiface.SectorFileType, ptype storiface.PathType) (*addPieceSelector, error) {
 
 	ssize, err := spt.SectorSize()
 	if err != nil {
@@ -119,8 +120,11 @@ func newAddPieceSelector(ctx context.Context, index stores.SectorIndex,
 		if info.GroupID != "" {
 			// can bind to any worker
 			//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
-			groupID = info.GroupID
-			break
+			_, err = index.TryBindSector2SealStorage(ctx, alloc, ptype, sector, info.GroupID)
+			if err == nil {
+				groupID = info.GroupID
+				break
+			}
 		}
 	}
 
