@@ -300,9 +300,9 @@ func (sw *schedWorker) disable(ctx context.Context) error {
 	// request cleanup in the main scheduler goroutine
 	select {
 	case sw.sched.workerDisable <- workerDisableReq{
-		activeWindows: sw.worker.activeWindows,
-		wid:           sw.wid,
-		groupID:       sw.worker.info.GroupID,
+		//activeWindows: sw.worker.activeWindows,
+		wid:     sw.wid,
+		groupID: sw.worker.info.GroupID,
 		done: func() {
 			close(done)
 		},
@@ -651,7 +651,7 @@ func (sh *scheduler) workerCleanup(wid WorkerID, w *workerHandle) {
 
 		groupID := w.info.GroupID
 		if groupID != "" {
-			openWindowsG := sh.openWindowsByGroup[groupID]
+			openWindowsG := sh.getOpenWindowsGroup(groupID)
 			if openWindowsG != nil {
 				openWindowsG.removeByWorkerID(wid)
 			}
