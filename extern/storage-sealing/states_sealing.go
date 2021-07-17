@@ -33,7 +33,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		pp := m.pendingPieces[c]
 		delete(m.pendingPieces, c)
 		if pp == nil {
-			log.Errorf("nil assigned pending piece %s", c)
+			log.Errorf("sector %d nil assigned pending piece %s", sector.SectorNumber, c)
 			continue
 		}
 
@@ -60,7 +60,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 	ubytes := abi.PaddedPieceSize(ssize).Unpadded()
 
 	if allocated > ubytes {
-		return xerrors.Errorf("too much data in sector: %d > %d", allocated, ubytes)
+		return xerrors.Errorf("handlePacking failed, too much data in sector %d: %d > %d", sector.SectorNumber, allocated, ubytes)
 	}
 
 	fillerSizes, err := fillersFromRem(ubytes - allocated)
@@ -73,12 +73,20 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 	}
 
 	// lingh: pledge AddPiece call
-	fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
-	if err != nil {
-		return xerrors.Errorf("filling up the sector (%v): %w", fillerSizes, err)
+	for {
+		fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
+		if err != nil {
+			log.Errorf("filling up the sector %d (%v): %w", sector.SectorNumber, fillerSizes, err)
+			err = failedCooldown(ctx, sector)
+			if err != nil {
+				log.Errorf("handlePacking failed,sector %d (%v): %w",
+					sector.SectorNumber, fillerSizes, err)
+				return err
+			}
+		} else {
+			return ctx.Send(SectorPacked{FillerPieces: fillerPieces, GroupID: gid})
+		}
 	}
-
-	return ctx.Send(SectorPacked{FillerPieces: fillerPieces, GroupID: gid})
 }
 
 func (m *Sealing) padSector(ctx context.Context, sectorID storage.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, sizes ...abi.UnpaddedPieceSize) ([]abi.PieceInfo, string, error) {
