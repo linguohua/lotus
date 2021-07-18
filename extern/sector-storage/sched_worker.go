@@ -404,6 +404,9 @@ func (sw *schedWorker) releaseWindowOfTasktype(taskType sealtasks.TaskType) {
 	sw.worker.wndLk.Lock()
 	count, _ := sw.worker.requestedWindowsCounter[taskType]
 	count = count - 1
+	if count < 0 {
+		count = 0
+	}
 	sw.worker.requestedWindowsCounter[taskType] = count
 	sw.worker.wndLk.Unlock()
 }
@@ -412,7 +415,6 @@ func (sw *schedWorker) requestWindows() bool {
 	// acceptTaskType, validcounts := sw.worker.info.Resources.ValidTaskType()
 	for i, t := range sw.worker.acceptTaskTypes {
 		x := sw.worker.taskTypeValidcounts[i]
-		// lingh: TODO lock protect
 
 		sw.worker.wndLk.Lock()
 		count, _ := sw.worker.requestedWindowsCounter[t]

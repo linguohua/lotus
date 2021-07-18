@@ -283,8 +283,15 @@ var runCmd = &cli.Command{
 		// }
 		switch role {
 		case "APx":
-			taskTypes = append(taskTypes, sealtasks.TTAddPiece,
-				sealtasks.TTCommit1, sealtasks.TTFetch, sealtasks.TTFinalize)
+			if os.Getenv("APX_NO_ADDPIECE") == "true" {
+				log.Warn("APX_NO_ADDPIECE == true, start APx without addpiece")
+				taskTypes = append(taskTypes,
+					sealtasks.TTCommit1, sealtasks.TTFetch, sealtasks.TTFinalize)
+			} else {
+				taskTypes = append(taskTypes, sealtasks.TTAddPiece,
+					sealtasks.TTCommit1, sealtasks.TTFetch, sealtasks.TTFinalize)
+			}
+
 		case "P1":
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit1)
 		case "P2":
