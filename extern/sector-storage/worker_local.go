@@ -82,6 +82,10 @@ type LocalWorker struct {
 		string
 		uint64
 	}
+
+	p1Mutex sync.Mutex
+	p2Mutex sync.Mutex
+	c2Mutex sync.Mutex
 }
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
@@ -521,6 +525,9 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 			return nil, err
 		}
 
+		// lock P1 mutex
+		l.p1Mutex.Lock()
+		defer l.p1Mutex.Unlock()
 		return sb.SealPreCommit1(ctx, sector, ticket, pieces)
 	})
 }
@@ -532,6 +539,9 @@ func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorR
 	}
 
 	return l.asyncCall(ctx, sector, SealPreCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
+		l.p2Mutex.Lock()
+		defer l.p2Mutex.Unlock()
+
 		return sb.SealPreCommit2(ctx, sector, phase1Out)
 	})
 }
@@ -554,6 +564,9 @@ func (l *LocalWorker) SealCommit2(ctx context.Context, sector storage.SectorRef,
 	}
 
 	return l.asyncCall(ctx, sector, SealCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
+		l.c2Mutex.Lock()
+		defer l.c2Mutex.Unlock()
+
 		return sb.SealCommit2(ctx, sector, phase1Out)
 	})
 }
