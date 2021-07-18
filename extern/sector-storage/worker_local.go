@@ -69,10 +69,11 @@ type LocalWorker struct {
 	// see equivalent field on WorkerConfig.
 	ignoreResources bool
 
-	ct          *workerCallTracker
-	acceptTasks map[sealtasks.TaskType]struct{}
-	running     sync.WaitGroup
-	taskLk      sync.Mutex
+	ct           *workerCallTracker
+	runningTasks map[sealtasks.TaskType]int
+	acceptTasks  map[sealtasks.TaskType]struct{}
+	running      sync.WaitGroup
+	taskLk       sync.Mutex
 
 	session     uuid.UUID
 	testDisable int64
@@ -108,9 +109,10 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 			st: cst,
 		},
 
-		acceptTasks: acceptTasks,
-		executor:    executor,
-		noSwap:      wcfg.NoSwap,
+		acceptTasks:  acceptTasks,
+		runningTasks: make(map[sealtasks.TaskType]int),
+		executor:     executor,
+		noSwap:       wcfg.NoSwap,
 
 		session: uuid.New(),
 		closing: make(chan struct{}),
@@ -527,7 +529,12 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 
 		// lock P1 mutex
 		l.p1Mutex.Lock()
-		defer l.p1Mutex.Unlock()
+		l.counterTask(sealtasks.TTPreCommit1, 1)
+		defer func() {
+			l.p1Mutex.Unlock()
+			l.counterTask(sealtasks.TTPreCommit1, -1)
+		}()
+
 		return sb.SealPreCommit1(ctx, sector, ticket, pieces)
 	})
 }
@@ -540,7 +547,11 @@ func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorR
 
 	return l.asyncCall(ctx, sector, SealPreCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		l.p2Mutex.Lock()
-		defer l.p2Mutex.Unlock()
+		l.counterTask(sealtasks.TTPreCommit2, 1)
+		defer func() {
+			l.p2Mutex.Unlock()
+			l.counterTask(sealtasks.TTPreCommit2, -1)
+		}()
 
 		return sb.SealPreCommit2(ctx, sector, phase1Out)
 	})
@@ -565,7 +576,11 @@ func (l *LocalWorker) SealCommit2(ctx context.Context, sector storage.SectorRef,
 
 	return l.asyncCall(ctx, sector, SealCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		l.c2Mutex.Lock()
-		defer l.c2Mutex.Unlock()
+		l.counterTask(sealtasks.TTCommit2, 1)
+		defer func() {
+			l.c2Mutex.Unlock()
+			l.counterTask(sealtasks.TTCommit2, -1)
+		}()
 
 		return sb.SealCommit2(ctx, sector, phase1Out)
 	})
@@ -673,6 +688,35 @@ func (l *LocalWorker) Paths(ctx context.Context) ([]stores.StoragePath, error) {
 	return l.localStore.Local(ctx)
 }
 
+func (l *LocalWorker) counterTask(tasktype sealtasks.TaskType, c int) {
+	l.taskLk.Lock()
+	defer l.taskLk.Unlock()
+
+	count, exist := l.runningTasks[tasktype]
+	if !exist {
+		l.runningTasks[tasktype] = c
+	} else {
+		l.runningTasks[tasktype] = count + c
+	}
+}
+
+func (l *LocalWorker) HasResourceForNewTask(ctx context.Context, tasktype sealtasks.TaskType) bool {
+	l.taskLk.Lock()
+	defer l.taskLk.Unlock()
+
+	count, exist := l.runningTasks[tasktype]
+	if !exist {
+		return true
+	}
+
+	taskParallelCount := parallelConfig[tasktype]
+	if count < int(taskParallelCount) {
+		return true
+	}
+
+	return false
+}
+
 func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	hostname, err := os.Hostname() // TODO: allow overriding from config
 	if err != nil {
@@ -708,24 +752,34 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}, nil
 }
 
+var parallelConfig = map[sealtasks.TaskType]uint32{
+	sealtasks.TTAddPiece:   1,
+	sealtasks.TTCommit1:    8,
+	sealtasks.TTCommit2:    1,
+	sealtasks.TTPreCommit1: 1,
+	sealtasks.TTPreCommit2: 1,
+	sealtasks.TTFinalize:   1,
+}
+
 func (l *LocalWorker) getWorkerResourceConfig() storiface.WorkerResources {
 	l.taskLk.Lock()
 	defer l.taskLk.Unlock()
 	res := storiface.WorkerResources{}
 	for k := range l.acceptTasks {
+		kk, _ := parallelConfig[k]
 		switch k {
 		case sealtasks.TTAddPiece:
-			res.AP = 1
+			res.AP = kk
 		case sealtasks.TTCommit1:
-			res.C1 = 8
+			res.C1 = kk
 		case sealtasks.TTCommit2:
-			res.C2 = 1
+			res.C2 = kk
 		case sealtasks.TTPreCommit1:
-			res.P1 = 1
+			res.P1 = kk
 		case sealtasks.TTPreCommit2:
-			res.P2 = 1
+			res.P2 = kk
 		case sealtasks.TTFinalize:
-			res.FIN = 1
+			res.FIN = kk
 		}
 	}
 

@@ -21,7 +21,7 @@ type schedPrioCtxKey int
 
 var SchedPriorityKey schedPrioCtxKey
 var DefaultSchedPriority = 0
-var SelectorTimeout = 5 * time.Second
+var SelectorTimeout = 3 * time.Second
 var InitWait = 3 * time.Second
 
 var (
@@ -723,29 +723,41 @@ func (sh *scheduler) schedOneC2(schReq *workerRequest) bool {
 }
 
 func (sh *scheduler) trySchedGroups() {
+	wg := sync.WaitGroup{}
+	wg.Add(len(sh.openWindowGroups))
+
 	for groupID, openwindowGroup := range sh.openWindowGroups {
-		tasks := openwindowGroup.tasks
-		update := make(map[sealtasks.TaskType][]*workerRequest)
+		gid := groupID
+		openg := openwindowGroup
 
-		for tt, tarray := range tasks {
-			log.Debugf("trySchedGroupTask begin, group %s, tasktype %s, queue len:%d",
-				groupID, tt, len(tarray))
+		go func() {
+			tasks := openg.tasks
+			update := make(map[sealtasks.TaskType][]*workerRequest)
 
-			hasDoneSched, remainArray := sh.trySchedGroupTask(tt, groupID,
-				tarray, openwindowGroup)
+			for tt, tarray := range tasks {
+				log.Debugf("trySchedGroupTask begin, group %s, tasktype %s, queue len:%d",
+					gid, tt, len(tarray))
 
-			log.Debugf("trySchedGroupTask completed, group %s, tasktype %s, done:%d",
-				groupID, tt, hasDoneSched)
+				hasDoneSched, remainArray := sh.trySchedGroupTask(tt, gid,
+					tarray, openg)
 
-			if hasDoneSched > 0 {
-				update[tt] = remainArray
+				log.Debugf("trySchedGroupTask completed, group %s, tasktype %s, done:%d",
+					gid, tt, hasDoneSched)
+
+				if hasDoneSched > 0 {
+					update[tt] = remainArray
+				}
 			}
-		}
 
-		for tt, tarray := range update {
-			tasks[tt] = tarray
-		}
+			for tt, tarray := range update {
+				tasks[tt] = tarray
+			}
+
+			wg.Done()
+		}()
 	}
+
+	wg.Wait()
 }
 
 func (sh *scheduler) trySchedGroupTask(tasktype sealtasks.TaskType,

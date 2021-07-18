@@ -36,6 +36,7 @@ type Worker interface {
 	storiface.WorkerCalls
 
 	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error)
+	HasResourceForNewTask(context.Context, sealtasks.TaskType) bool
 
 	// Returns paths accessible to the worker
 	Paths(context.Context) ([]stores.StoragePath, error)

@@ -127,11 +127,15 @@ func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 	}
 
 	workerGroupID := whnd.info.GroupID
-	if workerGroupID == s.groupID {
-		return true, nil
+	if workerGroupID != s.groupID {
+		return false, nil
 	}
 
-	return false, nil
+	if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *workerHandle) (bool, error) {

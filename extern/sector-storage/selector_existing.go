@@ -77,55 +77,16 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		return false, nil
 	}
 
-	//paths, err := whnd.workerRpc.Paths(ctx)
-	//if err != nil {
-	//	return false, xerrors.Errorf("getting worker paths: %w", err)
-	//}
-
-	// have := map[stores.ID]struct{}{}
-	// for _, path := range paths {
-	// 	have[path.ID] = struct{}{}
-	// }
-
-	// ssize, err := spt.SectorSize()
-	// if err != nil {
-	// 	return false, xerrors.Errorf("getting sector size: %w", err)
-	// }
-
-	// best, err := s.index.StorageFindSector(ctx, s.sector, s.alloc, ssize, false)
-	// if err != nil {
-	// 	return false, xerrors.Errorf("finding best storage: %w", err)
-	// }
-
-	// if len(best) < 1 {
-	// 	// log.Errorf("existingSelector.ok StorageFindSector found none, sector:%s task type:%s", s.sector, task)
-	// 	return false, nil
-	// }
-
 	workerGroupID := whnd.info.GroupID
-	if workerGroupID == s.groupID {
-		return true, nil
+	if workerGroupID != s.groupID {
+		return false, nil
 	}
 
-	// for _, info := range best {
-	// 	// if _, ok := have[info.ID]; ok {
-	// 	// 	return true, nil
-	// 	// }
-	// 	if info.GroupID == "" {
-	// 		// can bind to any worker
-	// 		//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
-	// 		return true, nil
-	// 	} else {
-	// 		if info.GroupID == workerGroupID {
-	// 			return true, nil
-	// 		}
-	// 	}
+	if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
+		return false, nil
+	}
 
-	// 	//log.Infof("existingSelector.ok group id not match info:%s != worker:%d", info.GroupID, workerGroupID)
-	// }
-
-	//log.Infof("existingSelector.ok return false, task type:%s", task)
-	return false, nil
+	return true, nil
 }
 
 func (s *existingSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *workerHandle) (bool, error) {

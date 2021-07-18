@@ -821,6 +821,8 @@ type WorkerStruct struct {
 
 		TaskTypes func(p0 context.Context) (map[sealtasks.TaskType]struct{}, error) `perm:"admin"`
 
+		HasResourceForNewTask func(p0 context.Context, p1 sealtasks.TaskType) bool `perm:"admin"`
+
 		UnsealPiece func(p0 context.Context, p1 storage.SectorRef, p2 storiface.UnpaddedByteIndex, p3 abi.UnpaddedPieceSize, p4 abi.SealRandomness, p5 cid.Cid) (storiface.CallID, error) `perm:"admin"`
 
 		Version func(p0 context.Context) (Version, error) `perm:"admin"`
@@ -3726,6 +3728,14 @@ func (s *WorkerStruct) TaskTypes(p0 context.Context) (map[sealtasks.TaskType]str
 
 func (s *WorkerStub) TaskTypes(p0 context.Context) (map[sealtasks.TaskType]struct{}, error) {
 	return *new(map[sealtasks.TaskType]struct{}), xerrors.New("method not supported")
+}
+
+func (s *WorkerStruct) HasResourceForNewTask(p0 context.Context, p1 sealtasks.TaskType) bool {
+	return s.Internal.HasResourceForNewTask(p0, p1)
+}
+
+func (s *WorkerStub) HasResourceForNewTask(p0 context.Context, p1 sealtasks.TaskType) bool {
+	return true
 }
 
 func (s *WorkerStruct) UnsealPiece(p0 context.Context, p1 storage.SectorRef, p2 storiface.UnpaddedByteIndex, p3 abi.UnpaddedPieceSize, p4 abi.SealRandomness, p5 cid.Cid) (storiface.CallID, error) {

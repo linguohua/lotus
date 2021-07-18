@@ -132,6 +132,10 @@ var decentWorkerResources = storiface.WorkerResources{
 	// GPUs:        []string{"a GPU"},
 }
 
+func (s *schedTestWorker) HasResourceForNewTask(context.Context, sealtasks.TaskType) bool {
+	return true
+}
+
 func (s *schedTestWorker) Info(ctx context.Context) (storiface.WorkerInfo, error) {
 	return storiface.WorkerInfo{
 		Hostname:        s.name,
