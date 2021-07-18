@@ -20,7 +20,7 @@ func (m *Manager) WorkerStats() map[uuid.UUID]storiface.WorkerStats {
 			Enabled:    handle.enabled,
 			Url:        handle.url,
 			UUID:       id.String(),
-			Paused:     handle.paused,
+			Paused:     handle.pauseStat(),
 			TaskTypes:  handle.acceptTaskTypes,
 			TaskCounts: handle.taskTypeValidcounts,
 			// MemUsedMin: handle.active.memUsedMin,

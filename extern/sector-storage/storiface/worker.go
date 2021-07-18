@@ -25,7 +25,7 @@ type WorkerInfo struct {
 	IgnoreResources bool
 	Resources       WorkerResources
 
-	GroupID   string
+	GroupID string
 }
 
 type WorkerResources struct {
@@ -94,7 +94,7 @@ type WorkerStats struct {
 	Url  string
 	UUID string
 
-	Paused bool
+	Paused string
 
 	MemUsedMin uint64
 	MemUsedMax uint64

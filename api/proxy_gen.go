@@ -740,9 +740,9 @@ type StorageMinerStruct struct {
 
 		WorkerJobs func(p0 context.Context) (map[uuid.UUID][]storiface.WorkerJob, error) `perm:"admin"`
 
-		WorkerPause func(p0 context.Context, p1 string) error `perm:"admin"`
+		WorkerPause func(p0 context.Context, p1 string, p2 string) error `perm:"admin"`
 
-		WorkerResume func(p0 context.Context, p1 string) error `perm:"admin"`
+		WorkerResume func(p0 context.Context, p1 string, p2 string) error `perm:"admin"`
 
 		WorkerRemove func(p0 context.Context, p1 string) error `perm:"admin"`
 
@@ -3464,19 +3464,19 @@ func (s *StorageMinerStub) WorkerJobs(p0 context.Context) (map[uuid.UUID][]stori
 	return *new(map[uuid.UUID][]storiface.WorkerJob), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) WorkerPause(p0 context.Context, p1 string) error {
-	return s.Internal.WorkerPause(p0, p1)
+func (s *StorageMinerStruct) WorkerPause(p0 context.Context, p1 string, p2 string) error {
+	return s.Internal.WorkerPause(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) WorkerPause(p0 context.Context, p1 string) error {
+func (s *StorageMinerStub) WorkerPause(p0 context.Context, p1 string, p2 string) error {
 	return xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) WorkerResume(p0 context.Context, p1 string) error {
-	return s.Internal.WorkerResume(p0, p1)
+func (s *StorageMinerStruct) WorkerResume(p0 context.Context, p1 string, p2 string) error {
+	return s.Internal.WorkerResume(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) WorkerResume(p0 context.Context, p1 string) error {
+func (s *StorageMinerStub) WorkerResume(p0 context.Context, p1 string, p2 string) error {
 	return xerrors.New("method not supported")
 }
 

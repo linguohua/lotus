@@ -56,7 +56,7 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 		//preparing: &activeResources{},
 		//active:  &activeResources{},
 		enabled: true,
-		paused:  false,
+		paused:  make(map[sealtasks.TaskType]struct{}),
 		url:     url,
 
 		closingMgr: make(chan struct{}),
@@ -111,11 +111,39 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 	return nil
 }
 
-func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool) error {
-	log.Infof("pauseWorker call with uuid:%s, paused: %v", uuid2, paused)
+func convertTaskTypes(tt string) []sealtasks.TaskType {
+	switch tt {
+	case "ap":
+		return []sealtasks.TaskType{sealtasks.TTAddPiece}
+	case "p1":
+		return []sealtasks.TaskType{sealtasks.TTPreCommit1}
+	case "p2":
+		return []sealtasks.TaskType{sealtasks.TTPreCommit2}
+	case "c1":
+		return []sealtasks.TaskType{sealtasks.TTCommit1}
+	case "c2":
+		return []sealtasks.TaskType{sealtasks.TTCommit2}
+	case "fin":
+		return []sealtasks.TaskType{sealtasks.TTFinalize}
+	case "all":
+		return []sealtasks.TaskType{sealtasks.TTAddPiece,
+			sealtasks.TTPreCommit1, sealtasks.TTPreCommit2,
+			sealtasks.TTCommit1, sealtasks.TTCommit2, sealtasks.TTFinalize}
+	default:
+		return []sealtasks.TaskType{}
+	}
+}
+
+func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool, tasktype string) error {
+	log.Infof("pauseWorker call with uuid:%s, paused: %v, tasktype:%s", uuid2, paused, tasktype)
 	wid, err := uuid.Parse(uuid2)
 	if err != nil {
 		return xerrors.Errorf("pauseWorker failed: parse uuid %s error %v", uuid2, err)
+	}
+
+	ttarray := convertTaskTypes(tasktype)
+	if len(ttarray) < 1 {
+		return xerrors.Errorf("pauseWorker failed: parse task type %s failed", tasktype)
 	}
 
 	log.Infof("pauseWorker call wait RLock")
@@ -129,8 +157,15 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool)
 
 	log.Infof("pauseWorker call wait Lock")
 	sh.workersLk.Lock()
-	old := worker.paused
-	worker.paused = paused
+	if paused {
+		for _, tt := range ttarray {
+			worker.paused[tt] = struct{}{}
+		}
+	} else {
+		for _, tt := range ttarray {
+			delete(worker.paused, tt)
+		}
+	}
 	sh.workersLk.Unlock()
 
 	if paused {
@@ -139,12 +174,22 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool)
 		log.Debugf("scheduler worker with session id %s has been resume, it can receive new task now", uuid2)
 	}
 
-	if !paused && old {
-		// need to re-sched work
+	// re-scheduler
+	if !paused {
 		sh.workerChange <- struct{}{}
 	}
+
 	log.Infof("pauseWorker call completed")
 	return nil
+}
+
+func (sw *workerHandle) pauseStat() string {
+	str := ""
+	for k := range sw.paused {
+		str = str + string(k) + ","
+	}
+
+	return str
 }
 
 func (sh *scheduler) removeWorker(ctx context.Context, uuid2 string) error {

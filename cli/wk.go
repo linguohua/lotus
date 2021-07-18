@@ -23,6 +23,11 @@ func workerPause(cctx *cli.Context, v bool) error {
 		return xerrors.Errorf("must specify a valid uuid")
 	}
 
+	tasktype := cctx.String("tt")
+	if tasktype == "" {
+		return xerrors.Errorf("must specify a valid tasktype")
+	}
+
 	uuids := make([]string, 0, 16)
 	if uuid == "all" {
 		stats, err := nodeApi.WorkerStats(ReqContext(cctx))
@@ -38,12 +43,12 @@ func workerPause(cctx *cli.Context, v bool) error {
 
 	for _, uuid := range uuids {
 		if v {
-			err = nodeApi.WorkerPause(ReqContext(cctx), uuid)
+			err = nodeApi.WorkerPause(ReqContext(cctx), uuid, tasktype)
 			if err != nil {
 				return err
 			}
 		} else {
-			err = nodeApi.WorkerResume(ReqContext(cctx), uuid)
+			err = nodeApi.WorkerResume(ReqContext(cctx), uuid, tasktype)
 			if err != nil {
 				return err
 			}
@@ -60,6 +65,10 @@ var PauseWorkerCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "uuid",
 			Usage: "specify the worker session uuid",
+		},
+		&cli.StringFlag{
+			Name:  "tt",
+			Usage: "specify task type to pause: ap,p1,p2,c1,c2,fin,all",
 		},
 	},
 
@@ -126,8 +135,8 @@ var ListWorkersCmd = &cli.Command{
 				disabled = color.RedString(" (disabled)")
 			}
 
-			if stat.Paused {
-				paused = color.RedString(" (paused)")
+			if len(stat.Paused) > 0 {
+				paused = color.RedString(" (paused:" + stat.Paused + ")")
 			}
 
 			fmt.Printf("Worker %s, host %s%s%s, group:%s, url:%s\n", stat.id,

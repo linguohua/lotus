@@ -591,7 +591,7 @@ func BenchmarkTrySched(b *testing.B) {
 				}
 
 				for i := 0; i < queue; i++ {
-					sched.schedQueue.Push(&workerRequest{
+					sched.c2Queue = append(sched.c2Queue, &workerRequest{
 						taskType: sealtasks.TTCommit2,
 						sel:      slowishSelector(true),
 						ctx:      ctx,

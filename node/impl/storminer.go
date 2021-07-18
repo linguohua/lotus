@@ -411,16 +411,16 @@ func (sm *StorageMinerAPI) WorkerConnect(ctx context.Context, url string) error 
 	return sm.StorageMgr.AddWorker(ctx, w, url)
 }
 
-func (sm *StorageMinerAPI) WorkerPause(ctx context.Context, uuid string) error {
+func (sm *StorageMinerAPI) WorkerPause(ctx context.Context, uuid string, tasktype string) error {
 	log.Infof("WorkerPause:%s", uuid)
 
-	return sm.StorageMgr.PauseWorker(ctx, uuid)
+	return sm.StorageMgr.PauseWorker(ctx, uuid, tasktype)
 }
 
-func (sm *StorageMinerAPI) WorkerResume(ctx context.Context, uuid string) error {
+func (sm *StorageMinerAPI) WorkerResume(ctx context.Context, uuid string, tasktype string) error {
 	log.Infof("WorkerResume:%s", uuid)
 
-	return sm.StorageMgr.ResumeWorker(ctx, uuid)
+	return sm.StorageMgr.ResumeWorker(ctx, uuid, tasktype)
 }
 
 func (sm *StorageMinerAPI) WorkerRemove(ctx context.Context, uuid string) error {

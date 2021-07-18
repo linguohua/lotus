@@ -109,8 +109,8 @@ type StorageMiner interface {
 	WorkerJobs(context.Context) (map[uuid.UUID][]storiface.WorkerJob, error)  //perm:admin
 	// go run gen/api/proxygen.go
 	WorkerRemove(context.Context, string) error                                         //perm:admin
-	WorkerPause(context.Context, string) error                                          //perm:admin
-	WorkerResume(context.Context, string) error                                         //perm:admin
+	WorkerPause(context.Context, string, string) error                                  //perm:admin
+	WorkerResume(context.Context, string, string) error                                 //perm:admin
 	UpdateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error //perm:admin
 	UpdateP1TicketsParams(ctx context.Context, tickets uint, interval uint) error       //perm:admin
 

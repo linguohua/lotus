@@ -118,7 +118,8 @@ type workerHandle struct {
 	// count all request windows
 	requestedWindowsCounter map[sealtasks.TaskType]int
 
-	paused  bool
+	paused map[sealtasks.TaskType]struct{}
+
 	removed bool
 	url     string
 
@@ -805,7 +806,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 			continue
 		}
 
-		if worker.paused {
+		if _, paused := worker.paused[taskType]; paused {
 			log.Debugw("skipping paused worker", "worker", windowRequest.worker)
 			continue
 		}
