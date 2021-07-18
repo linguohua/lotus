@@ -823,21 +823,6 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 			continue
 		}
 
-		rpcCtx, cancel := context.WithTimeout(schReq.ctx, SelectorTimeout)
-		ok, err := schReq.sel.Ok(rpcCtx, taskType, schReq.sector.ProofType, worker)
-		cancel()
-		if err != nil {
-			log.Errorf("trySched(1) sector:%d, group:%s, task-type:%s, req.sel.Ok error: %+v",
-				schReq.sector.ID.Number,
-				windowRequest.groupID, taskType, err)
-			continue
-		}
-
-		if !ok {
-			// selector not allow
-			continue
-		}
-
 		if taskType == sealtasks.TTPreCommit1 {
 			groupID := windowRequest.groupID
 			bucket, ok := sh.p1GroupBuckets[groupID]
@@ -865,6 +850,21 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 				return false, nil
 			}
 			sh.finTickets--
+		}
+
+		rpcCtx, cancel := context.WithTimeout(schReq.ctx, SelectorTimeout)
+		ok, err := schReq.sel.Ok(rpcCtx, taskType, schReq.sector.ProofType, worker)
+		cancel()
+		if err != nil {
+			log.Errorf("trySched(1) sector:%d, group:%s, task-type:%s, req.sel.Ok error: %+v",
+				schReq.sector.ID.Number,
+				windowRequest.groupID, taskType, err)
+			continue
+		}
+
+		if !ok {
+			// selector not allow
+			continue
 		}
 
 		log.Debugf("SCHED assign sector %d to window %d, group:%s, task-type:%s",
