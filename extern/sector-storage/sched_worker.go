@@ -82,10 +82,9 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 	if info.GroupID != "" && hasTaskType(acceptTaskTypes, sealtasks.TTPreCommit1) {
 		_, exist = sh.p1GroupBuckets[info.GroupID]
 		if !exist {
-			sh.p1GroupBuckets[info.GroupID] = &groupBuckets{
-				tikets:  sh.p1TicketsPerInterval,
-				groupID: info.GroupID,
-			}
+			gb := &groupBuckets{}
+			gb.set(sh.p1TicketsPerInterval)
+			sh.p1GroupBuckets[info.GroupID] = gb
 		}
 	}
 

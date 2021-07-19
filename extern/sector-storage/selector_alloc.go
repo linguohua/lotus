@@ -131,10 +131,6 @@ func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		return false, nil
 	}
 
-	if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
-		return false, nil
-	}
-
 	return true, nil
 }
 

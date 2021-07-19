@@ -82,8 +82,12 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		return false, nil
 	}
 
-	if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
-		return false, nil
+	if task == sealtasks.TTPreCommit1 || task == sealtasks.TTPreCommit2 ||
+		task == sealtasks.TTCommit2 {
+
+		if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
+			return false, nil
+		}
 	}
 
 	return true, nil

@@ -54,8 +54,10 @@ type WorkerSelector interface {
 }
 
 type groupBuckets struct {
-	groupID string
-	tikets  uint
+	//groupID string
+
+	atomicTikets uint
+	ticketLock   sync.Mutex
 }
 
 type schedWindowRequestsGroup struct {
@@ -72,7 +74,7 @@ type scheduler struct {
 	p1TicketInterval      uint
 	finTicketsPerInterval uint
 	finTicketInterval     uint
-	finTickets            uint
+	finTickets            *groupBuckets
 	p1Ticker              *time.Ticker
 	finTicker             *time.Ticker
 
@@ -193,6 +195,36 @@ type workerResponse struct {
 	err error
 }
 
+func (b *groupBuckets) set(v uint) bool {
+	b.ticketLock.Lock()
+	defer b.ticketLock.Unlock()
+
+	if v == b.atomicTikets {
+		return false
+	}
+
+	b.atomicTikets = v
+	return true
+}
+
+func (b *groupBuckets) use() bool {
+	b.ticketLock.Lock()
+	defer b.ticketLock.Unlock()
+
+	if 0 == b.atomicTikets {
+		return false
+	}
+
+	b.atomicTikets--
+	return true
+}
+
+func (b *groupBuckets) free() {
+	b.ticketLock.Lock()
+	defer b.ticketLock.Unlock()
+	b.atomicTikets++
+}
+
 func (sh *scheduler) loadEnv() {
 	var p1TicketInterval int = 4
 	var p1TicketsPerInterval int = 2
@@ -256,7 +288,10 @@ func (sh *scheduler) loadEnv() {
 
 	sh.finTicketsPerInterval = uint(finTicketsPerInterval)
 	sh.finTicketInterval = uint(finTicketInterval)
-	sh.finTickets = uint(finTicketsPerInterval)
+
+	g := &groupBuckets{}
+	g.set(sh.finTicketsPerInterval)
+	sh.finTickets = g
 }
 
 func newScheduler() *scheduler {
@@ -421,11 +456,10 @@ func (sh *scheduler) runSched() {
 			case <-ticker.C:
 				sh.workersLk.Lock()
 				changed := false
-				for _, g := range sh.p1GroupBuckets {
-					if g.tikets < sh.p1TicketsPerInterval {
-						g.tikets = sh.p1TicketsPerInterval
+				for x, g := range sh.p1GroupBuckets {
+					if g.set(sh.p1TicketsPerInterval) {
 						changed = true
-						log.Infof("reset group %s P1 tickets to %d", g.groupID, g.tikets)
+						log.Infof("reset group %s P1 tickets to %d", x, sh.p1TicketsPerInterval)
 					}
 				}
 				sh.workersLk.Unlock()
@@ -437,8 +471,7 @@ func (sh *scheduler) runSched() {
 					// only do job when finTicketInterval > 0
 					sh.workersLk.Lock()
 					changed := false
-					if sh.finTickets < sh.finTicketsPerInterval {
-						sh.finTickets = sh.finTicketsPerInterval
+					if sh.finTickets.set(sh.finTicketsPerInterval) {
 						changed = true
 					}
 					sh.workersLk.Unlock()
@@ -804,6 +837,50 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		return false, openWindowsTT
 	}
 
+	result := false
+	var p1bucket *groupBuckets = nil
+	var f1bucket *groupBuckets = nil
+	defer func() {
+		if !result {
+			if p1bucket != nil {
+				p1bucket.free()
+			}
+
+			if f1bucket != nil {
+				f1bucket.free()
+			}
+		}
+	}()
+
+	if taskType == sealtasks.TTPreCommit1 {
+		bucket, ok := sh.p1GroupBuckets[groupID]
+		if ok {
+			if !bucket.use() {
+				log.Debugf("task acquire P1 ticket, sector:%d group:%s, no ticket remain",
+					schReq.sector.ID.Number,
+					groupID)
+				return false, nil
+			}
+
+			p1bucket = bucket
+			log.Debugf("task acquire P1 ticket, sector:%d group:%s, remain:%d",
+				schReq.sector.ID.Number,
+				groupID, bucket.atomicTikets)
+		}
+	}
+
+	if taskType == sealtasks.TTFinalize && sh.finTicketInterval > 0 {
+		if !sh.finTickets.use() {
+			log.Debugf("task acquire Finalize ticket, sector:%d group:%s, no ticket remain",
+				schReq.sector.ID.Number,
+				groupID)
+
+			return false, nil
+		}
+
+		f1bucket = sh.finTickets
+	}
+
 	for wnd, windowRequest := range openWindowsTT {
 		worker, ok := sh.workers[windowRequest.worker]
 		if !ok {
@@ -821,35 +898,6 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		if _, paused := worker.paused[taskType]; paused {
 			log.Debugw("skipping paused worker", "worker", windowRequest.worker)
 			continue
-		}
-
-		if taskType == sealtasks.TTPreCommit1 {
-			groupID := windowRequest.groupID
-			bucket, ok := sh.p1GroupBuckets[groupID]
-			if ok {
-				if bucket.tikets < 1 {
-					log.Debugf("task acquire P1 ticket, sector:%d group:%s, no ticket remain",
-						schReq.sector.ID.Number,
-						groupID)
-					continue
-				}
-
-				bucket.tikets--
-				log.Debugf("task acquire P1 ticket, sector:%d group:%s, remain:%d",
-					schReq.sector.ID.Number,
-					groupID, bucket.tikets)
-			}
-		}
-
-		if taskType == sealtasks.TTFinalize && sh.finTicketInterval > 0 {
-			if sh.finTickets < 1 {
-				log.Debugf("task acquire Finalize ticket, sector:%d group:%s, no ticket remain",
-					schReq.sector.ID.Number,
-					groupID)
-
-				return false, nil
-			}
-			sh.finTickets--
 		}
 
 		rpcCtx, cancel := context.WithTimeout(schReq.ctx, SelectorTimeout)
@@ -888,6 +936,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		l := len(openWindowsTT)
 		openWindowsTT[l-1], openWindowsTT[wnd] = openWindowsTT[wnd], openWindowsTT[l-1]
 		// update windows
+		result = true
 		return true, openWindowsTT[0:(l - 1)]
 	}
 
