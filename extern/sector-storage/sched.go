@@ -827,18 +827,21 @@ func (sh *scheduler) trySchedGroupTask(tasktype sealtasks.TaskType,
 }
 
 func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
-	openWindowsTT []*schedWindowRequest) (bool, []*schedWindowRequest) {
+	openWindowsTT []*schedWindowRequest) (result bool, windows []*schedWindowRequest) {
+
 	taskType := schReq.taskType
+	result = false
+	windows = openWindowsTT
 
 	if len(openWindowsTT) < 1 {
 		log.Debugf("SCHED sector %d, taskType:%s, no available open window, group:%s",
 			schReq.sector.ID.Number,
 			taskType, groupID)
 
-		return false, openWindowsTT
+		return
 	}
 
-	result := false
+	// when failed to schedule request, free buckets
 	var p1bucket *groupBuckets = nil
 	var f1bucket *groupBuckets = nil
 	defer func() {
@@ -860,7 +863,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 				log.Debugf("task acquire P1 ticket, sector:%d group:%s, no ticket remain",
 					schReq.sector.ID.Number,
 					groupID)
-				return false, openWindowsTT
+				return
 			}
 
 			p1bucket = bucket
@@ -876,7 +879,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 				schReq.sector.ID.Number,
 				groupID)
 
-			return false, openWindowsTT
+			return
 		}
 
 		f1bucket = sh.finTickets
@@ -938,10 +941,11 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		openWindowsTT[l-1], openWindowsTT[wnd] = openWindowsTT[wnd], openWindowsTT[l-1]
 		// update windows
 		result = true
-		return true, openWindowsTT[0:(l - 1)]
+		windows = openWindowsTT[0:(l - 1)]
+		return
 	}
 
-	return false, openWindowsTT
+	return
 }
 
 func (sh *scheduler) schedClose() {
