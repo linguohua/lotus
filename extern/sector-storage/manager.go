@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/google/uuid"
@@ -82,6 +83,8 @@ type Manager struct {
 
 	results map[WorkID]result
 	waitRes map[WorkID]chan struct{}
+
+	queryWorker bool
 }
 
 type result struct {
@@ -131,6 +134,9 @@ func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls store
 		return nil, err
 	}
 
+	queryWorker := os.Getenv("SCH_QUERY_WORKER") == "true"
+	log.Infof("New sector-storage.Manager, with queryWorker:%v", queryWorker)
+
 	m := &Manager{
 		ls:         ls,
 		storage:    stor,
@@ -147,6 +153,8 @@ func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls store
 		callRes:    map[storiface.CallID]chan result{},
 		results:    map[WorkID]result{},
 		waitRes:    map[WorkID]chan struct{}{},
+
+		queryWorker: queryWorker,
 	}
 
 	m.setupWorkTracker()
@@ -277,7 +285,7 @@ func (m *Manager) SectorsUnsealPiece(ctx context.Context, sector storage.SectorR
 
 	// selector will schedule the Unseal task on a worker that either already has the sealed sector files or has space in
 	// one of it's sealing scratch spaces to store them after fetching them from another worker.
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTSealed|storiface.FTCache, "")
+	selector := newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTSealed|storiface.FTCache, "")
 
 	log.Debugf("will schedule unseal for sector %d", sector.ID)
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTUnseal, selector, sealFetch, func(ctx context.Context, w Worker) error {
@@ -331,7 +339,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 			return abi.PieceInfo{}, xerrors.Errorf("AddPiece failed, no groupID found for sector: %s", sector.ID)
 		}
 
-		selector = newExistingSelector(m.index, sector.ID, storiface.FTUnsealed, groupID)
+		selector = newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTUnsealed, groupID)
 	}
 
 	var out abi.PieceInfo
@@ -409,7 +417,7 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 		return nil, xerrors.Errorf("SealPreCommit1 failed, no groupID found for sector: %v", sector.ID)
 	}
 
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTUnsealed|storiface.FTCache|storiface.FTSealed, groupID)
+	selector := newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTUnsealed|storiface.FTCache|storiface.FTSealed, groupID)
 
 	log.Infof("Manager.SealPreCommit1 sched.Schedule, sector id:%v", sector.ID)
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, schedNop, func(ctx context.Context, w Worker) error {
@@ -470,7 +478,7 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 	}
 
 	// lingh: not allow fetch
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, groupID)
+	selector := newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTCache|storiface.FTSealed, groupID)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit2, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.SealPreCommit2(ctx, sector, phase1Out))
@@ -532,7 +540,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 		return storage.Commit1Out{}, xerrors.Errorf("SealCommit1 failed, no groupID found for sector: %s", sector.ID)
 	}
 
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, groupID)
+	selector := newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTCache|storiface.FTSealed, groupID)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTCommit1, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.SealCommit1(ctx, sector, ticket, seed, pieces, cids))
@@ -623,7 +631,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		return xerrors.Errorf("FinalizeSector failed, no groupID found for sector: %s", sector.ID)
 	}
 
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, groupID)
+	selector := newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTCache|storiface.FTSealed, groupID)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTFinalize, selector,
 		schedNop,

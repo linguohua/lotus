@@ -12,10 +12,11 @@ import (
 )
 
 type existingSelector struct {
-	index   stores.SectorIndex
-	sector  abi.SectorID
-	alloc   storiface.SectorFileType
-	groupID string
+	index       stores.SectorIndex
+	sector      abi.SectorID
+	alloc       storiface.SectorFileType
+	groupID     string
+	queryWorker bool
 }
 
 func findSectorGroup(ctx context.Context, index stores.SectorIndex, spt abi.RegisteredSealProof,
@@ -46,16 +47,17 @@ func findSectorGroup(ctx context.Context, index stores.SectorIndex, spt abi.Regi
 	return "", nil
 }
 
-func newExistingSelector(index stores.SectorIndex, sector abi.SectorID, alloc storiface.SectorFileType, groupID string) *existingSelector {
+func newExistingSelector(queryWorker bool, index stores.SectorIndex, sector abi.SectorID, alloc storiface.SectorFileType, groupID string) *existingSelector {
 	if groupID == "" {
 		log.Warnf("newExistingSelector, sector:%s, group should not be empty", sector)
 	}
 
 	return &existingSelector{
-		index:   index,
-		sector:  sector,
-		alloc:   alloc,
-		groupID: groupID,
+		index:       index,
+		sector:      sector,
+		alloc:       alloc,
+		groupID:     groupID,
+		queryWorker: queryWorker,
 	}
 }
 
@@ -82,11 +84,13 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		return false, nil
 	}
 
-	if task == sealtasks.TTPreCommit1 || task == sealtasks.TTPreCommit2 ||
-		task == sealtasks.TTCommit2 {
+	if s.queryWorker {
+		if task == sealtasks.TTPreCommit1 || task == sealtasks.TTPreCommit2 ||
+			task == sealtasks.TTCommit2 {
 
-		if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
-			return false, nil
+			if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
+				return false, nil
+			}
 		}
 	}
 

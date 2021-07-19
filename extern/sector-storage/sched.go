@@ -473,6 +473,7 @@ func (sh *scheduler) runSched() {
 					changed := false
 					if sh.finTickets.set(sh.finTicketsPerInterval) {
 						changed = true
+						log.Infof("reset finTickets tickets to %d", sh.finTicketsPerInterval)
 					}
 					sh.workersLk.Unlock()
 					if changed {
@@ -859,7 +860,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 				log.Debugf("task acquire P1 ticket, sector:%d group:%s, no ticket remain",
 					schReq.sector.ID.Number,
 					groupID)
-				return false, nil
+				return false, openWindowsTT
 			}
 
 			p1bucket = bucket
@@ -875,7 +876,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 				schReq.sector.ID.Number,
 				groupID)
 
-			return false, nil
+			return false, openWindowsTT
 		}
 
 		f1bucket = sh.finTickets
@@ -940,7 +941,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		return true, openWindowsTT[0:(l - 1)]
 	}
 
-	return false, nil
+	return false, openWindowsTT
 }
 
 func (sh *scheduler) schedClose() {
