@@ -757,7 +757,7 @@ func (sh *scheduler) schedOneC2(schReq *workerRequest) bool {
 }
 
 func (sh *scheduler) trySchedGroups() {
-	wg := sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	wg.Add(len(sh.openWindowGroups))
 
 	for groupID, openwindowGroup := range sh.openWindowGroups {
