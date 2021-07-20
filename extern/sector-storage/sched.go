@@ -706,26 +706,41 @@ func (sh *scheduler) trySchedAddPiece() {
 
 func (sh *scheduler) schedOneAddPiece(schReq *workerRequest) bool {
 	taskType := schReq.taskType
-	groupID := schReq.sel.GroupID()
+	selector, ok := schReq.sel.(*addPieceSelector)
 
-	var openWindowsGroup *schedWindowRequestsGroup
-	var openWindowsTT []*schedWindowRequest
-	if groupID != "" {
-		openWindowsGroup = sh.getOpenWindowsGroup(groupID)
-		openWindowsTT, _ = openWindowsGroup.openWindows[schReq.taskType]
-	} else {
+	if !ok {
+		log.Error("schedOneAddPiece failed, selector not addPieceSelector")
+		return false
+	}
+
+	best := selector.findBestStorages()
+	if len(best) < 1 {
 		log.Debugf("schedOneAddPiece sector %d, taskType:%s, no available storage group found",
 			schReq.sector.ID.Number,
 			taskType)
 		return false
 	}
 
-	done, remainWindows := sh.trySchedReq(schReq, groupID, openWindowsTT)
-	if done {
-		openWindowsGroup.openWindows[schReq.taskType] = remainWindows
+	for _, store := range best {
+		groupID := store.GroupID
+		var openWindowsGroup *schedWindowRequestsGroup
+		var openWindowsTT []*schedWindowRequest
+
+		if groupID != "" {
+			openWindowsGroup = sh.getOpenWindowsGroup(groupID)
+			openWindowsTT, _ = openWindowsGroup.openWindows[schReq.taskType]
+		} else {
+			continue
+		}
+
+		done, remainWindows := sh.trySchedReq(schReq, groupID, openWindowsTT)
+		if done {
+			openWindowsGroup.openWindows[schReq.taskType] = remainWindows
+			return true
+		}
 	}
 
-	return done
+	return false
 }
 
 func (sh *scheduler) trySchedC2() {

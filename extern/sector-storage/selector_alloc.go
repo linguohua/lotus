@@ -92,11 +92,10 @@ func (s *allocSelector) GroupID() string {
 var _ WorkerSelector = &allocSelector{}
 
 type addPieceSelector struct {
-	index   stores.SectorIndex
-	alloc   storiface.SectorFileType
-	ptype   storiface.PathType
-	groupID string
-	sector  storage.SectorRef
+	index  stores.SectorIndex
+	alloc  storiface.SectorFileType
+	ptype  storiface.PathType
+	sector storage.SectorRef
 }
 
 func newAddPieceSelector(index stores.SectorIndex,
@@ -104,33 +103,14 @@ func newAddPieceSelector(index stores.SectorIndex,
 	alloc storiface.SectorFileType, ptype storiface.PathType) *addPieceSelector {
 
 	return &addPieceSelector{
-		index:   index,
-		alloc:   alloc,
-		ptype:   ptype,
-		groupID: "",
-		sector:  sector,
+		index:  index,
+		alloc:  alloc,
+		ptype:  ptype,
+		sector: sector,
 	}
 }
 
 func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
-	supported := false
-	tasks := whnd.acceptTaskTypes
-	for _, t := range tasks {
-		if t == task {
-			supported = true
-			break
-		}
-	}
-
-	if !supported {
-		return false, nil
-	}
-
-	workerGroupID := whnd.info.GroupID
-	if workerGroupID != s.groupID {
-		return false, nil
-	}
-
 	return true, nil
 }
 
@@ -139,11 +119,15 @@ func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, 
 }
 
 func (s *addPieceSelector) GroupID() string {
+	return ""
+}
+
+func (s *addPieceSelector) findBestStorages() []stores.StorageInfo {
 	spt := s.sector.ProofType
 	ssize, err := spt.SectorSize()
 	if err != nil {
 		log.Errorf("addPieceSelector: sector:%v, getting sector size: %v", s.sector.ID, err)
-		return ""
+		return nil
 	}
 
 	// try to find best group
@@ -151,22 +135,10 @@ func (s *addPieceSelector) GroupID() string {
 	best, err := s.index.StorageBestAlloc(ctx, s.alloc, ssize, s.ptype)
 	if err != nil {
 		log.Errorf("addPieceSelector: sector:%v, finding best alloc storage: %v", s.sector.ID, err)
-		return ""
+		return nil
 	}
 
-	groupID := ""
-	for _, info := range best {
-		// if _, ok := have[info.ID]; ok {
-		// 	return true, nil
-		// }
-		if info.GroupID != "" {
-			groupID = info.GroupID
-			break
-		}
-	}
-
-	s.groupID = groupID
-	return groupID
+	return best
 }
 
 var _ WorkerSelector = &addPieceSelector{}
