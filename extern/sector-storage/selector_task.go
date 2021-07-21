@@ -10,11 +10,14 @@ import (
 )
 
 type taskSelector struct {
-	best []stores.StorageInfo //nolint: unused, structcheck
+	best        []stores.StorageInfo //nolint: unused, structcheck
+	queryWorker bool
 }
 
-func newTaskSelector() *taskSelector {
-	return &taskSelector{}
+func newTaskSelector(queryWorker bool) *taskSelector {
+	return &taskSelector{
+		queryWorker: queryWorker,
+	}
 }
 
 func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
@@ -29,6 +32,14 @@ func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.
 
 	if !supported {
 		return false, nil
+	}
+
+	if s.queryWorker {
+		if task == sealtasks.TTCommit2 {
+			if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
+				return false, nil
+			}
+		}
 	}
 
 	return true, nil
