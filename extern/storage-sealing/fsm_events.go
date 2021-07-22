@@ -411,3 +411,33 @@ type SectorRemoveFailed struct{ error }
 
 func (evt SectorRemoveFailed) FormatError(xerrors.Printer) (next error) { return evt.error }
 func (evt SectorRemoveFailed) apply(*SectorInfo)                        {}
+
+type SectorRedoPacked struct {
+	FillerPieces []abi.PieceInfo
+	GroupID      string
+}
+
+func (evt SectorRedoPacked) apply(*SectorInfo) {}
+
+type SectorRedoPreCommit1 struct {
+	PreCommit1Out storage.PreCommit1Out
+}
+
+func (evt SectorRedoPreCommit1) apply(state *SectorInfo) {}
+
+type SectorRedoSealPreCommit1Failed struct{ error }
+
+func (evt SectorRedoSealPreCommit1Failed) FormatError(xerrors.Printer) (next error) { return evt.error }
+func (evt SectorRedoSealPreCommit1Failed) apply(si *SectorInfo)                     {}
+
+type SectorRedoSealPreCommit2Failed struct{ error }
+
+func (evt SectorRedoSealPreCommit2Failed) FormatError(xerrors.Printer) (next error) { return evt.error }
+func (evt SectorRedoSealPreCommit2Failed) apply(si *SectorInfo)                     {}
+
+type SectorRedoPreCommit2 struct {
+	Sealed   cid.Cid
+	Unsealed cid.Cid
+}
+
+func (evt SectorRedoPreCommit2) apply(state *SectorInfo) {}

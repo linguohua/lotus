@@ -787,3 +787,80 @@ func (m *Sealing) handleProvingSector(ctx statemachine.Context, sector SectorInf
 
 	return nil
 }
+
+func (m *Sealing) handleRedoPacking(ctx statemachine.Context, sector SectorInfo) error {
+	// TODO: lingh
+	var allocated abi.UnpaddedPieceSize
+	for _, piece := range sector.Pieces {
+		allocated += piece.Piece.Size.Unpadded()
+	}
+
+	ssize, err := sector.SectorType.SectorSize()
+	if err != nil {
+		return err
+	}
+
+	ubytes := abi.PaddedPieceSize(ssize).Unpadded()
+
+	if allocated > ubytes {
+		return xerrors.Errorf("handleRedoPacking failed, too much data in sector %d: %d > %d", sector.SectorNumber, allocated, ubytes)
+	}
+
+	fillerSizes, err := fillersFromRem(ubytes - allocated)
+	if err != nil {
+		return err
+	}
+
+	if len(fillerSizes) > 0 {
+		log.Warnf("handleRedoPacking %d filler pieces for sector %d", len(fillerSizes), sector.SectorNumber)
+	}
+
+	// lingh: redo sector
+	for {
+		fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
+		if err != nil {
+			log.Errorf("handleRedoPacking filling up the sector %d (%v): %w", sector.SectorNumber, fillerSizes, err)
+			err = failedCooldown(ctx, sector)
+			if err != nil {
+				log.Errorf("handleRedoPacking failed,sector %d (%v): %w",
+					sector.SectorNumber, fillerSizes, err)
+				return err
+			}
+		} else {
+			return ctx.Send(SectorRedoPacked{FillerPieces: fillerPieces, GroupID: gid})
+		}
+	}
+}
+
+func (m *Sealing) handleRedoPreCommit1(ctx statemachine.Context, sector SectorInfo) error {
+	pc1o, err := m.sealer.SealPreCommit1(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber),
+		sector.TicketValue, sector.pieceInfos())
+	if err != nil {
+		return ctx.Send(SectorRedoSealPreCommit1Failed{xerrors.Errorf("redo seal pre commit(1) failed: %w", err)})
+	}
+
+	return ctx.Send(SectorRedoPreCommit1{
+		PreCommit1Out: pc1o,
+	})
+}
+
+func (m *Sealing) handleRedoPreCommit2(ctx statemachine.Context, sector SectorInfo) error {
+	cids, err := m.sealer.SealPreCommit2(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.PreCommit1Out)
+	if err != nil {
+		return ctx.Send(SectorRedoSealPreCommit2Failed{xerrors.Errorf("seal pre commit(2) failed: %w", err)})
+	}
+
+	if cids.Unsealed == cid.Undef {
+		return ctx.Send(SectorRedoSealPreCommit1Failed{xerrors.Errorf("seal pre commit(2) returned undefined CommD")})
+	}
+
+	return ctx.Send(SectorRedoPreCommit2{
+		Unsealed: cids.Unsealed,
+		Sealed:   cids.Sealed,
+	})
+}
+
+func (m *Sealing) handleRedoFinalize(ctx statemachine.Context, sector SectorInfo) error {
+	// TODO: lingh
+	return nil
+}
