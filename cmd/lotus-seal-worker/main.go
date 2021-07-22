@@ -297,6 +297,9 @@ var runCmd = &cli.Command{
 		case "P2":
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
 		case "C2":
+			if os.Getenv("BELLMAN_GPU_BUS_ID") == "" {
+				return xerrors.Errorf("C2 role must specify non-empty BELLMAN_GPU_BUS_ID")
+			}
 			taskTypes = append(taskTypes, sealtasks.TTCommit2)
 		default:
 			return xerrors.Errorf("unsupported role:%s", role)
