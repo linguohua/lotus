@@ -601,17 +601,17 @@ func (sb *Sealer) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 		return nil, xerrors.Errorf("StandaloneSealCommit: %w", err)
 	}
 
-	cache := paths.Cache
-	if sb.ccfunc != nil {
-		log.Infof("SealCommit1, call ccfunc to clear cache:%s", cache)
-		ssize, err := sector.ProofType.SectorSize()
-		if err != nil {
-			log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v", err)
-		} else {
-			// clear cache
-			sb.ccfunc(cache, uint64(ssize))
-		}
-	}
+	// cache := paths.Cache
+	// if sb.ccfunc != nil {
+	// 	log.Infof("SealCommit1, call ccfunc to clear cache:%s", cache)
+	// 	ssize, err := sector.ProofType.SectorSize()
+	// 	if err != nil {
+	// 		log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v", err)
+	// 	} else {
+	// 		// clear cache
+	// 		sb.ccfunc(cache, uint64(ssize))
+	// 	}
+	// }
 
 	return output, nil
 }
