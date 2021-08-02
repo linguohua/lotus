@@ -470,7 +470,7 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
 
-	loclpath := si.URLs[0]
+	loclpath := si.URLs[rand.Int()%len(si.URLs)]
 	for _, fileType := range storiface.PathTypes {
 		dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(sid.ID))
 		storiface.SetPathByType(&paths, fileType, dest)

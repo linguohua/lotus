@@ -333,17 +333,18 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 			}
 		}
 
-	uloop:
-		for _, u := range si.URLs {
-			for _, l := range i.stores[si.ID].info.URLs {
-				if u == l {
-					continue uloop
-				}
-			}
+		// uloop:
+		// 	for _, u := range si.URLs {
+		// 		for _, l := range i.stores[si.ID].info.URLs {
+		// 			if u == l {
+		// 				continue uloop
+		// 			}
+		// 		}
 
-			i.stores[si.ID].info.URLs = append(i.stores[si.ID].info.URLs, u)
-		}
+		// 		i.stores[si.ID].info.URLs = append(i.stores[si.ID].info.URLs, u)
+		// 	}
 
+		i.stores[si.ID].info.URLs = si.URLs
 		i.stores[si.ID].info.Weight = si.Weight
 		i.stores[si.ID].info.MaxStorage = si.MaxStorage
 		i.stores[si.ID].info.CanSeal = si.CanSeal
