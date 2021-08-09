@@ -301,6 +301,15 @@ var runCmd = &cli.Command{
 				return xerrors.Errorf("C2 role must specify non-empty BELLMAN_GPU_BUS_ID")
 			}
 			taskTypes = append(taskTypes, sealtasks.TTCommit2)
+		case "P2C2":
+			if os.Getenv("BELLMAN_GPU_BUS_ID") == "" {
+				return xerrors.Errorf("P2C2 role must specify non-empty BELLMAN_GPU_BUS_ID")
+			}
+			if os.Getenv("NEPTUNE_DEFAULT_GPU") == "" {
+				return xerrors.Errorf("P2C2 role must specify non-empty NEPTUNE_DEFAULT_GPU")
+			}
+			taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
+			taskTypes = append(taskTypes, sealtasks.TTCommit2)
 		default:
 			return xerrors.Errorf("unsupported role:%s", role)
 		}

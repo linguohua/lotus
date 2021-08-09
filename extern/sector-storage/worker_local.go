@@ -84,9 +84,8 @@ type LocalWorker struct {
 		uint64
 	}
 
-	p1Mutex sync.Mutex
-	p2Mutex sync.Mutex
-	c2Mutex sync.Mutex
+	p1p2c2Mutex sync.Mutex
+	role        string
 }
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
@@ -174,7 +173,11 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		}
 	}()
 
-	if ext != nil && ext.Role == "P1" {
+	if ext != nil {
+		w.role = ext.Role
+	}
+
+	if w.role == "P1" {
 		log.Info("LocalWorker.New role is P1, try allocate hugepages for 64GB sectors")
 		sn := abi.SectorNumber(0)
 		mid := abi.ActorID(0)
@@ -528,10 +531,10 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 		}
 
 		// lock P1 mutex
-		l.p1Mutex.Lock()
+		l.p1p2c2Mutex.Lock()
 		l.counterTask(sealtasks.TTPreCommit1, 1)
 		defer func() {
-			l.p1Mutex.Unlock()
+			l.p1p2c2Mutex.Unlock()
 			l.counterTask(sealtasks.TTPreCommit1, -1)
 		}()
 
@@ -546,10 +549,10 @@ func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorR
 	}
 
 	return l.asyncCall(ctx, sector, SealPreCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		l.p2Mutex.Lock()
+		l.p1p2c2Mutex.Lock()
 		l.counterTask(sealtasks.TTPreCommit2, 1)
 		defer func() {
-			l.p2Mutex.Unlock()
+			l.p1p2c2Mutex.Unlock()
 			l.counterTask(sealtasks.TTPreCommit2, -1)
 		}()
 
@@ -575,10 +578,10 @@ func (l *LocalWorker) SealCommit2(ctx context.Context, sector storage.SectorRef,
 	}
 
 	return l.asyncCall(ctx, sector, SealCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		l.c2Mutex.Lock()
+		l.p1p2c2Mutex.Lock()
 		l.counterTask(sealtasks.TTCommit2, 1)
 		defer func() {
-			l.c2Mutex.Unlock()
+			l.p1p2c2Mutex.Unlock()
 			l.counterTask(sealtasks.TTCommit2, -1)
 		}()
 
@@ -703,6 +706,14 @@ func (l *LocalWorker) counterTask(tasktype sealtasks.TaskType, c int) {
 func (l *LocalWorker) HasResourceForNewTask(ctx context.Context, tasktype sealtasks.TaskType) bool {
 	l.taskLk.Lock()
 	defer l.taskLk.Unlock()
+
+	if l.role == "P2C2" {
+		c2Count := l.runningTasks[sealtasks.TTCommit2]
+		p2Count := l.runningTasks[sealtasks.TTPreCommit2]
+		if p2Count+c2Count > 0 {
+			return false
+		}
+	}
 
 	count, exist := l.runningTasks[tasktype]
 	if !exist {
