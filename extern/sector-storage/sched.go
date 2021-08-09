@@ -655,11 +655,11 @@ func (sh *scheduler) trySched() {
 	// schedule AddPiece Task
 	sh.trySchedAddPiece()
 
-	// schedule C2 Task
-	sh.trySchedC2()
-
 	// schedule Groups
 	sh.trySchedGroups()
+
+	// schedule C2 Task
+	sh.trySchedC2()
 }
 
 func (sh *scheduler) trySchedQueue(queue []*workerRequest, dodo func(*workerRequest) bool) (int, []*workerRequest) {
