@@ -85,6 +85,10 @@ var ResumeWorkerCmd = &cli.Command{
 			Name:  "uuid",
 			Usage: "specify the worker session uuid",
 		},
+		&cli.StringFlag{
+			Name:  "tt",
+			Usage: "specify task type to pause: ap,p1,p2,c1,c2,fin,all",
+		},
 	},
 
 	Action: func(cctx *cli.Context) error {
