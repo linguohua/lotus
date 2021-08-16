@@ -87,7 +87,7 @@ var ResumeWorkerCmd = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "tt",
-			Usage: "specify task type to pause: ap,p1,p2,c1,c2,fin,all",
+			Usage: "specify task type to resume: ap,p1,p2,c1,c2,fin,all",
 		},
 	},
 
