@@ -197,6 +197,18 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		}
 	}
 
+	if w.role == "C2" || w.role == "P2C2" {
+		c1out := []byte{0}
+		mid := abi.ActorID(0)
+		sn := abi.SectorNumber(0)
+		_, err := ffi.SealCommitPhase2(c1out, sn, mid)
+		if err != nil && err.Error() != "ok" {
+			log.Fatalf("LocalWorker.New role is P2C2, warmup failed:%v", err)
+		} else {
+			log.Infof("LocalWorker.New role is P2C2, warmup completed: ", err)
+		}
+	}
+
 	return w
 }
 
