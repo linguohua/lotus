@@ -197,25 +197,25 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		}
 	}
 
-	if w.role == "C2" || w.role == "P2C2" {
-		sn := abi.SectorNumber(0)
-		mid := abi.ActorID(0)
-		ti := abi.SealRandomness([]byte{0})
-		pi := []abi.PieceInfo{}
+	// if w.role == "C2" || w.role == "P2C2" {
+	// 	sn := abi.SectorNumber(0)
+	// 	mid := abi.ActorID(0)
+	// 	ti := abi.SealRandomness([]byte{0})
+	// 	pi := []abi.PieceInfo{}
 
-		stype := abi.RegisteredSealProof_StackedDrg64GiBV1
-		if os.Getenv("SECTOR_TYPE") == "32GB" {
-			stype = abi.RegisteredSealProof_StackedDrg32GiBV1
-		}
-		_, err = ffi.SealPreCommitPhase1(stype,
-			"c2warm", "c2warm", "c2warm", sn, mid, ti, pi)
+	// 	stype := abi.RegisteredSealProof_StackedDrg64GiBV1
+	// 	if os.Getenv("SECTOR_TYPE") == "32GB" {
+	// 		stype = abi.RegisteredSealProof_StackedDrg32GiBV1
+	// 	}
+	// 	_, err = ffi.SealPreCommitPhase1(stype,
+	// 		"c2warm", "c2warm", "c2warm", sn, mid, ti, pi)
 
-		if err != nil && err.Error() != "ok" {
-			log.Fatalf("LocalWorker.New role is P2C2, warmup failed:%v", err)
-		} else {
-			log.Infof("LocalWorker.New role is P2C2, warmup completed: ", err)
-		}
-	}
+	// 	if err != nil && err.Error() != "ok" {
+	// 		log.Fatalf("LocalWorker.New role is P2C2, warmup failed:%v", err)
+	// 	} else {
+	// 		log.Infof("LocalWorker.New role is P2C2, warmup completed: ", err)
+	// 	}
+	// }
 
 	return w
 }
