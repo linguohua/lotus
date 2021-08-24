@@ -207,6 +207,7 @@ func candidateSelect(candidates []*storageEntry) *storageEntry {
 		start = r2
 	}
 
+	log.Warnf("candidateSelect: random match failed, return first storage:%v", candidates[0].info.URLs)
 	return candidates[0]
 }
 
