@@ -218,7 +218,7 @@ func (sh *scheduler) removeWorker(ctx context.Context, uuid2 string) error {
 }
 
 func (sh *scheduler) updateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error {
-	log.Infof("updateFinalizeTicketsParam with tickets:%d, interval: %d", tickets, interval)
+	log.Infof("updateFinalizeTicketsParam with tickets:%d, interval: %d minutes", tickets, interval)
 
 	sh.workersLk.Lock()
 	sh.finTicketInterval = interval
@@ -227,7 +227,7 @@ func (sh *scheduler) updateFinalizeTicketsParams(ctx context.Context, tickets ui
 		if interval == 0 {
 			interval = 60
 		}
-		sh.finTicker.Reset(time.Duration(interval))
+		sh.finTicker.Reset(time.Duration(interval) * time.Minute)
 	}
 	sh.workersLk.Unlock()
 
