@@ -176,7 +176,7 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 	}
 
 	// random select one
-	candidate := candidates[rand.Int()%len(candidates)]
+	candidate := candidateSelect(candidates)
 	if candidate.info.MaxSealingSectors != 0 {
 		candidate.bindSectors[sector] = struct{}{}
 	}
@@ -187,6 +187,27 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 	// }
 	log.Debugf("allocStorageForFinalize bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
 	return *candidate.info, nil
+}
+
+func candidateSelect(candidates []*storageEntry) *storageEntry {
+	var weightSum int = 0
+	for _, s := range candidates {
+		weightSum = weightSum + int(s.info.Weight)
+	}
+
+	v := rand.Int() % weightSum
+	start := 0
+	for _, s := range candidates {
+		r1 := start
+		r2 := start + int(s.info.Weight)
+		if v >= r1 && v < r2 {
+			return s
+		}
+
+		start = r2
+	}
+
+	return candidates[0]
 }
 
 func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType,
