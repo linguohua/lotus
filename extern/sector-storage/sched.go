@@ -898,6 +898,9 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		}
 
 		f1bucket = sh.finTickets
+		log.Debugf("task acquire Finalize ticket, sector:%d group:%s, remain:%d",
+			schReq.sector.ID.Number,
+			groupID, f1bucket.atomicTikets)
 	}
 
 	for wnd, windowRequest := range openWindowsTT {
