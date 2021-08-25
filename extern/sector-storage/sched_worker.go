@@ -231,7 +231,7 @@ func (sh *scheduler) updateFinalizeTicketsParams(ctx context.Context, tickets ui
 	}
 	sh.workersLk.Unlock()
 
-	log.Infof("updateFinalizeTicketsParam call completed")
+	log.Infof("updateFinalizeTicketsParam call completed with tickets:%d, interval: %d minutes", tickets, interval)
 	return nil
 }
 
