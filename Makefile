@@ -74,6 +74,9 @@ debug: build-devnets
 2k: GOFLAGS+=-tags=2k
 2k: build-devnets
 
+lim: GOFLAGS+=-tags=mamami
+lim: build
+
 calibnet: GOFLAGS+=-tags=calibnet
 calibnet: build-devnets
 

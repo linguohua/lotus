@@ -1,4 +1,5 @@
 // +build mamami
+
 package main
 
 import (
