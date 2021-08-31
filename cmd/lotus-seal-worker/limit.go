@@ -27,7 +27,7 @@ func mamami() {
 	if ok {
 		os.Setenv("FIL_PROOFS_NUMA_NODE_LIMIT", "16")
 	} else {
-		os.Setenv("BELLMAN_NO_GPU", "32")
+		os.Setenv("FIL_PROOFS_NUMA_NODE_LIMIT", "32")
 	}
 }
 
