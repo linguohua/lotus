@@ -18,12 +18,16 @@ CLEAN:=
 BINS:=
 
 LDFLAGS=-lnuma
-
+ifneq ($(MAKECMDGOALS),lim)
 ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+else
+ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty=-release 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+endif
+
+
 ifneq ($(strip $(LDFLAGS)),)
 	ldflags+=-extldflags=$(LDFLAGS)
 endif
-
 GOFLAGS+=-ldflags="$(ldflags)"
 
 
