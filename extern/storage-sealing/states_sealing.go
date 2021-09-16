@@ -110,8 +110,9 @@ func (m *Sealing) padSector(ctx context.Context, sectorID storage.SectorRef, exi
 				return nil, groupID, xerrors.Errorf("add piece: %w", err)
 			}
 		}
+
 		if !expectCid.Equals(expectCid) {
-			return nil, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
+			return nil, groupID, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
 		}
 
 		existingPieceSizes = append(existingPieceSizes, size)
