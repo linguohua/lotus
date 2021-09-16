@@ -397,9 +397,37 @@ func (sm *StorageMinerAPI) WorkerConnect(ctx context.Context, url string) error 
 		return xerrors.Errorf("connecting remote storage failed: %w", err)
 	}
 
-	log.Infof("Connected to a remote worker at %s", url)
+	sessID, _ := w.Session(ctx)
 
-	return sm.StorageMgr.AddWorker(ctx, w)
+	log.Infof("Connected to a remote worker at url:%s, session-id:%s", url, sessID)
+
+	return sm.StorageMgr.AddWorker(ctx, w, url)
+}
+
+func (sm *StorageMinerAPI) WorkerPause(ctx context.Context, uuid string, tasktype string) error {
+	log.Infof("WorkerPause:%s", uuid)
+
+	return sm.StorageMgr.PauseWorker(ctx, uuid, tasktype)
+}
+
+func (sm *StorageMinerAPI) WorkerResume(ctx context.Context, uuid string, tasktype string) error {
+	log.Infof("WorkerResume:%s", uuid)
+
+	return sm.StorageMgr.ResumeWorker(ctx, uuid, tasktype)
+}
+
+func (sm *StorageMinerAPI) WorkerRemove(ctx context.Context, uuid string) error {
+	log.Infof("WorkerResume:%s", uuid)
+
+	return sm.StorageMgr.RemoveWorker(ctx, uuid)
+}
+
+func (sm *StorageMinerAPI) UpdateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return sm.StorageMgr.UpdateFinalizeTicketsParams(ctx, tickets, interval)
+}
+
+func (sm *StorageMinerAPI) UpdateP1TicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return sm.StorageMgr.UpdateP1TicketsParams(ctx, tickets, interval)
 }
 
 func (sm *StorageMinerAPI) SealingSchedDiag(ctx context.Context, doSched bool) (interface{}, error) {

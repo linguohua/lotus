@@ -105,6 +105,11 @@ type SectorInfo struct {
 	LastErr string
 
 	Log []Log
+
+	// in comiple-enviroment: do go run main.go to re-gen cbor marshal/unmarshal code
+	// lingh: bind sector to specific storage groupID when seal
+	SealGroupID  string
+	HasFinalized bool
 }
 
 func (t *SectorInfo) pieceInfos() []abi.PieceInfo {
