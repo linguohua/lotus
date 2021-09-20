@@ -205,7 +205,16 @@ func (m *Manager) AddLocalStorage(ctx context.Context, path string) error {
 	}
 
 	if err := m.ls.SetStorage(func(sc *stores.StorageConfig) {
-		sc.StoragePaths = append(sc.StoragePaths, stores.LocalPath{Path: path})
+		exist := false
+		for _, sp := range sc.StoragePaths {
+			if sp.Path == path {
+				exist = true
+				break
+			}
+		}
+		if !exist {
+			sc.StoragePaths = append(sc.StoragePaths, stores.LocalPath{Path: path})
+		}
 	}); err != nil {
 		return xerrors.Errorf("get storage config: %w", err)
 	}
