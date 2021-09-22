@@ -498,7 +498,7 @@ func TestSealAndVerifyAggregate(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: cdir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -901,7 +901,7 @@ func TestMulticoreSDR(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: dir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}

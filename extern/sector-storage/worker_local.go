@@ -3,6 +3,7 @@ package sectorstorage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -266,6 +267,10 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 			}
 		}
 	}, nil
+}
+
+func (l *localWorkerPathProvider) MakeSureSectorsStore(ctx context.Context, id abi.SectorID) error {
+	return fmt.Errorf("MakeSureSectorsStore not implemented for localWorkerPathProvider")
 }
 
 func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {
