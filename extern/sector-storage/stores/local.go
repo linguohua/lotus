@@ -512,9 +512,10 @@ func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) e
 	t := storiface.FTSealed | storiface.FTCache
 	for id, p := range st.paths {
 		pathoo := filepath.Join(p.local, storiface.FTSealed.String(), sectorName)
+		log.Info("Local.MakeSureSectorStore try to found sector %s", pathoo)
 		_, err = os.Stat(pathoo)
 		if err == nil {
-			log.Info("Local.MakeSureSectorStore re-declare sector id:%s in %s", sectorName, pathoo)
+			log.Info("Local.MakeSureSectorStore re-declare sector %s", pathoo)
 			if err := st.index.StorageDeclareSector(ctx, id, sector, t, false); err != nil {
 				return xerrors.Errorf("MakeSureSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, id, err)
 			}
