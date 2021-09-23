@@ -507,14 +507,16 @@ func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) e
 
 	// find in path, redeclare it
 	sectorName := storiface.SectorName(sector)
+	log.Info("Local.MakeSureSectorStore try to found sector id:%s", sectorName)
+
 	t := storiface.FTSealed | storiface.FTCache
 	for id, p := range st.paths {
 		pathoo := filepath.Join(p.local, storiface.FTSealed.String(), sectorName)
 		_, err = os.Stat(pathoo)
 		if err == nil {
-			log.Debugf("Local.MakeSureSectorStore declare sector id:%d", sector)
+			log.Info("Local.MakeSureSectorStore re-declare sector id:%s in %s", sectorName, pathoo)
 			if err := st.index.StorageDeclareSector(ctx, id, sector, t, false); err != nil {
-				return xerrors.Errorf("MakeSureSectorStore declare sector %d(t:%d) -> %s: %w", sector, t, id, err)
+				return xerrors.Errorf("MakeSureSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, id, err)
 			}
 
 			// found
