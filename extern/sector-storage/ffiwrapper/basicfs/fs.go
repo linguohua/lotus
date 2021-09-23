@@ -86,6 +86,6 @@ func (b *Provider) AcquireSector(ctx context.Context, id storage.SectorRef, exis
 	return out, done, nil
 }
 
-func (b *Provider) MakeSureSectorsStore(ctx context.Context, id abi.SectorID) error {
-	return fmt.Errorf("MakeSureSectorsStore not implemented for basicfs.Provider")
+func (b *Provider) MakeSureSectorStore(ctx context.Context, id abi.SectorID) error {
+	return fmt.Errorf("MakeSureSectorStore not implemented for basicfs.Provider")
 }

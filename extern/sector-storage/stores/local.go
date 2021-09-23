@@ -494,6 +494,37 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 	return paths, stores, nil
 }
 
+func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) error {
+	storeIDs, err := st.index.StorageFindSector(ctx, sector, storiface.FTSealed, abi.SectorSize(0), false)
+	if err != nil {
+		return err
+	}
+
+	if len(storeIDs) > 0 {
+		// already found
+		return nil
+	}
+
+	// find in path, redeclare it
+	sectorName := storiface.SectorName(sector)
+	t := storiface.FTSealed | storiface.FTCache
+	for id, p := range st.paths {
+		pathoo := filepath.Join(p.local, storiface.FTSealed.String(), sectorName)
+		_, err = os.Stat(pathoo)
+		if err == nil {
+			log.Debugf("Local.MakeSureSectorStore declare sector id:%d", sector)
+			if err := st.index.StorageDeclareSector(ctx, id, sector, t, false); err != nil {
+				return xerrors.Errorf("MakeSureSectorStore declare sector %d(t:%d) -> %s: %w", sector, t, id, err)
+			}
+
+			// foud
+			return nil
+		}
+	}
+
+	return xerrors.Errorf("MakeSureSectorStore can't found sector:%s", sectorName)
+}
+
 func (st *Local) Local(ctx context.Context) ([]StoragePath, error) {
 	st.localLk.RLock()
 	defer st.localLk.RUnlock()

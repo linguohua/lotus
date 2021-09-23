@@ -77,6 +77,7 @@ type SectorIndex interface { // part of storage-miner api
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)
 
 	StorageList(ctx context.Context) (map[ID][]Decl, error)
+
 	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) (StorageInfo, error)
 	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 }

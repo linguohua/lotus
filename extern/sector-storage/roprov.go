@@ -2,7 +2,6 @@ package sectorstorage
 
 import (
 	"context"
-	"fmt"
 
 	"golang.org/x/xerrors"
 
@@ -41,6 +40,6 @@ func (l *readonlyProvider) AcquireSector(ctx context.Context, id storage.SectorR
 	return p, cancel, err
 }
 
-func (l *readonlyProvider) MakeSureSectorsStore(ctx context.Context, id abi.SectorID) error {
-	return fmt.Errorf("MakeSureSectorsStore not implemented for readonlyProvider")
+func (l *readonlyProvider) MakeSureSectorStore(ctx context.Context, id abi.SectorID) error {
+	return l.stor.MakeSureSectorStore(ctx, id)
 }
