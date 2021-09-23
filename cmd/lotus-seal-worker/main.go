@@ -444,7 +444,6 @@ var runCmd = &cli.Command{
 		}
 
 		// Create / expose the worker
-
 		log.Infof("worker group id %s", groupID)
 
 		ext := &sectorstorage.LocalWorkerExtParams{}
@@ -453,6 +452,12 @@ var runCmd = &cli.Command{
 		ext.PieceTemplateSize = 68719476736
 		if os.Getenv("SECTOR_TYPE") == "32GB" {
 			ext.PieceTemplateSize = 34359738378
+		}
+
+		if os.Getenv("BELLMAN_C2_PARALLEL") == "true" {
+			ext.C2Count = 2
+		} else {
+			ext.C2Count = 1
 		}
 
 		ext.MerkleTreecache = os.Getenv("MERKLE_TREE_CACHE")

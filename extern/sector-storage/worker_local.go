@@ -53,6 +53,8 @@ type LocalWorkerExtParams struct {
 
 	GroupID string
 	Role    string
+
+	C2Count int
 }
 
 type LocalWorker struct {
@@ -92,7 +94,8 @@ type LocalWorker struct {
 	// p1 exclusive
 	p1Mutex sync.Mutex
 
-	role string
+	role    string
+	c2Count int
 }
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
@@ -128,7 +131,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 			uint64
 		}, 16),
 
-		p2c2Semaphore: semaphore.NewWeighted(int64(2)),
+		c2Count: 1,
 	}
 
 	if ext != nil {
@@ -136,11 +139,14 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		w.pieceTemplateDir = ext.PieceTemplateDir
 		w.pieceTemplateSize = ext.PieceTemplateSize
 		w.merkleTreecache = ext.MerkleTreecache
+		w.c2Count = ext.C2Count
 	}
 
 	if w.executor == nil {
 		w.executor = w.ffiExec
 	}
+
+	w.p2c2Semaphore = semaphore.NewWeighted(int64(w.c2Count))
 
 	unfinished, err := w.ct.unfinished()
 	if err != nil {
@@ -588,12 +594,12 @@ func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorR
 			l.counterTask(sealtasks.TTPreCommit2, -1)
 		}()
 
-		err := l.p2c2Semaphore.Acquire(context.TODO(), 2)
+		err := l.p2c2Semaphore.Acquire(context.TODO(), int64(l.c2Count))
 		if err != nil {
 			return nil, err
 		}
 
-		defer l.p2c2Semaphore.Release(2)
+		defer l.p2c2Semaphore.Release(int64(l.c2Count))
 
 		return sb.SealPreCommit2(ctx, sector, phase1Out)
 	})
