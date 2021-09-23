@@ -516,7 +516,7 @@ func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) e
 		_, err = os.Stat(pathoo)
 		if err == nil {
 			log.Info("Local.MakeSureSectorStore re-declare sector %s", pathoo)
-			if err := st.index.StorageDeclareSector(ctx, id, sector, t, false); err != nil {
+			if err := st.index.StorageDeclareSector(ctx, id, sector, t, true); err != nil {
 				return xerrors.Errorf("MakeSureSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, id, err)
 			}
 
