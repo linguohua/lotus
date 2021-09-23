@@ -517,7 +517,7 @@ func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) e
 				return xerrors.Errorf("MakeSureSectorStore declare sector %d(t:%d) -> %s: %w", sector, t, id, err)
 			}
 
-			// foud
+			// found
 			return nil
 		}
 	}
