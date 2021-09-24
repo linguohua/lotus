@@ -142,6 +142,9 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		w.c2Count = ext.C2Count
 	}
 
+	// reset c2 count
+	parallelConfig[sealtasks.TTCommit2] = uint32(w.c2Count)
+
 	if w.executor == nil {
 		w.executor = w.ffiExec
 	}
@@ -830,7 +833,7 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 var parallelConfig = map[sealtasks.TaskType]uint32{
 	sealtasks.TTAddPiece:   1,
 	sealtasks.TTCommit1:    8,
-	sealtasks.TTCommit2:    2,
+	sealtasks.TTCommit2:    1,
 	sealtasks.TTPreCommit1: 1,
 	sealtasks.TTPreCommit2: 1,
 	sealtasks.TTFinalize:   1,
