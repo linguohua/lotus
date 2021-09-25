@@ -565,22 +565,22 @@ func (sh *scheduler) runSched() {
 				// 	}
 				// }
 
+				// Non-C2
 				groupID := req.groupID
-				if groupID != "" {
-					openWindowsGroup := sh.getOpenWindowsGroup(groupID)
-					if openWindowsGroup != nil {
-						openWindowsGroup.removeByWorkerID(req.wid)
-					}
-				} else {
-					windowOfTT := sh.openWindowsC2
-					openWindows := make([]*schedWindowRequest, 0, len(windowOfTT))
-					for _, window := range windowOfTT {
-						if window.worker != req.wid {
-							openWindows = append(openWindows, window)
-						}
-					}
-					sh.openWindowsC2 = openWindows
+				openWindowsGroup := sh.getOpenWindowsGroup(groupID)
+				if openWindowsGroup != nil {
+					openWindowsGroup.removeByWorkerID(req.wid)
 				}
+
+				// C2
+				windowOfTT := sh.openWindowsC2
+				openWindows := make([]*schedWindowRequest, 0, len(windowOfTT))
+				for _, window := range windowOfTT {
+					if window.worker != req.wid {
+						openWindows = append(openWindows, window)
+					}
+				}
+				sh.openWindowsC2 = openWindows
 
 				sh.workersLk.Lock()
 				sh.workers[req.wid].enabled = false
