@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -80,7 +81,9 @@ type Local struct {
 	index        SectorIndex
 	urls         []string
 
-	paths map[ID]*path
+	paths             map[ID]*path
+	lookupPathsCached []*cpath
+	lookupPathsValid  bool
 
 	localLk sync.RWMutex
 	groupID string
@@ -93,6 +96,14 @@ type path struct {
 
 	reserved     int64
 	reservations map[abi.SectorID]storiface.SectorFileType
+}
+
+type cpath struct {
+	id       ID
+	weight   uint64
+	canStore bool
+
+	p *path
 }
 
 func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
@@ -251,6 +262,7 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 	}
 
 	st.paths[meta.ID] = out
+	st.lookupPathsValid = false
 
 	return nil
 }
@@ -276,6 +288,8 @@ func (st *Local) open(ctx context.Context) error {
 func (st *Local) Redeclare(ctx context.Context) error {
 	st.localLk.Lock()
 	defer st.localLk.Unlock()
+
+	st.lookupPathsValid = false
 
 	for id, p := range st.paths {
 		mb, err := ioutil.ReadFile(filepath.Join(p.local, MetaFile))
@@ -494,6 +508,51 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 	return paths, stores, nil
 }
 
+func (st *Local) lookupPaths() []*cpath {
+	st.localLk.Lock()
+	defer st.localLk.Unlock()
+
+	ctx := context.TODO()
+	if !st.lookupPathsValid {
+		cached := make([]*cpath, 0, len(st.paths))
+		for id, p := range st.paths {
+			si, err := st.index.StorageInfo(ctx, id)
+			if err != nil {
+				log.Errorf("get storage info for %s: %w", id, err)
+				continue
+			}
+			cp := &cpath{
+				id:       id,
+				weight:   si.Weight,
+				canStore: si.CanStore,
+				p:        p,
+			}
+
+			cached = append(cached, cp)
+		}
+
+		sort.Slice(cached, func(i int, j int) bool {
+			a := cached[i]
+			b := cached[j]
+
+			if a.canStore && !b.canStore {
+				return true
+			}
+
+			if a.weight > b.weight {
+				return true
+			}
+
+			return false
+		})
+
+		st.lookupPathsCached = cached
+		st.lookupPathsValid = true
+	}
+
+	return st.lookupPathsCached
+}
+
 func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) error {
 	storeIDs, err := st.index.StorageFindSector(ctx, sector, storiface.FTSealed, abi.SectorSize(0), false)
 	if err != nil {
@@ -510,14 +569,15 @@ func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) e
 	log.Info("Local.MakeSureSectorStore try to found sector id:%s", sectorName)
 
 	t := storiface.FTSealed | storiface.FTCache
-	for id, p := range st.paths {
-		pathoo := filepath.Join(p.local, storiface.FTSealed.String(), sectorName)
+	for _, cp := range st.lookupPaths() {
+		// only check sealed file, assume cached file under the same directory
+		pathoo := filepath.Join(cp.p.local, storiface.FTSealed.String(), sectorName)
 		log.Info("Local.MakeSureSectorStore try to found sector %s", pathoo)
 		_, err = os.Stat(pathoo)
 		if err == nil {
 			log.Info("Local.MakeSureSectorStore re-declare sector %s", pathoo)
-			if err := st.index.StorageDeclareSector(ctx, id, sector, t, true); err != nil {
-				return xerrors.Errorf("MakeSureSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, id, err)
+			if err := st.index.StorageDeclareSector(ctx, cp.id, sector, t, cp.canStore); err != nil {
+				return xerrors.Errorf("MakeSureSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, cp.id, err)
 			}
 
 			// found
