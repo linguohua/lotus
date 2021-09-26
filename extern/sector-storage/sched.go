@@ -973,7 +973,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		select {
 		case windowRequest.done <- &window:
 		default:
-			log.Error("expected sh.openWindows[wnd].done to be buffered, sector %d to window %d, group:%s, task-type:%s",
+			log.Errorf("expected sh.openWindows[wnd].done to be buffered, sector %d to window %d, group:%s, task-type:%s",
 				schReq.sector.ID.Number,
 				wnd, windowRequest.groupID, schReq.taskType)
 			// found next available window
