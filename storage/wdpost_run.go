@@ -86,6 +86,11 @@ func (s *WindowPoStScheduler) startGeneratePoST(
 
 		posts, err := s.runGeneratePoST(ctx, ts, deadline)
 		completeGeneratePoST(posts, err)
+
+		// try pre-load paux files
+		if s.preloadPaux {
+			s.preloadPAuxFiles(deadline)
+		}
 	}()
 
 	return abort
@@ -439,6 +444,54 @@ func (s *WindowPoStScheduler) declareFaults(ctx context.Context, dlIdx uint64, p
 	}
 
 	return faults, sm, nil
+}
+
+func (s *WindowPoStScheduler) preloadPAuxFiles(di *dline.Info) {
+	// next deadline
+	declDeadline := (di.Index + 1) % di.WPoStPeriodDeadlines
+	log.Infof("preloadPAuxFiles, for next index:%d, current:%d, total:%d", declDeadline, di.Index, di.WPoStPeriodDeadlines)
+
+	ctx := context.TODO()
+	partitions, err := s.api.StateMinerPartitions(ctx, s.actor, declDeadline, types.EmptyTSK)
+	if err != nil {
+		log.Errorf("preloadPAuxFiles, StateMinerPartitions failed:%v", err)
+		return
+	}
+
+	mid, err := address.IDFromAddress(s.actor)
+	if err != nil {
+		log.Errorf("preloadPAuxFiles, IDFromAddress failed:%v", err)
+		return
+	}
+
+	var tocheck []proof2.SectorInfo
+	for _, par := range partitions {
+		sectors := make(map[abi.SectorNumber]struct{})
+
+		sectorInfos, err := s.api.StateMinerSectors(ctx, s.actor, &par.LiveSectors, types.EmptyTSK)
+		if err != nil {
+			log.Errorf("preloadPAuxFiles, StateMinerSectors failed:%v", err)
+			return
+		}
+
+		for _, info := range sectorInfos {
+			sectors[info.SectorNumber] = struct{}{}
+			tocheck = append(tocheck, proof2.SectorInfo{
+				SectorNumber: info.SectorNumber,
+				SealedCID:    info.SealedCID,
+				SealProof:    info.SealProof,
+			})
+		}
+	}
+
+	mid = 0                  // zero id
+	rand := make([]byte, 32) // zero rand
+	_, _, err = s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), tocheck, append(abi.PoStRandomness{}, rand...))
+	if err.Error() != "goodboy" {
+		log.Errorf("preloadPAuxFiles, GenerateWindowPoSt failed:%v", err)
+	} else {
+		log.Infof("preloadPAuxFiles, for next index:%d, sectors:%d, completed", declDeadline, len(tocheck))
+	}
 }
 
 // runPoStCycle runs a full cycle of the PoSt process:
