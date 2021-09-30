@@ -19,11 +19,6 @@ import (
 
 func (sb *Sealer) GenerateWinningPoSt(ctx context.Context, minerID abi.ActorID, sectorInfo []proof5.SectorInfo, randomness abi.PoStRandomness) ([]proof5.PoStProof, error) {
 	randomness[31] &= 0x3f
-	// ensure sector has storage info
-	err := sb.sectors.MakeSureSectorStore(ctx, abi.SectorID{Miner: minerID, Number: sectorInfo[0].SectorNumber})
-	if err != nil {
-		return nil, xerrors.Errorf("MakeSureSectorStore failed: %+v", err)
-	}
 
 	privsectors, skipped, done, err := sb.pubSectorToPriv(ctx, minerID, sectorInfo, nil, abi.RegisteredSealProof.RegisteredWinningPoStProof) // TODO: FAULTS?
 	if err != nil {
@@ -85,6 +80,14 @@ func (sb *Sealer) pubSectorToPriv(ctx context.Context, mid abi.ActorID, sectorIn
 		sid := storage.SectorRef{
 			ID:        abi.SectorID{Miner: mid, Number: s.SectorNumber},
 			ProofType: s.SealProof,
+		}
+
+		// ensure sector has storage info
+		err := sb.sectors.MakeSureSectorStore(ctx, sid.ID)
+		if err != nil {
+			log.Errorw("failed to MakeSureSectorStore, skipping", "sector", sid.ID, "error", err)
+			skipped = append(skipped, sid.ID)
+			continue
 		}
 
 		paths, d, err := sb.sectors.AcquireSector(ctx, sid, storiface.FTCache|storiface.FTSealed, 0, storiface.PathStorage)

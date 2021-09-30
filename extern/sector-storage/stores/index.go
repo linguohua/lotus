@@ -561,15 +561,21 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 			continue
 		}
 
-		urls := make([]string, len(st.info.URLs))
-		for k, u := range st.info.URLs {
+		urls := make([]string, 0, len(st.info.URLs))
+		for _, u := range st.info.URLs {
 			rl, err := url.Parse(u)
 			if err != nil {
-				return nil, xerrors.Errorf("failed to parse url: %w", err)
+				log.Errorf("StorageFindSector failed to parse url: %w", err)
+				continue
 			}
 
 			rl.Path = gopath.Join(rl.Path, ft.String(), storiface.SectorName(s))
-			urls[k] = rl.String()
+			urls = append(urls, rl.String())
+		}
+
+		if len(urls) < 1 {
+			log.Errorf("StorageFindSector find sector %v failed, storage id:%s has no url to access", s, id)
+			continue
 		}
 
 		out = append(out, SectorStorageInfo{
