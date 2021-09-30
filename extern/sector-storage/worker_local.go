@@ -3,15 +3,16 @@ package sectorstorage
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/elastic/go-sysinfo"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
@@ -26,6 +27,8 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+
+	"golang.org/x/sync/semaphore"
 )
 
 var pathTypes = []storiface.SectorFileType{storiface.FTUnsealed, storiface.FTSealed, storiface.FTCache}
@@ -43,7 +46,24 @@ type WorkerConfig struct {
 // used do provide custom proofs impl (mostly used in testing)
 type ExecutorFunc func() (ffiwrapper.Storage, error)
 
+type LocalWorkerExtParams struct {
+	PieceTemplateSize abi.SectorSize
+	PieceTemplateDir  string
+	MerkleTreecache   string
+
+	GroupID string
+	Role    string
+
+	C2Count int
+}
+
 type LocalWorker struct {
+	pieceTemplateSize abi.SectorSize
+	pieceTemplateDir  string
+	merkleTreecache   string
+
+	groupID string
+
 	storage    stores.Store
 	localStore *stores.Local
 	sindex     stores.SectorIndex
@@ -54,17 +74,35 @@ type LocalWorker struct {
 	// see equivalent field on WorkerConfig.
 	ignoreResources bool
 
-	ct          *workerCallTracker
-	acceptTasks map[sealtasks.TaskType]struct{}
-	running     sync.WaitGroup
-	taskLk      sync.Mutex
+	ct           *workerCallTracker
+	runningTasks map[sealtasks.TaskType]int
+	acceptTasks  map[sealtasks.TaskType]struct{}
+	running      sync.WaitGroup
+	taskLk       sync.Mutex
 
 	session     uuid.UUID
 	testDisable int64
 	closing     chan struct{}
+
+	chanCacheClear chan struct {
+		string
+		uint64
+	}
+
+	// p2, c2 exclusive
+	p2c2Semaphore *semaphore.Weighted
+	// p1 exclusive
+	p1Mutex sync.Mutex
+
+	role    string
+	c2Count int
 }
 
-func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store, local *stores.Local, sindex stores.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
+func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
+	store stores.Store, local *stores.Local, sindex stores.SectorIndex,
+	ret storiface.WorkerReturn, cst *statestore.StateStore, ext *LocalWorkerExtParams) *LocalWorker {
+	log.Infof("newLocalWorker executor:%v, wcfg:%+v, ext:%+v", executor, wcfg, ext)
+
 	acceptTasks := map[sealtasks.TaskType]struct{}{}
 	for _, taskType := range wcfg.TaskTypes {
 		acceptTasks[taskType] = struct{}{}
@@ -79,17 +117,39 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		ct: &workerCallTracker{
 			st: cst,
 		},
-		acceptTasks:     acceptTasks,
-		executor:        executor,
-		noSwap:          wcfg.NoSwap,
-		ignoreResources: wcfg.IgnoreResourceFiltering,
-		session:         uuid.New(),
-		closing:         make(chan struct{}),
+
+		acceptTasks:  acceptTasks,
+		runningTasks: make(map[sealtasks.TaskType]int),
+		executor:     executor,
+		noSwap:       wcfg.NoSwap,
+
+		session: uuid.New(),
+		closing: make(chan struct{}),
+
+		chanCacheClear: make(chan struct {
+			string
+			uint64
+		}, 16),
+
+		c2Count: 1,
 	}
+
+	if ext != nil {
+		w.groupID = ext.GroupID
+		w.pieceTemplateDir = ext.PieceTemplateDir
+		w.pieceTemplateSize = ext.PieceTemplateSize
+		w.merkleTreecache = ext.MerkleTreecache
+		w.c2Count = ext.C2Count
+	}
+
+	// reset c2 count
+	parallelConfig[sealtasks.TTCommit2] = uint32(w.c2Count)
 
 	if w.executor == nil {
 		w.executor = w.ffiExec
 	}
+
+	w.p2c2Semaphore = semaphore.NewWeighted(int64(w.c2Count))
 
 	unfinished, err := w.ct.unfinished()
 	if err != nil {
@@ -111,11 +171,76 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, store stores.Store
 		}
 	}()
 
+	go func() {
+		for {
+			cached, ok := <-w.chanCacheClear
+			if !ok {
+				log.Info("LocalWorker.chanCacheClear closed")
+				break
+			}
+
+			log.Info("LocalWorker.chanCacheClear, do:", cached.string)
+
+			// lingh: we clear cache after C1 completed
+			err = ffi.ClearCache(uint64(cached.uint64), cached.string)
+			if err != nil {
+				log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
+			}
+
+			log.Infof("LocalWorker.chanCacheClear, do:%s completed", cached.string)
+		}
+	}()
+
+	if ext != nil {
+		w.role = ext.Role
+	}
+
+	if w.role == "P1" {
+		log.Info("LocalWorker.New role is P1, try allocate hugepages for 64GB sectors")
+		sn := abi.SectorNumber(0)
+		mid := abi.ActorID(0)
+		ti := abi.SealRandomness([]byte{0})
+		pi := []abi.PieceInfo{}
+
+		stype := abi.RegisteredSealProof_StackedDrg64GiBV1
+		if os.Getenv("SECTOR_TYPE") == "32GB" {
+			stype = abi.RegisteredSealProof_StackedDrg32GiBV1
+		}
+		_, err = ffi.SealPreCommitPhase1(stype,
+			"hpalloc", "hpalloc", "hpalloc", sn, mid, ti, pi)
+		if err != nil && err.Error() != "ok" {
+			log.Fatalf("LocalWorker.New role is P1, allocate hugepages failed:%v", err)
+		} else {
+			log.Infof("LocalWorker.New role is P1, try allocate completed: ", err)
+		}
+	}
+
+	// if w.role == "C2" || w.role == "P2C2" {
+	// 	sn := abi.SectorNumber(0)
+	// 	mid := abi.ActorID(0)
+	// 	ti := abi.SealRandomness([]byte{0})
+	// 	pi := []abi.PieceInfo{}
+
+	// 	stype := abi.RegisteredSealProof_StackedDrg64GiBV1
+	// 	if os.Getenv("SECTOR_TYPE") == "32GB" {
+	// 		stype = abi.RegisteredSealProof_StackedDrg32GiBV1
+	// 	}
+	// 	_, err = ffi.SealPreCommitPhase1(stype,
+	// 		"c2warm", "c2warm", "c2warm", sn, mid, ti, pi)
+
+	// 	if err != nil && err.Error() != "ok" {
+	// 		log.Fatalf("LocalWorker.New role is P2C2, warmup failed:%v", err)
+	// 	} else {
+	// 		log.Infof("LocalWorker.New role is P2C2, warmup completed: ", err)
+	// 	}
+	// }
+
 	return w
 }
 
-func NewLocalWorker(wcfg WorkerConfig, store stores.Store, local *stores.Local, sindex stores.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
-	return newLocalWorker(nil, wcfg, store, local, sindex, ret, cst)
+func NewLocalWorker(wcfg WorkerConfig, store stores.Store, local *stores.Local, sindex stores.SectorIndex,
+	ret storiface.WorkerReturn, cst *statestore.StateStore, ext *LocalWorkerExtParams) *LocalWorker {
+	return newLocalWorker(nil, wcfg, store, local, sindex, ret, cst, ext)
 }
 
 type localWorkerPathProvider struct {
@@ -129,15 +254,15 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 		return storiface.SectorPaths{}, nil, err
 	}
 
-	releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
-	if err != nil {
-		return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
-	}
+	// releaseStorage, err := l.w.localStore.Reserve(ctx, sector, allocate, storageIDs, storiface.FSOverheadSeal)
+	// if err != nil {
+	// 	return storiface.SectorPaths{}, nil, xerrors.Errorf("reserving storage space: %w", err)
+	// }
 
 	log.Debugf("acquired sector %d (e:%d; a:%d): %v", sector, existing, allocate, paths)
 
 	return paths, func() {
-		releaseStorage()
+		// releaseStorage()
 
 		for _, fileType := range pathTypes {
 			if fileType&allocate == 0 {
@@ -153,8 +278,36 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 	}, nil
 }
 
+func (l *localWorkerPathProvider) MakeSureSectorStore(ctx context.Context, id abi.SectorID) error {
+	return fmt.Errorf("MakeSureSectorStore not implemented for localWorkerPathProvider")
+}
+
 func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {
-	return ffiwrapper.New(&localWorkerPathProvider{w: l})
+	ccfunc := func(cache string, size uint64) {
+		l.clearLocalCache(cache, size)
+	}
+
+	return ffiwrapper.New(&localWorkerPathProvider{w: l}, l.merkleTreecache, ccfunc)
+}
+
+func (l *LocalWorker) clearLocalCache(cache string, size uint64) {
+	if l.chanCacheClear != nil {
+		log.Info("LocalWorker.clearLocalCache:", cache)
+		go func() {
+			defer func() {
+				if recover() == nil {
+					return
+				}
+			}()
+
+			l.chanCacheClear <- struct {
+				string
+				uint64
+			}{cache, size}
+		}()
+	} else {
+		log.Infof("LocalWorker.clearLocalCache:%s, but no chanCacheClear avalible", cache)
+	}
 }
 
 type ReturnType string
@@ -310,9 +463,83 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, ep
 		return storiface.UndefCall, err
 	}
 
+	size, _ := sector.ProofType.SectorSize()
+	hasTemplate := l.hasPieceTemplate()
+
+	log.Debugf("AddPiece size: %d, hasTemplate: %v, pieceTemplateSize: %d", size, hasTemplate, l.pieceTemplateSize)
+	if hasTemplate && size <= l.pieceTemplateSize {
+		return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
+			return l.loadPieceTemplate(ctx, sector)
+		})
+	}
+
 	return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 		return sb.AddPiece(ctx, sector, epcs, sz, r)
 	})
+}
+
+func (l *LocalWorker) hasPieceTemplate() bool {
+	if l.pieceTemplateDir == "" {
+		return false
+	}
+
+	pieceFilePath := path.Join(l.pieceTemplateDir, "staged-file")
+	pieceinfos := path.Join(l.pieceTemplateDir, "piece-info.json")
+
+	_, err := os.Stat(pieceFilePath)
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	_, err = os.Stat(pieceinfos)
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
+func (l *LocalWorker) loadPieceTemplate(ctx context.Context, sector storage.SectorRef) (abi.PieceInfo, error) {
+	log.Debugf("loadPieceTemplate call, sector:%v", sector)
+
+	stagedPath, done, err := (&localWorkerPathProvider{w: l}).AcquireSector(ctx, sector, 0, storiface.FTUnsealed, storiface.PathSealing)
+	if err != nil {
+		log.Errorf("loadPieceTemplate AcquireSector failed:%v", err)
+		return abi.PieceInfo{}, err
+	}
+
+	defer func() {
+		if done != nil {
+			done()
+		}
+	}()
+
+	pieceFilePath := path.Join(l.pieceTemplateDir, "staged-file")
+	pieceinfos := path.Join(l.pieceTemplateDir, "piece-info.json")
+
+	// soft link file to staged path
+	err = os.Symlink(pieceFilePath, stagedPath.Unsealed)
+	if err != nil {
+		log.Errorf("loadPieceTemplate Symlink failed:%v", err)
+		return abi.PieceInfo{}, xerrors.Errorf("loadPieceTemplate %w", err)
+	}
+
+	// read pieceCID from json file
+	bb, err := ioutil.ReadFile(pieceinfos)
+	if err != nil {
+		log.Errorf("loadPieceTemplate ReadAll failed:%v", err)
+		return abi.PieceInfo{}, xerrors.Errorf("loadPieceTemplate: %w", err)
+	}
+
+	pi := abi.PieceInfo{}
+	err = json.Unmarshal(bb, &pi)
+	if err != nil {
+		log.Errorf("loadPieceTemplate Unmarshal failed:%v", err)
+		return abi.PieceInfo{}, xerrors.Errorf("loadPieceTemplate: %w", err)
+	}
+
+	log.Debugf("loadPieceTemplate completed, sector:%v", sector)
+	return pi, nil
 }
 
 func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileType storiface.SectorFileType, ptype storiface.PathType, am storiface.AcquireMode) (storiface.CallID, error) {
@@ -345,6 +572,14 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 			return nil, err
 		}
 
+		// lock P1 mutex
+		l.p1Mutex.Lock()
+		l.counterTask(sealtasks.TTPreCommit1, 1)
+		defer func() {
+			l.p1Mutex.Unlock()
+			l.counterTask(sealtasks.TTPreCommit1, -1)
+		}()
+
 		return sb.SealPreCommit1(ctx, sector, ticket, pieces)
 	})
 }
@@ -356,6 +591,19 @@ func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorR
 	}
 
 	return l.asyncCall(ctx, sector, SealPreCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
+		l.counterTask(sealtasks.TTPreCommit2, 1)
+
+		defer func() {
+			l.counterTask(sealtasks.TTPreCommit2, -1)
+		}()
+
+		err := l.p2c2Semaphore.Acquire(context.TODO(), int64(l.c2Count))
+		if err != nil {
+			return nil, err
+		}
+
+		defer l.p2c2Semaphore.Release(int64(l.c2Count))
+
 		return sb.SealPreCommit2(ctx, sector, phase1Out)
 	})
 }
@@ -378,6 +626,18 @@ func (l *LocalWorker) SealCommit2(ctx context.Context, sector storage.SectorRef,
 	}
 
 	return l.asyncCall(ctx, sector, SealCommit2, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
+		l.counterTask(sealtasks.TTCommit2, 1)
+
+		defer func() {
+			l.counterTask(sealtasks.TTCommit2, -1)
+		}()
+
+		err := l.p2c2Semaphore.Acquire(context.TODO(), 1)
+		if err != nil {
+			return nil, err
+		}
+		defer l.p2c2Semaphore.Release(1)
+
 		return sb.SealCommit2(ctx, sector, phase1Out)
 	})
 }
@@ -393,13 +653,15 @@ func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storage.SectorR
 			return nil, xerrors.Errorf("finalizing sector: %w", err)
 		}
 
-		if len(keepUnsealed) == 0 {
-			if err := l.storage.Remove(ctx, sector.ID, storiface.FTUnsealed, true); err != nil {
-				return nil, xerrors.Errorf("removing unsealed data: %w", err)
-			}
-		}
+		// lingh: sb.FinalizeSector already remove local unsealed sector
+		// if len(keepUnsealed) == 0 {
+		// 	if err := l.storage.Remove(ctx, sector.ID, storiface.FTUnsealed, true); err != nil {
+		// 		return nil, xerrors.Errorf("removing unsealed data: %w", err)
+		// 	}
+		// }
 
-		return nil, err
+		// lingh: do move also
+		return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed)
 	})
 }
 
@@ -482,43 +744,124 @@ func (l *LocalWorker) Paths(ctx context.Context) ([]stores.StoragePath, error) {
 	return l.localStore.Local(ctx)
 }
 
+func (l *LocalWorker) counterTask(tasktype sealtasks.TaskType, c int) {
+	l.taskLk.Lock()
+	defer l.taskLk.Unlock()
+
+	count, exist := l.runningTasks[tasktype]
+	if !exist {
+		l.runningTasks[tasktype] = c
+	} else {
+		l.runningTasks[tasktype] = count + c
+	}
+}
+
+func (l *LocalWorker) HasResourceForNewTask(ctx context.Context, tasktype sealtasks.TaskType) bool {
+	l.taskLk.Lock()
+	defer l.taskLk.Unlock()
+
+	if l.role == "P2C2" {
+		current := l.runningTasks[tasktype]
+		max := parallelConfig[tasktype]
+		if current >= int(max) {
+			return false
+		}
+
+		if tasktype == sealtasks.TTPreCommit2 {
+			c2count := l.runningTasks[sealtasks.TTCommit2]
+			if c2count > 0 {
+				return false
+			}
+		} else if tasktype == sealtasks.TTCommit2 {
+			p2count := l.runningTasks[sealtasks.TTPreCommit2]
+			if p2count > 0 {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	count, exist := l.runningTasks[tasktype]
+	if !exist {
+		return true
+	}
+
+	taskParallelCount := parallelConfig[tasktype]
+	if count < int(taskParallelCount) {
+		return true
+	}
+
+	return false
+}
+
 func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	hostname, err := os.Hostname() // TODO: allow overriding from config
 	if err != nil {
 		panic(err)
 	}
 
-	gpus, err := ffi.GetGPUDevices()
-	if err != nil {
-		log.Errorf("getting gpu devices failed: %+v", err)
-	}
+	// gpus, err := ffi.GetGPUDevices()
+	// if err != nil {
+	// 	log.Errorf("getting gpu devices failed: %+v", err)
+	// }
 
-	h, err := sysinfo.Host()
-	if err != nil {
-		return storiface.WorkerInfo{}, xerrors.Errorf("getting host info: %w", err)
-	}
+	// h, err := sysinfo.Host()
+	// if err != nil {
+	// 	return storiface.WorkerInfo{}, xerrors.Errorf("getting host info: %w", err)
+	// }
 
-	mem, err := h.Memory()
-	if err != nil {
-		return storiface.WorkerInfo{}, xerrors.Errorf("getting memory info: %w", err)
-	}
+	// mem, err := h.Memory()
+	// if err != nil {
+	// 	return storiface.WorkerInfo{}, xerrors.Errorf("getting memory info: %w", err)
+	// }
 
-	memSwap := mem.VirtualTotal
-	if l.noSwap {
-		memSwap = 0
-	}
+	// memSwap := mem.VirtualTotal
+	// if l.noSwap {
+	// 	memSwap = 0
+	// }
+
+	res := l.getWorkerResourceConfig()
 
 	return storiface.WorkerInfo{
-		Hostname:        hostname,
-		IgnoreResources: l.ignoreResources,
-		Resources: storiface.WorkerResources{
-			MemPhysical: mem.Total,
-			MemSwap:     memSwap,
-			MemReserved: mem.VirtualUsed + mem.Total - mem.Available, // TODO: sub this process
-			CPUs:        uint64(runtime.NumCPU()),
-			GPUs:        gpus,
-		},
+		GroupID:   l.groupID,
+		Hostname:  hostname,
+		Resources: res,
 	}, nil
+}
+
+var parallelConfig = map[sealtasks.TaskType]uint32{
+	sealtasks.TTAddPiece:   1,
+	sealtasks.TTCommit1:    8,
+	sealtasks.TTCommit2:    1,
+	sealtasks.TTPreCommit1: 1,
+	sealtasks.TTPreCommit2: 1,
+	sealtasks.TTFinalize:   1,
+}
+
+func (l *LocalWorker) getWorkerResourceConfig() storiface.WorkerResources {
+	l.taskLk.Lock()
+	defer l.taskLk.Unlock()
+	res := storiface.WorkerResources{}
+	for k := range l.acceptTasks {
+		kk, _ := parallelConfig[k]
+		switch k {
+		case sealtasks.TTAddPiece:
+			res.AP = kk
+		case sealtasks.TTCommit1:
+			res.C1 = kk
+		case sealtasks.TTCommit2:
+			res.C2 = kk
+		case sealtasks.TTPreCommit1:
+			res.P1 = kk
+		case sealtasks.TTPreCommit2:
+			res.P2 = kk
+		case sealtasks.TTFinalize:
+			res.FIN = kk
+		}
+	}
+
+	return res
 }
 
 func (l *LocalWorker) Session(ctx context.Context) (uuid.UUID, error) {
@@ -535,6 +878,7 @@ func (l *LocalWorker) Session(ctx context.Context) (uuid.UUID, error) {
 }
 
 func (l *LocalWorker) Close() error {
+	close(l.chanCacheClear)
 	close(l.closing)
 	return nil
 }

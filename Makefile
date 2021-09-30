@@ -1,6 +1,6 @@
 SHELL=/usr/bin/env bash
 
-all: build
+all: lin
 .PHONY: all
 
 unexport GOFLAGS
@@ -19,11 +19,32 @@ MODULES:=
 CLEAN:=
 BINS:=
 
-ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+LDFLAGS=-lnuma
+
+CPU_CHECK:=$(shell if lscpu | grep -iq amd; then echo "amd"; else echo "intel"; fi)
+
+dirtystr:=$(CPU_CHECK)
+ifeq ($(MAKECMDGOALS),dubai)
+	dirtystr := $(dirtystr)_dubai
+endif
+
+ifeq ($(MAKECMDGOALS),hn)
+        dirtystr := $(dirtystr)_hn
+endif
+
+ifeq ($(MAKECMDGOALS),jm)
+	dirtystr := $(dirtystr)_jm
+endif
+
+ifeq ($(MAKECMDGOALS),changsha)
+	dirtystr := $(dirtystr)_changsha
+endif
+
+ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty=-$(dirtystr) 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+
 ifneq ($(strip $(LDFLAGS)),)
 	ldflags+=-extldflags=$(LDFLAGS)
 endif
-
 GOFLAGS+=-ldflags="$(ldflags)"
 
 
@@ -64,7 +85,8 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+#build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+build-devnets: lotus lotus-miner lotus-worker
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -72,6 +94,17 @@ debug: build-devnets
 
 2k: GOFLAGS+=-tags=2k
 2k: build-devnets
+
+dubai: GOFLAGS+=-tags=dubai
+dubai: build
+lin: GOFLAGS+=-tags=lin
+lin: build
+hn: GOFLAGS+=-tags=hn
+hn: build
+jm: GOFLAGS+=-tags=jm
+jm: build
+changsha: GOFLAGS+=-tags=changsha
+changsha: build
 
 calibnet: GOFLAGS+=-tags=calibnet
 calibnet: build-devnets

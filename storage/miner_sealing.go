@@ -32,6 +32,10 @@ func (m *Miner) ListSectors() ([]sealing.SectorInfo, error) {
 }
 
 func (m *Miner) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
+	if m.sealingDisable {
+		return storage.SectorRef{}, xerrors.Errorf("PledgeSector failed, miner is sealing disable")
+	}
+
 	return m.sealing.PledgeSector(ctx)
 }
 
@@ -140,6 +144,10 @@ func (m *Miner) SectorsStatus(ctx context.Context, sid abi.SectorNumber, showOnC
 
 		LastErr: info.LastErr,
 		Log:     log,
+
+		HasFinalized: info.HasFinalized,
+		SealGroupID:  info.SealGroupID,
+
 		// on chain info
 		SealProof:          info.SectorType,
 		Activation:         0,

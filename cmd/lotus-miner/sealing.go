@@ -17,7 +17,6 @@ import (
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 
-	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 )
 
@@ -26,125 +25,9 @@ var sealingCmd = &cli.Command{
 	Usage: "interact with sealing pipeline",
 	Subcommands: []*cli.Command{
 		sealingJobsCmd,
-		sealingWorkersCmd,
+		lcli.ListWorkersCmd,
 		sealingSchedDiagCmd,
 		sealingAbortCmd,
-	},
-}
-
-var sealingWorkersCmd = &cli.Command{
-	Name:  "workers",
-	Usage: "list workers",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:        "color",
-			Usage:       "use color in display output",
-			DefaultText: "depends on output being a TTY",
-		},
-	},
-	Action: func(cctx *cli.Context) error {
-		if cctx.IsSet("color") {
-			color.NoColor = !cctx.Bool("color")
-		}
-
-		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
-		if err != nil {
-			return err
-		}
-		defer closer()
-
-		ctx := lcli.ReqContext(cctx)
-
-		stats, err := nodeApi.WorkerStats(ctx)
-		if err != nil {
-			return err
-		}
-
-		type sortableStat struct {
-			id uuid.UUID
-			storiface.WorkerStats
-		}
-
-		st := make([]sortableStat, 0, len(stats))
-		for id, stat := range stats {
-			st = append(st, sortableStat{id, stat})
-		}
-
-		sort.Slice(st, func(i, j int) bool {
-			return st[i].id.String() < st[j].id.String()
-		})
-
-		for _, stat := range st {
-			gpuUse := "not "
-			gpuCol := color.FgBlue
-			if stat.GpuUsed {
-				gpuCol = color.FgGreen
-				gpuUse = ""
-			}
-
-			var disabled string
-			if !stat.Enabled {
-				disabled = color.RedString(" (disabled)")
-			}
-
-			fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
-
-			var barCols = uint64(64)
-			cpuBars := int(stat.CpuUse * barCols / stat.Info.Resources.CPUs)
-			cpuBar := strings.Repeat("|", cpuBars)
-			if int(barCols)-cpuBars >= 0 {
-				cpuBar += strings.Repeat(" ", int(barCols)-cpuBars)
-			}
-
-			fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
-				color.GreenString(cpuBar), stat.CpuUse, stat.Info.Resources.CPUs)
-
-			ramBarsRes := int(stat.Info.Resources.MemReserved * barCols / stat.Info.Resources.MemPhysical)
-			ramBarsUsed := int(stat.MemUsedMin * barCols / stat.Info.Resources.MemPhysical)
-			ramRepeatSpace := int(barCols) - (ramBarsUsed + ramBarsRes)
-
-			colorFunc := color.YellowString
-			if ramRepeatSpace < 0 {
-				ramRepeatSpace = 0
-				colorFunc = color.RedString
-			}
-
-			ramBar := colorFunc(strings.Repeat("|", ramBarsRes)) +
-				color.GreenString(strings.Repeat("|", ramBarsUsed)) +
-				strings.Repeat(" ", ramRepeatSpace)
-
-			vmem := stat.Info.Resources.MemPhysical + stat.Info.Resources.MemSwap
-
-			vmemBarsRes := int(stat.Info.Resources.MemReserved * barCols / vmem)
-			vmemBarsUsed := int(stat.MemUsedMax * barCols / vmem)
-			vmemRepeatSpace := int(barCols) - (vmemBarsUsed + vmemBarsRes)
-
-			colorFunc = color.YellowString
-			if vmemRepeatSpace < 0 {
-				vmemRepeatSpace = 0
-				colorFunc = color.RedString
-			}
-
-			vmemBar := colorFunc(strings.Repeat("|", vmemBarsRes)) +
-				color.GreenString(strings.Repeat("|", vmemBarsUsed)) +
-				strings.Repeat(" ", vmemRepeatSpace)
-
-			fmt.Printf("\tRAM:  [%s] %d%% %s/%s\n", ramBar,
-				(stat.Info.Resources.MemReserved+stat.MemUsedMin)*100/stat.Info.Resources.MemPhysical,
-				types.SizeStr(types.NewInt(stat.Info.Resources.MemReserved+stat.MemUsedMin)),
-				types.SizeStr(types.NewInt(stat.Info.Resources.MemPhysical)))
-
-			fmt.Printf("\tVMEM: [%s] %d%% %s/%s\n", vmemBar,
-				(stat.Info.Resources.MemReserved+stat.MemUsedMax)*100/vmem,
-				types.SizeStr(types.NewInt(stat.Info.Resources.MemReserved+stat.MemUsedMax)),
-				types.SizeStr(types.NewInt(vmem)))
-
-			for _, gpu := range stat.Info.Resources.GPUs {
-				fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
-			}
-		}
-
-		return nil
 	},
 }
 

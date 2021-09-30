@@ -3,7 +3,10 @@ package stores
 import (
 	"context"
 	"errors"
+
 	"fmt"
+	"math/rand"
+
 	"net/url"
 	gopath "path"
 	"sort"
@@ -27,6 +30,9 @@ var SkippedHeartbeatThresh = HeartbeatInterval * 5
 type ID string
 
 type StorageInfo struct {
+	GroupID           string
+	MaxSealingSectors int
+
 	ID         ID
 	URLs       []string // TODO: Support non-http transports
 	Weight     uint64
@@ -42,6 +48,9 @@ type HealthReport struct {
 }
 
 type SectorStorageInfo struct {
+	GroupID           string
+	MaxSealingSectors int
+
 	ID     ID
 	URLs   []string // TODO: Support non-http transports
 	Weight uint64
@@ -68,6 +77,9 @@ type SectorIndex interface { // part of storage-miner api
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)
 
 	StorageList(ctx context.Context) (map[ID][]Decl, error)
+
+	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) (StorageInfo, error)
+	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 }
 
 type Decl struct {
@@ -86,6 +98,8 @@ type storageEntry struct {
 
 	lastHeartbeat time.Time
 	heartbeatErr  error
+
+	bindSectors map[abi.SectorID]struct{}
 }
 
 type Index struct {
@@ -106,6 +120,201 @@ func NewIndex() *Index {
 	}
 }
 
+func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID, ft storiface.SectorFileType) (StorageInfo, error) {
+	log.Debugf("allocStorageForFinalize: sector %s, ft:%d", sector, ft)
+	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
+	for _, fileType := range storiface.PathTypes {
+		if fileType&ft == 0 {
+			continue
+		}
+
+		d := Decl{sector, fileType}
+		dd, exist := i.sectors[d]
+		if exist {
+			for _, d := range dd {
+				s, exist := i.stores[d.storage]
+				if exist {
+					log.Debugf("allocStorageForFinalize found sector: %d bind to storage %s, path:%v , filetype:%d, return it",
+						sector, s.info.ID, s.info.URLs, ft)
+
+					return *s.info, nil
+				}
+			}
+		}
+	}
+
+	var candidates []*storageEntry
+	for _, p := range i.stores {
+		// only bind to sealing storage
+		if !p.info.CanStore {
+			///log.Infof("allocStorageForFinalize storage %s not a store storage",
+			//p.info.ID)
+			continue
+		}
+
+		// readonly storage
+		if p.info.Weight == 0 {
+			continue
+		}
+
+		if time.Since(p.lastHeartbeat) > SkippedHeartbeatThresh {
+			log.Debugf("allocStorageForFinalize not allocating on %s, didn't receive heartbeats for %s",
+				p.info.ID, time.Since(p.lastHeartbeat))
+			continue
+		}
+
+		if p.heartbeatErr != nil {
+			log.Debugf("allocStorageForFinalize not allocating on %s, heartbeat error: %s",
+				p.info.ID, p.heartbeatErr)
+			continue
+		}
+
+		candidates = append(candidates, p)
+	}
+
+	if len(candidates) < 1 {
+		return StorageInfo{}, xerrors.Errorf("allocStorageForFinalize failed to found storage to bind %s",
+			sector)
+	}
+
+	// random select one
+	candidate := candidateSelect(candidates)
+	if candidate.info.MaxSealingSectors != 0 {
+		candidate.bindSectors[sector] = struct{}{}
+	}
+
+	// err := i.StorageDeclareSector(ctx, storageID, sector, ft, true)
+	// if err != nil {
+	// 	return StorageInfo{}, err
+	// }
+	log.Debugf("allocStorageForFinalize bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
+	return *candidate.info, nil
+}
+
+func candidateSelect(candidates []*storageEntry) *storageEntry {
+	var weightSum int = 0
+	for _, s := range candidates {
+		weightSum = weightSum + int(s.info.Weight)
+	}
+
+	v := rand.Int() % weightSum
+	start := 0
+	for _, s := range candidates {
+		r1 := start
+		r2 := start + int(s.info.Weight)
+		if v >= r1 && v < r2 {
+			return s
+		}
+
+		start = r2
+	}
+
+	log.Warnf("candidateSelect: random match failed, return first storage:%v", candidates[0].info.URLs)
+	return candidates[0]
+}
+
+func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType,
+	sector abi.SectorID, groupID string) (StorageInfo, error) {
+	log.Debugf("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
+	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
+	i.lk.Lock()
+	defer i.lk.Unlock()
+
+	if pathType == storiface.PathStorage {
+		log.Debugf("TryBindSector2SealStorage worker pathType is PathStorage, sector:%s, return a storage path", sector)
+
+		// just continue
+		return i.allocStorageForFinalize(ctx, sector, fileType)
+	}
+
+	var candidates []*storageEntry
+	for _, p := range i.stores {
+		// only bind to sealing storage
+		if !p.info.CanSeal {
+			// log.Infof("TryBindSector2SealStorage storage %s not a seal storage",
+			// 	p.info.ID)
+			continue
+		}
+
+		if p.info.GroupID == "" {
+			// log.Errorf("TryBindSector2SealStorage storage %s is seal storage but without GroupID",
+			// 	p.info.ID)
+			continue
+		}
+
+		if p.info.GroupID != groupID {
+			// log.Infof("TryBindSector2SealStorage group not match, require:%s, p:%s",
+			// 	groupID, p.info.GroupID)
+			continue
+		}
+
+		if p.info.MaxSealingSectors != 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
+			_, ok := p.bindSectors[sector]
+			if ok {
+				// log.Infof("TryBindSector2SealStorage bind ok, already bind: sector %s, storage ID:%s",
+				// 	sector, p.info.ID)
+				return *p.info, nil
+			}
+
+			// log.Infof("TryBindSector2SealStorage storage %s already bind to sector:%s",
+			// 	p.info.ID, p.bindSector)
+			continue
+		}
+
+		if time.Since(p.lastHeartbeat) > SkippedHeartbeatThresh {
+			log.Debugf("TryBindSector2SealStorage not allocating on %s, didn't receive heartbeats for %s",
+				p.info.ID, time.Since(p.lastHeartbeat))
+			continue
+		}
+
+		if p.heartbeatErr != nil {
+			log.Debugf("TryBindSector2SealStorage not allocating on %s, heartbeat error: %s",
+				p.info.ID, p.heartbeatErr)
+			continue
+		}
+
+		candidates = append(candidates, p)
+	}
+
+	if len(candidates) < 1 {
+		return StorageInfo{}, xerrors.Errorf("TryBindSector2SealStorage failed to found storage to bind %s, groupID:%s",
+			sector, groupID)
+	}
+
+	// random select one
+	candidate := candidates[rand.Int()%len(candidates)]
+	if candidate.info.MaxSealingSectors != 0 {
+		candidate.bindSectors[sector] = struct{}{}
+	}
+
+	// err := i.StorageDeclareSector(ctx, storageID, sector, ft, true)
+	// if err != nil {
+	// 	return StorageInfo{}, err
+	// }
+	log.Debugf("TryBindSector2SealStorage bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
+	return *candidate.info, nil
+}
+
+func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
+	log.Debugf("UnBindSector2SealStorage: %s", sector)
+	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
+
+	i.lk.Lock()
+	defer i.lk.Unlock()
+
+	for _, p := range i.stores {
+		_, ok := p.bindSectors[sector]
+		if ok {
+			delete(p.bindSectors, sector)
+			log.Debugf("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
+			return nil
+		}
+	}
+
+	log.Debugf("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
+	return nil
+}
+
 func (i *Index) StorageList(ctx context.Context) (map[ID][]Decl, error) {
 	i.lk.RLock()
 	defer i.lk.RUnlock()
@@ -117,7 +326,10 @@ func (i *Index) StorageList(ctx context.Context) (map[ID][]Decl, error) {
 	}
 	for decl, ids := range i.sectors {
 		for _, id := range ids {
-			byID[id.storage][decl.SectorID] |= decl.SectorFileType
+			mm, ok := byID[id.storage]
+			if ok {
+				mm[decl.SectorID] |= decl.SectorFileType
+			}
 		}
 	}
 
@@ -139,7 +351,7 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 	i.lk.Lock()
 	defer i.lk.Unlock()
 
-	log.Infof("New sector storage: %s", si.ID)
+	log.Infof("StorageAttach, New sector storage: %+v", si)
 
 	if _, ok := i.stores[si.ID]; ok {
 		for _, u := range si.URLs {
@@ -148,30 +360,59 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 			}
 		}
 
-	uloop:
-		for _, u := range si.URLs {
-			for _, l := range i.stores[si.ID].info.URLs {
-				if u == l {
-					continue uloop
-				}
-			}
+		// uloop:
+		// 	for _, u := range si.URLs {
+		// 		for _, l := range i.stores[si.ID].info.URLs {
+		// 			if u == l {
+		// 				continue uloop
+		// 			}
+		// 		}
 
-			i.stores[si.ID].info.URLs = append(i.stores[si.ID].info.URLs, u)
-		}
+		// 		i.stores[si.ID].info.URLs = append(i.stores[si.ID].info.URLs, u)
+		// 	}
 
+		i.stores[si.ID].info.URLs = si.URLs
 		i.stores[si.ID].info.Weight = si.Weight
 		i.stores[si.ID].info.MaxStorage = si.MaxStorage
 		i.stores[si.ID].info.CanSeal = si.CanSeal
 		i.stores[si.ID].info.CanStore = si.CanStore
+		i.stores[si.ID].info.GroupID = si.GroupID
+		i.stores[si.ID].info.MaxSealingSectors = si.MaxSealingSectors
+		// clear bind sectors
+		i.stores[si.ID].bindSectors = make(map[abi.SectorID]struct{})
 
 		return nil
 	}
-	i.stores[si.ID] = &storageEntry{
-		info: &si,
-		fsi:  st,
 
+	i.stores[si.ID] = &storageEntry{
+		info:          &si,
+		fsi:           st,
+		bindSectors:   make(map[abi.SectorID]struct{}),
 		lastHeartbeat: time.Now(),
 	}
+
+	// remove all decl made by this storage
+	sectors := make(map[Decl]struct{})
+	for decl, ids := range i.sectors {
+		found := false
+		for _, id := range ids {
+			if id.storage == si.ID {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			sectors[decl] = struct{}{}
+		}
+	}
+
+	if len(sectors) > 0 {
+		for k := range sectors {
+			delete(i.sectors, k)
+		}
+	}
+
 	return nil
 }
 
@@ -224,6 +465,23 @@ loop:
 		})
 	}
 
+	store, exist := i.stores[storageID]
+	if exist && store.info.GroupID != "" {
+		// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
+		_, ok := store.bindSectors[s]
+		if ok {
+			log.Infof("sector %v declared in %s, store already bind to it", s, storageID)
+		} else {
+			if len(store.bindSectors) < store.info.MaxSealingSectors {
+				store.bindSectors[s] = struct{}{}
+				log.Infof("sector %v declared in %s, re-bind store to sector", s, storageID)
+			} else {
+				log.Errorf("sector %v declared in %s, but store has bind fulled",
+					s, storageID)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -256,6 +514,21 @@ func (i *Index) StorageDropSector(ctx context.Context, storageID ID, s abi.Secto
 		}
 
 		i.sectors[d] = rewritten
+	}
+
+	// only remove bind when release sealed
+	store, exist := i.stores[storageID]
+	if exist && store.info.GroupID != "" {
+		// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
+		_, ok := store.bindSectors[s]
+		if ok {
+			log.Infof("sector %v drop in %s, unbind",
+				s, storageID)
+			delete(store.bindSectors, s)
+		} else {
+			log.Infof("sector %v drop in %s, but store has not bind to it",
+				s, storageID)
+		}
 	}
 
 	return nil
@@ -300,9 +573,11 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 		}
 
 		out = append(out, SectorStorageInfo{
-			ID:     id,
-			URLs:   urls,
-			Weight: st.info.Weight * n, // storage with more sector types is better
+			GroupID:           st.info.GroupID,
+			MaxSealingSectors: st.info.MaxSealingSectors,
+			ID:                id,
+			URLs:              urls,
+			Weight:            st.info.Weight * n, // storage with more sector types is better
 
 			CanSeal:  st.info.CanSeal,
 			CanStore: st.info.CanStore,
@@ -311,59 +586,61 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 		})
 	}
 
-	if allowFetch {
-		spaceReq, err := ft.SealSpaceUse(ssize)
-		if err != nil {
-			return nil, xerrors.Errorf("estimating required space: %w", err)
-		}
+	// if allowFetch {
+	// 	spaceReq, err := ft.SealSpaceUse(ssize)
+	// 	if err != nil {
+	// 		return nil, xerrors.Errorf("estimating required space: %w", err)
+	// 	}
 
-		for id, st := range i.stores {
-			if !st.info.CanSeal {
-				continue
-			}
+	// 	for id, st := range i.stores {
+	// 		if !st.info.CanSeal {
+	// 			continue
+	// 		}
 
-			if spaceReq > uint64(st.fsi.Available) {
-				log.Debugf("not selecting on %s, out of space (available: %d, need: %d)", st.info.ID, st.fsi.Available, spaceReq)
-				continue
-			}
+	// 		if spaceReq > uint64(st.fsi.Available) {
+	// 			log.Debugf("not selecting on %s, out of space (available: %d, need: %d)", st.info.ID, st.fsi.Available, spaceReq)
+	// 			continue
+	// 		}
 
-			if time.Since(st.lastHeartbeat) > SkippedHeartbeatThresh {
-				log.Debugf("not selecting on %s, didn't receive heartbeats for %s", st.info.ID, time.Since(st.lastHeartbeat))
-				continue
-			}
+	// 		if time.Since(st.lastHeartbeat) > SkippedHeartbeatThresh {
+	// 			log.Debugf("not selecting on %s, didn't receive heartbeats for %s", st.info.ID, time.Since(st.lastHeartbeat))
+	// 			continue
+	// 		}
 
-			if st.heartbeatErr != nil {
-				log.Debugf("not selecting on %s, heartbeat error: %s", st.info.ID, st.heartbeatErr)
-				continue
-			}
+	// 		if st.heartbeatErr != nil {
+	// 			log.Debugf("not selecting on %s, heartbeat error: %s", st.info.ID, st.heartbeatErr)
+	// 			continue
+	// 		}
 
-			if _, ok := storageIDs[id]; ok {
-				continue
-			}
+	// 		if _, ok := storageIDs[id]; ok {
+	// 			continue
+	// 		}
 
-			urls := make([]string, len(st.info.URLs))
-			for k, u := range st.info.URLs {
-				rl, err := url.Parse(u)
-				if err != nil {
-					return nil, xerrors.Errorf("failed to parse url: %w", err)
-				}
+	// 		urls := make([]string, len(st.info.URLs))
+	// 		for k, u := range st.info.URLs {
+	// 			rl, err := url.Parse(u)
+	// 			if err != nil {
+	// 				return nil, xerrors.Errorf("failed to parse url: %w", err)
+	// 			}
 
-				rl.Path = gopath.Join(rl.Path, ft.String(), storiface.SectorName(s))
-				urls[k] = rl.String()
-			}
+	// 			rl.Path = gopath.Join(rl.Path, ft.String(), storiface.SectorName(s))
+	// 			urls[k] = rl.String()
+	// 		}
 
-			out = append(out, SectorStorageInfo{
-				ID:     id,
-				URLs:   urls,
-				Weight: st.info.Weight * 0, // TODO: something better than just '0'
+	// 		out = append(out, SectorStorageInfo{
+	// 			GroupID:           st.info.GroupID,
+	// 			MaxSealingSectors: st.info.MaxSealingSectors,
+	// 			ID:                id,
+	// 			URLs:              urls,
+	// 			Weight:            st.info.Weight * 0, // TODO: something better than just '0'
 
-				CanSeal:  st.info.CanSeal,
-				CanStore: st.info.CanStore,
+	// 			CanSeal:  st.info.CanSeal,
+	// 			CanStore: st.info.CanStore,
 
-				Primary: false,
-			})
-		}
-	}
+	// 			Primary: false,
+	// 		})
+	// 	}
+	// }
 
 	return out, nil
 }
@@ -384,7 +661,7 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 	i.lk.RLock()
 	defer i.lk.RUnlock()
 
-	var candidates []storageEntry
+	var candidates []*storageEntry
 
 	var err error
 	var spaceReq uint64
@@ -408,6 +685,11 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 			continue
 		}
 
+		if p.info.MaxSealingSectors != 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
+			//log.Debugf("not allocating on %s, it already bind full", p.info.ID)
+			continue
+		}
+
 		if spaceReq > uint64(p.fsi.Available) {
 			log.Debugf("not allocating on %s, out of space (available: %d, need: %d)", p.info.ID, p.fsi.Available, spaceReq)
 			continue
@@ -423,18 +705,27 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 			continue
 		}
 
-		candidates = append(candidates, *p)
+		candidates = append(candidates, p)
 	}
 
 	if len(candidates) == 0 {
-		return nil, xerrors.New("no good path found")
+		log.Debugf("StorageBestAlloc, no good path found found")
+		return nil, nil
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
-		iw := big.Mul(big.NewInt(candidates[i].fsi.Available), big.NewInt(int64(candidates[i].info.Weight)))
-		jw := big.Mul(big.NewInt(candidates[j].fsi.Available), big.NewInt(int64(candidates[j].info.Weight)))
 
-		return iw.GreaterThan(jw)
+		iw := len(candidates[i].bindSectors)
+		jw := len(candidates[j].bindSectors)
+
+		if iw != jw {
+			return iw < jw
+		}
+
+		iiw := big.Mul(big.NewInt(candidates[i].fsi.Available), big.NewInt(int64(candidates[i].info.Weight)))
+		jjw := big.Mul(big.NewInt(candidates[j].fsi.Available), big.NewInt(int64(candidates[j].info.Weight)))
+
+		return iiw.GreaterThan(jjw)
 	})
 
 	out := make([]StorageInfo, len(candidates))

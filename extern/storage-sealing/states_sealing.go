@@ -3,6 +3,7 @@ package sealing
 import (
 	"bytes"
 	"context"
+	"strings"
 
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -33,7 +34,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		pp := m.pendingPieces[c]
 		delete(m.pendingPieces, c)
 		if pp == nil {
-			log.Errorf("nil assigned pending piece %s", c)
+			log.Errorf("sector %d nil assigned pending piece %s", sector.SectorNumber, c)
 			continue
 		}
 
@@ -60,7 +61,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 	ubytes := abi.PaddedPieceSize(ssize).Unpadded()
 
 	if allocated > ubytes {
-		return xerrors.Errorf("too much data in sector: %d > %d", allocated, ubytes)
+		return xerrors.Errorf("handlePacking failed, too much data in sector %d: %d > %d", sector.SectorNumber, allocated, ubytes)
 	}
 
 	fillerSizes, err := fillersFromRem(ubytes - allocated)
@@ -72,31 +73,46 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		log.Warnf("Creating %d filler pieces for sector %d", len(fillerSizes), sector.SectorNumber)
 	}
 
-	fillerPieces, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
-	if err != nil {
-		return xerrors.Errorf("filling up the sector (%v): %w", fillerSizes, err)
+	// lingh: pledge AddPiece call
+	for {
+		fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
+		if err != nil {
+			log.Errorf("filling up the sector %d (%v): %w", sector.SectorNumber, fillerSizes, err)
+			err = failedCooldown(ctx, sector)
+			if err != nil {
+				log.Errorf("handlePacking failed,sector %d (%v): %w",
+					sector.SectorNumber, fillerSizes, err)
+				return err
+			}
+		} else {
+			return ctx.Send(SectorPacked{FillerPieces: fillerPieces, GroupID: gid})
+		}
 	}
-
-	return ctx.Send(SectorPacked{FillerPieces: fillerPieces})
 }
 
-func (m *Sealing) padSector(ctx context.Context, sectorID storage.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, sizes ...abi.UnpaddedPieceSize) ([]abi.PieceInfo, error) {
+func (m *Sealing) padSector(ctx context.Context, sectorID storage.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, sizes ...abi.UnpaddedPieceSize) ([]abi.PieceInfo, string, error) {
 	if len(sizes) == 0 {
-		return nil, nil
+		return nil, "", nil
 	}
 
 	log.Infof("Pledge %d, contains %+v", sectorID, existingPieceSizes)
-
+	groupID := ""
 	out := make([]abi.PieceInfo, len(sizes))
 	for i, size := range sizes {
 		expectCid := zerocomm.ZeroPieceCommitment(size)
 
 		ppi, err := m.sealer.AddPiece(ctx, sectorID, existingPieceSizes, size, NewNullReader(size))
 		if err != nil {
-			return nil, xerrors.Errorf("add piece: %w", err)
+			errStr := err.Error()
+			if i := strings.Index(errStr, "ugly:"); i >= 0 {
+				groupID = errStr[i+5:]
+			} else {
+				return nil, groupID, xerrors.Errorf("add piece: %w", err)
+			}
 		}
+
 		if !expectCid.Equals(expectCid) {
-			return nil, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
+			return nil, groupID, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
 		}
 
 		existingPieceSizes = append(existingPieceSizes, size)
@@ -104,7 +120,7 @@ func (m *Sealing) padSector(ctx context.Context, sectorID storage.SectorRef, exi
 		out[i] = ppi
 	}
 
-	return out, nil
+	return out, groupID, nil
 }
 
 func checkTicketExpired(ticket, head abi.ChainEpoch) bool {
@@ -509,7 +525,9 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 
 	randHeight := pci.PreCommitEpoch + policy.GetPreCommitChallengeDelay()
 
+	log.Infof("handleWaitSeed, call ChainAt begin, sector number:%d", sector.SectorNumber)
 	err = m.events.ChainAt(func(ectx context.Context, _ TipSetToken, curH abi.ChainEpoch) error {
+		log.Infof("handleWaitSeed, call ChainAt completed, sector number:%d", sector.SectorNumber)
 		// in case of null blocks the randomness can land after the tipset we
 		// get from the events API
 		tok, _, err := m.Api.ChainHead(ctx.Context())
@@ -534,12 +552,14 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 
 		return nil
 	}, func(ctx context.Context, ts TipSetToken) error {
-		log.Warn("revert in interactive commit sector step")
+		log.Warnf("handleWaitSeed, call ChainAt completed, revert in interactive commit sector step, sector:%d",
+			sector.SectorNumber)
 		// TODO: need to cancel running process and restart...
 		return nil
 	}, InteractivePoRepConfidence, randHeight)
 	if err != nil {
-		log.Warn("waitForPreCommitMessage ChainAt errored: ", err)
+		log.Warnf("handleWaitSeed, call ChainAt completed, waitForPreCommitMessage ChainAt errored:%v, sector:%d",
+			err, sector.SectorNumber)
 	}
 
 	return nil
@@ -773,13 +793,23 @@ func (m *Sealing) handleCommitWait(ctx statemachine.Context, sector SectorInfo) 
 func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorInfo) error {
 	// TODO: Maybe wait for some finality
 
-	cfg, err := m.getConfig()
-	if err != nil {
-		return xerrors.Errorf("getting sealing config: %w", err)
-	}
+	// never keep unsealed
+	// cfg, err := m.getConfig()
+	// if err != nil {
+	// 	return xerrors.Errorf("getting sealing config: %w", err)
+	// }
 
-	if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
-		return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
+	// never keep unsealed
+	// if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
+	// 	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
+	// }
+	log.Infof("Sealing handleFinalizeSector, sector:%d", sector.SectorNumber)
+	if !sector.HasFinalized {
+		if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), nil); err != nil {
+			return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
+		}
+	} else {
+		log.Infof("Sealing handleFinalizeSector, sector:%d, early finalized", sector.SectorNumber)
 	}
 
 	return ctx.Send(SectorFinalized{})
