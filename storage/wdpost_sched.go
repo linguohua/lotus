@@ -66,7 +66,7 @@ func NewWindowedPoStScheduler(api fullNodeFilteredAPI,
 	}
 
 	preloadPaux := false
-	if os.Getenv("FIL_PROOFS_USE_PAUX_CACHE") == "true" {
+	if os.Getenv("FIL_PROOFS_USE_PAUX_PRELOAD") == "true" {
 		preloadPaux = true
 	}
 
