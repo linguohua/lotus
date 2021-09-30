@@ -938,8 +938,8 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 			// check if group has P2, then P2 first
 			g, kk := sh.openWindowGroups[windowRequest.groupID]
 			if kk {
-				_, p2 := g.tasks[sealtasks.TTPreCommit2]
-				if p2 {
+				p2Tasks, hasP2 := g.tasks[sealtasks.TTPreCommit2]
+				if hasP2 && len(p2Tasks) > 0 {
 					log.Debugf("C2 skipping worker that has P2 task, group:%s", windowRequest.groupID)
 					continue
 				}
