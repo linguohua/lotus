@@ -40,6 +40,10 @@ ifeq ($(MAKECMDGOALS),changsha)
 	dirtystr := $(dirtystr)_changsha
 endif
 
+ifeq ($(MAKECMDGOALS),yunkuang)
+	dirtystr := $(dirtystr)_yunkuang
+endif
+
 ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty=-$(dirtystr) 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
 
 ifneq ($(strip $(LDFLAGS)),)
@@ -105,6 +109,8 @@ jm: GOFLAGS+=-tags=jm
 jm: build
 changsha: GOFLAGS+=-tags=changsha
 changsha: build
+yunkuang: GOFLAGS+=-tags=yunkuang
+yunkuang: build
 
 calibnet: GOFLAGS+=-tags=calibnet
 calibnet: build-devnets
