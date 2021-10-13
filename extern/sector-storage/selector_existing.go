@@ -23,17 +23,17 @@ func findSectorGroup(ctx context.Context, index stores.SectorIndex, spt abi.Regi
 	sector abi.SectorID, alloc storiface.SectorFileType) (string, error) {
 	ssize, err := spt.SectorSize()
 	if err != nil {
-		return "", xerrors.Errorf("findSectorGroup getting sector size: %w, sector:%w", err, sector)
+		return "", xerrors.Errorf("findSectorGroup getting sector size: %v, sector:%v", ssize, sector)
 	}
 
 	best, err := index.StorageFindSector(ctx, sector, alloc, ssize, false)
 	if err != nil {
-		return "", xerrors.Errorf("findSectorGroup: finding best storage error: %w, sector:%w", err, sector)
+		return "", xerrors.Errorf("findSectorGroup: finding best storage error: %v, sector:%v", err, sector)
 	}
 
 	if len(best) < 1 {
 		// log.Errorf("existingSelector.ok StorageFindSector found none, sector:%s task type:%s", s.sector, task)
-		return "", xerrors.Errorf("findSectorGroup no valid storage found for sector:%w", sector)
+		return "", xerrors.Errorf("findSectorGroup no valid storage found for sector:%v", sector)
 	}
 
 	for _, s := range best {
