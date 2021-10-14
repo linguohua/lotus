@@ -104,12 +104,21 @@ const (
 	Removing     SectorState = "Removing"
 	RemoveFailed SectorState = "RemoveFailed"
 	Removed      SectorState = "Removed"
+
+	RedoPacking              SectorState = "RedoPacking"        // Redo Packing
+	RedoPreCommit1           SectorState = "RedoPreCommit1"     // Redo PreCommit1
+	RedoPreCommit2           SectorState = "RedoPreCommit2"     // Redo PreCommit2
+	RedoFinalizeSector       SectorState = "RedoFinalizeSector" // Redo Finalize
+	RedoSealPreCommit1Failed SectorState = "RedoSealPreCommit1Failed"
+	RedoSealPreCommit2Failed SectorState = "RedoSealPreCommit2Failed"
+	RedoFinalizeFailed       SectorState = "RedoFinalizeFailed"
 )
 
 func toStatState(st SectorState, finEarly bool) statSectorState {
 	switch st {
 	case UndefinedSectorState, Empty, WaitDeals, AddPiece, AddPieceFailed:
 		return sstStaging
+
 	case Packing, GetTicket, PreCommit1, PreCommit2, PreCommitting, PreCommitWait, SubmitPreCommitBatch, PreCommitBatchWait, WaitSeed, Committing, CommitFinalize, FinalizeSector:
 		return sstSealing
 	case SubmitCommit, CommitWait, SubmitCommitAggregate, CommitAggregateWait:

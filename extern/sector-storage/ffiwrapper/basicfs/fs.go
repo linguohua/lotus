@@ -2,6 +2,7 @@ package basicfs
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -83,4 +84,8 @@ func (b *Provider) AcquireSector(ctx context.Context, id storage.SectorRef, exis
 	}
 
 	return out, done, nil
+}
+
+func (b *Provider) MakeSureSectorStore(ctx context.Context, id abi.SectorID) error {
+	return fmt.Errorf("MakeSureSectorStore not implemented for basicfs.Provider")
 }
