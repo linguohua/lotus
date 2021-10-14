@@ -37,6 +37,13 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
+			err := m.localStore.MakeSureSectorStore(ctx, sector.ID)
+			if err != nil {
+				log.Warnw("CheckProvable Sector FAULT: MakeSureSectorStore in checkProvable", "sector", sector, "error", err)
+				bad[sector.ID] = fmt.Sprintf("acquire sector failed: %s", err)
+				return nil
+			}
+
 			locked, err := m.index.StorageTryLock(ctx, sector.ID, storiface.FTSealed|storiface.FTCache, storiface.FTNone)
 			if err != nil {
 				return xerrors.Errorf("acquiring sector lock: %w", err)

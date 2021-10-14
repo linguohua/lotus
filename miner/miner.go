@@ -432,7 +432,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	var mbi *api.MiningBaseInfo
 	var rbase types.BeaconEntry
 	defer func() {
-
 		var hasMinPower bool
 
 		// mbi can be nil if we are deep in penalty and there are 0 eligible sectors
@@ -476,7 +475,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		} else if isLate || (hasMinPower && !mbi.EligibleForMining) {
 			log.Warnw("completed mineOne", logStruct...)
 		} else {
+			//if winner != nil {
 			log.Infow("completed mineOne", logStruct...)
+			//}
 		}
 	}()
 
@@ -487,6 +488,11 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	}
 	if mbi == nil {
 		return nil, nil
+	}
+
+	sectorNumber := abi.SectorNumber(0)
+	if len(mbi.Sectors) > 0 {
+		sectorNumber = mbi.Sectors[0].SectorNumber
 	}
 
 	if !mbi.EligibleForMining {
@@ -508,6 +514,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		return nil, err
 	}
 
+	// lingh: how to ensure exactly 5 winners a round?
 	winner, err = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
 	if err != nil {
 		err = xerrors.Errorf("failed to check if we win next round: %w", err)
@@ -536,6 +543,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tSeed := build.Clock.Now()
 
+	// lingh: winning POST
 	postProof, err := m.epp.ComputeProof(ctx, mbi.Sectors, prand)
 	if err != nil {
 		err = xerrors.Errorf("failed to compute winning post proof: %w", err)
@@ -566,7 +574,13 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	for i, header := range base.TipSet.Blocks() {
 		parentMiners[i] = header.Miner
 	}
-	log.Infow("mined new block", "cid", minedBlock.Cid(), "height", int64(minedBlock.Header.Height), "miner", minedBlock.Header.Miner, "parents", parentMiners, "parentTipset", base.TipSet.Key().String(), "took", dur)
+
+	b := minedBlock
+	log.Infow("mined new block", "sector-number", sectorNumber,
+		"cid", b.Cid(), "height", int64(b.Header.Height),
+		"miner", b.Header.Miner, "parents", parentMiners, "parentTipset",
+		base.TipSet.Key().String(), "took", dur)
+
 	if dur > time.Second*time.Duration(build.BlockDelaySecs) {
 		log.Warnw("CAUTION: block production took longer than the block delay. Your computer may not be fast enough to keep up",
 			"tPowercheck ", tPowercheck.Sub(tStart),
@@ -574,9 +588,19 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			"tSeed ", tSeed.Sub(tTicket),
 			"tProof ", tProof.Sub(tSeed),
 			"tPending ", tPending.Sub(tProof),
-			"tCreateBlock ", tCreateBlock.Sub(tPending))
+			"tCreateBlock ", tCreateBlock.Sub(tPending),
+			"sector-number", sectorNumber,
+		)
 	}
 
+	bst, err := m.GetBestMiningCandidate(ctx)
+	if err == nil {
+		blks := bst.TipSet.Blocks()
+		if len(blks) != len(parentMiners) {
+			log.Errorf("mined new block will FAILED: parents not match newest one, base %d != %d new",
+				len(parentMiners), len(blks))
+		}
+	}
 	return minedBlock, nil
 }
 

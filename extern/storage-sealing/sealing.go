@@ -171,6 +171,7 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 	}
 	s.startupWait.Add(1)
 
+	// lingh:SectorInfo pass through all state handler
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
 
 	return s

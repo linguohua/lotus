@@ -51,7 +51,7 @@ var infoAllCmd = &cli.Command{
 		}
 
 		fmt.Println("\n#: Worker List")
-		if err := sealingWorkersCmd.Action(cctx); err != nil {
+		if err := lcli.ListWorkersCmd.Action(cctx); err != nil {
 			fmt.Println("ERROR: ", err)
 		}
 
