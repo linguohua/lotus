@@ -467,7 +467,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			"minerPowerAtLookback", mbi.MinerPower.String(),
 			"isEligible", mbi.EligibleForMining,
 			"isWinner", (winner != nil),
-			"error", err,
+			"e-rror", err,
 		}
 
 		if err != nil {
