@@ -210,6 +210,7 @@ func (m *Miner) mine(ctx context.Context) {
 	go m.doWinPoStWarmup(ctx)
 
 	var lastBase MiningBase
+	waitParentsPropagation := true
 minerLoop:
 	for {
 		select {
@@ -238,8 +239,19 @@ minerLoop:
 			}
 
 			if base != nil && base.TipSet.Height() == prebase.TipSet.Height() && base.NullRounds == prebase.NullRounds {
-				base = prebase
-				break
+				btime := time.Unix(int64(base.TipSet.MinTimestamp()+build.BlockDelaySecs), 0)
+				now := build.Clock.Now()
+				// deadline := time.Second * time.Duration(2*build.PropagationDelaySecs)
+				blks := base.TipSet.Blocks()
+				if len(blks) < int(build.BlocksPerEpoch) && waitParentsPropagation {
+					log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v", len(blks), now.Sub(btime))
+					m.niceSleep(time.Duration(build.PropagationDelaySecs) * time.Second)
+					waitParentsPropagation = false
+					continue
+				} else {
+					base = prebase
+					break
+				}
 			}
 			if base != nil {
 				onDone(false, 0, nil)
@@ -273,6 +285,7 @@ minerLoop:
 		}
 
 		base.NullRounds += injectNulls // testing
+		waitParentsPropagation = true
 
 		if base.TipSet.Equals(lastBase.TipSet) && lastBase.NullRounds == base.NullRounds {
 			log.Warnf("BestMiningCandidate from the previous round: %s (nulls:%d)", lastBase.TipSet.Cids(), lastBase.NullRounds)
@@ -291,6 +304,7 @@ minerLoop:
 			onDone(false, 0, err)
 			continue
 		}
+
 		lastBase = *base
 
 		var h abi.ChainEpoch
@@ -300,6 +314,19 @@ minerLoop:
 		onDone(b != nil, h, nil)
 
 		if b != nil {
+			newBase, err := m.GetBestMiningCandidate(ctx)
+			if err == nil {
+				blks := newBase.TipSet.Blocks()
+				lastBlks := lastBase.TipSet.Blocks()
+				if len(blks) != len(lastBlks) {
+					log.Warnf("mined new block will FAILED: parents not match newest one, base %d != %d, try to redo mineOne",
+						len(lastBlks), len(blks))
+					// redo mine one
+					waitParentsPropagation = false
+					continue
+				}
+			}
+
 			m.journal.RecordEvent(m.evtTypes[evtTypeBlockMined], func() interface{} {
 				return map[string]interface{}{
 					"parents":   base.TipSet.Cids(),
@@ -593,14 +620,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		)
 	}
 
-	bst, err := m.GetBestMiningCandidate(ctx)
-	if err == nil {
-		blks := bst.TipSet.Blocks()
-		if len(blks) != len(parentMiners) {
-			log.Errorf("mined new block will FAILED: parents not match newest one, base %d != %d new",
-				len(parentMiners), len(blks))
-		}
-	}
 	return minedBlock, nil
 }
 
