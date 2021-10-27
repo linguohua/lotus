@@ -129,6 +129,9 @@ type Miner struct {
 
 	evtTypes [1]journal.EventType
 	journal  journal.Journal
+
+	waitDoubleDelay bool
+	redoMineOne     bool
 }
 
 // Address returns the address of the miner.
@@ -144,6 +147,19 @@ func (m *Miner) Address() address.Address {
 func (m *Miner) Start(_ context.Context) error {
 	m.lk.Lock()
 	defer m.lk.Unlock()
+
+	if os.Getenv("YOUZHOU_MINE_WAIT_DOUBLE_DELAY") == "false" {
+		m.waitDoubleDelay = false
+	} else {
+		m.waitDoubleDelay = true
+	}
+
+	if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "false" {
+		m.redoMineOne = false
+	} else {
+		m.redoMineOne = true
+	}
+
 	if m.stop != nil {
 		return fmt.Errorf("miner already started")
 	}
@@ -238,19 +254,21 @@ minerLoop:
 			}
 
 			if base != nil && base.TipSet.Height() == prebase.TipSet.Height() && base.NullRounds == prebase.NullRounds {
-				btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
-				now := build.Clock.Now()
-				deadline := time.Second * time.Duration(2*build.PropagationDelaySecs)
-				diff := now.Sub(btime)
-				blks := base.TipSet.Blocks()
-				if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
-					log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v", len(blks), diff)
-					m.niceSleep(time.Duration(build.PropagationDelaySecs) * time.Second)
-					continue
-				} else {
-					base = prebase
-					break
+				if m.waitDoubleDelay {
+					btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
+					now := build.Clock.Now()
+					deadline := time.Second * time.Duration(2*build.PropagationDelaySecs)
+					diff := now.Sub(btime)
+					blks := base.TipSet.Blocks()
+					if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
+						log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v", len(blks), diff)
+						m.niceSleep(time.Duration(build.PropagationDelaySecs) * time.Second)
+						continue
+					}
 				}
+
+				base = prebase
+				break
 			}
 			if base != nil {
 				onDone(false, 0, nil)
@@ -312,15 +330,17 @@ minerLoop:
 		onDone(b != nil, h, nil)
 
 		if b != nil {
-			newBase, err := m.GetBestMiningCandidate(ctx)
-			if err == nil {
-				newBlks := newBase.TipSet.Blocks()
-				lastBlks := lastBase.TipSet.Blocks()
-				if len(newBlks) != len(lastBlks) {
-					log.Warnf("mined new block will FAILED: parents not match newest one, base %d != %d, try to redo mineOne",
-						len(lastBlks), len(newBlks))
-					// redo mine one
-					continue
+			if m.redoMineOne {
+				newBase, err := m.GetBestMiningCandidate(ctx)
+				if err == nil {
+					newBlks := newBase.TipSet.Blocks()
+					lastBlks := lastBase.TipSet.Blocks()
+					if len(newBlks) != len(lastBlks) {
+						log.Warnf("mined new block will FAILED: parents not match newest one, base %d != %d, try to redo mineOne",
+							len(lastBlks), len(newBlks))
+						// redo mine one
+						continue
+					}
 				}
 			}
 
