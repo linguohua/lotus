@@ -210,7 +210,6 @@ func (m *Miner) mine(ctx context.Context) {
 	go m.doWinPoStWarmup(ctx)
 
 	var lastBase MiningBase
-	waitParentsPropagation := true
 minerLoop:
 	for {
 		select {
@@ -239,14 +238,14 @@ minerLoop:
 			}
 
 			if base != nil && base.TipSet.Height() == prebase.TipSet.Height() && base.NullRounds == prebase.NullRounds {
-				btime := time.Unix(int64(base.TipSet.MinTimestamp()+build.BlockDelaySecs), 0)
+				btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
 				now := build.Clock.Now()
-				// deadline := time.Second * time.Duration(2*build.PropagationDelaySecs)
+				deadline := time.Second * time.Duration(2*build.PropagationDelaySecs)
+				diff := now.Sub(btime)
 				blks := base.TipSet.Blocks()
-				if len(blks) < int(build.BlocksPerEpoch) && waitParentsPropagation {
-					log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v", len(blks), now.Sub(btime))
+				if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
+					log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v", len(blks), diff)
 					m.niceSleep(time.Duration(build.PropagationDelaySecs) * time.Second)
-					waitParentsPropagation = false
 					continue
 				} else {
 					base = prebase
@@ -285,7 +284,6 @@ minerLoop:
 		}
 
 		base.NullRounds += injectNulls // testing
-		waitParentsPropagation = true
 
 		if base.TipSet.Equals(lastBase.TipSet) && lastBase.NullRounds == base.NullRounds {
 			log.Warnf("BestMiningCandidate from the previous round: %s (nulls:%d)", lastBase.TipSet.Cids(), lastBase.NullRounds)
@@ -316,13 +314,12 @@ minerLoop:
 		if b != nil {
 			newBase, err := m.GetBestMiningCandidate(ctx)
 			if err == nil {
-				blks := newBase.TipSet.Blocks()
+				newBlks := newBase.TipSet.Blocks()
 				lastBlks := lastBase.TipSet.Blocks()
-				if len(blks) != len(lastBlks) {
+				if len(newBlks) != len(lastBlks) {
 					log.Warnf("mined new block will FAILED: parents not match newest one, base %d != %d, try to redo mineOne",
-						len(lastBlks), len(blks))
+						len(lastBlks), len(newBlks))
 					// redo mine one
-					waitParentsPropagation = false
 					continue
 				}
 			}
