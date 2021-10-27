@@ -148,15 +148,11 @@ func (m *Miner) Start(_ context.Context) error {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
-	if os.Getenv("YOUZHOU_MINE_WAIT_DOUBLE_DELAY") == "false" {
-		m.waitDoubleDelay = false
-	} else {
+	if os.Getenv("YOUZHOU_MINE_WAIT_DOUBLE_DELAY") == "true" {
 		m.waitDoubleDelay = true
 	}
 
-	if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "false" {
-		m.redoMineOne = false
-	} else {
+	if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "true" {
 		m.redoMineOne = true
 	}
 
