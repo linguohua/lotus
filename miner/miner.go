@@ -260,13 +260,14 @@ minerLoop:
 				if m.waitDoubleDelay > 0 {
 					btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
 					now := build.Clock.Now()
-					deadline := time.Second * time.Duration(2*build.PropagationDelaySecs)
+					deadline := time.Second * time.Duration(1+uint64(m.waitDoubleDelay)+build.PropagationDelaySecs)
 					diff := now.Sub(btime)
 					blks := base.TipSet.Blocks()
 					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
 					if diff < deadline {
-						log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v", len(blks), diff)
-						m.niceSleep(time.Duration(build.PropagationDelaySecs) * time.Second)
+						log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v, will delay %d more",
+							len(blks), diff, m.waitDoubleDelay)
+						m.niceSleep(time.Duration(m.waitDoubleDelay) * time.Second)
 						continue
 					}
 				}
