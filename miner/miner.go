@@ -225,25 +225,26 @@ func (m *Miner) niceSleep(d time.Duration) bool {
 }
 
 type AnchorRespBlock struct {
-	Miner string `json:"miner"`
+	Miner string `json:"Miner"`
 }
 
 type AnchorRespData struct {
-	Height int64              `json:"height"`
-	Blocks []*AnchorRespBlock `json:"blocks"`
+	Height int64              `json:"Height"`
+	Blocks []*AnchorRespBlock `json:"Blocks"`
 }
 
 type AnchorResp struct {
-	Code int             `json:"code"`
-	Data *AnchorRespData `json:"data,omitempty"`
+	Result *AnchorRespData `json:"result"`
 }
 
 func (m *Miner) doAnchor(height abi.ChainEpoch) {
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
-	url := fmt.Sprintf("https://api.filscout.com/api/v1/tipset/%d", height)
-	resp, err := client.Get(url)
+
+	url := "https://api.node.glif.io/rpc/v0"
+	jsonStr := "{ \"jsonrpc\": \"2.0\", \"method\": \"Filecoin.ChainHead\", \"params\": [], \"id\": 1 }"
+	resp, err := client.Post(url, "application/json", bytes.NewBuffer([]byte(jsonStr)))
 	if err != nil {
 		log.Errorf("doAnchor failed:%v, url:%s", err, url)
 		return
@@ -252,25 +253,32 @@ func (m *Miner) doAnchor(height abi.ChainEpoch) {
 	defer resp.Body.Close()
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Errorf("doAnchor read body failed:%v, url:%s", err, url)
+		log.Errorf("doAnchor read body failed:%v", err)
 		return
 	}
-	bodyString := string(bodyBytes)
-	log.Infof("doAnchor body:\n%s\n", bodyString)
+
+	if resp.StatusCode != 200 {
+		log.Errorf("doAnchor req failed, status %d != 200", resp.StatusCode)
+		return
+	}
 
 	aresp := &AnchorResp{}
 	err = json.Unmarshal(bodyBytes, aresp)
 	if err != nil {
-		log.Errorf("doAnchor json decode failed:%v, url:%s", err, url)
+		log.Errorf("doAnchor json decode failed:%v", err)
 		return
 	}
 
-	if aresp.Code == 200 {
-		m.anchorHeight = height
-		m.anchorBlkCount = len(aresp.Data.Blocks)
-		log.Infof("doAnchor ok, height:%d, anchorBlkCount:%d", m.anchorHeight, m.anchorBlkCount)
+	if aresp.Result != nil {
+		if aresp.Result.Height == int64(height) {
+			m.anchorHeight = height
+			m.anchorBlkCount = len(aresp.Result.Blocks)
+			log.Infof("doAnchor ok, aresp.Result Height %d, blocks:%d", m.anchorHeight, m.anchorBlkCount)
+		} else {
+			log.Errorf("doAnchor failed, aresp.Result Height %d != %d", aresp.Result.Height, height)
+		}
 	} else {
-		log.Errorf("doAnchor failed, code %d != 200, url:%s", aresp.Code, url)
+		log.Errorf("doAnchor failed, aresp.Result is nil")
 	}
 }
 
