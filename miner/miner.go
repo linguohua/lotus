@@ -73,6 +73,44 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		panic(err)
 	}
 
+	waitParentsDelay := false
+	waitParentDeadline := 0
+	waitParentInterval := 0
+
+	if os.Getenv("YOUZHOU_WAIT_PARENT_DELAY") == "true" {
+		waitParentsDelay = true
+		waitParentDeadline = 13
+		waitParentInterval = 3
+
+		delayStr := os.Getenv("YOUZHOU_WAIT_PARENT_DEADLINE")
+		if delayStr != "" {
+			delayInSeconds, err := strconv.Atoi(delayStr)
+			if err != nil {
+				waitParentDeadline = delayInSeconds
+			}
+		}
+
+		delayStr = os.Getenv("YOUZHOU_WAIT_PARENT_INTERVAL")
+		if delayStr != "" {
+			delayInSeconds, err := strconv.Atoi(delayStr)
+			if err != nil {
+				waitParentInterval = delayInSeconds
+			}
+		}
+
+		log.Infof("miner wait parents delay enabled, waitParentDeadline:%d, waitParentInterval:%d",
+			waitParentDeadline, waitParentInterval)
+	}
+
+	var extraPropagationDelay uint64 = 0
+	delayStr := os.Getenv("YOUZHOU_EXTRA_PROPGATION_DEALY")
+	if delayStr != "" {
+		delayInSeconds, err := strconv.Atoi(delayStr)
+		if err != nil {
+			extraPropagationDelay = uint64(delayInSeconds)
+		}
+	}
+
 	return &Miner{
 		api:     api,
 		epp:     epp,
@@ -88,7 +126,7 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 			// the result is that we WILL NOT wait, therefore fast-forwarding
 			// and thus healing the chain by backfilling it with null rounds
 			// rapidly.
-			deadline := baseTime + build.PropagationDelaySecs
+			deadline := baseTime + build.PropagationDelaySecs + extraPropagationDelay
 			baseT := time.Unix(int64(deadline), 0)
 
 			baseT = baseT.Add(randTimeOffset(time.Second))
@@ -104,6 +142,10 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 			evtTypeBlockMined: j.RegisterEventType("miner", "block_mined"),
 		},
 		journal: j,
+
+		waitParentsDelay:   waitParentsDelay,
+		waitParentDeadline: waitParentDeadline,
+		waitParentInterval: waitParentInterval,
 	}
 }
 
@@ -156,31 +198,6 @@ func (m *Miner) Address() address.Address {
 func (m *Miner) Start(_ context.Context) error {
 	m.lk.Lock()
 	defer m.lk.Unlock()
-
-	if os.Getenv("YOUZHOU_WAIT_PARENT_DELAY") == "true" {
-		m.waitParentsDelay = true
-		m.waitParentDeadline = 13
-		m.waitParentInterval = 3
-
-		delayStr := os.Getenv("YOUZHOU_WAIT_PARENT_DEADLINE")
-		if delayStr != "" {
-			delayInSeconds, err := strconv.Atoi(delayStr)
-			if err != nil {
-				m.waitParentDeadline = delayInSeconds
-			}
-		}
-
-		delayStr = os.Getenv("YOUZHOU_WAIT_PARENT_INTERVAL")
-		if delayStr != "" {
-			delayInSeconds, err := strconv.Atoi(delayStr)
-			if err != nil {
-				m.waitParentInterval = delayInSeconds
-			}
-		}
-
-		log.Infof("miner wait parents delay enabled, waitParentDeadline:%d, waitParentInterval:%d",
-			m.waitParentDeadline, m.waitParentInterval)
-	}
 
 	// if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "true" {
 	// 	log.Info("YOUZHOU_MINE_REDO_MINEONE enabled!")
