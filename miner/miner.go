@@ -85,7 +85,7 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		delayStr := os.Getenv("YOUZHOU_WAIT_PARENT_DEADLINE")
 		if delayStr != "" {
 			delayInSeconds, err := strconv.Atoi(delayStr)
-			if err != nil {
+			if err == nil {
 				waitParentDeadline = delayInSeconds
 			}
 		}
@@ -93,7 +93,7 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		delayStr = os.Getenv("YOUZHOU_WAIT_PARENT_INTERVAL")
 		if delayStr != "" {
 			delayInSeconds, err := strconv.Atoi(delayStr)
-			if err != nil {
+			if err == nil {
 				waitParentInterval = delayInSeconds
 			}
 		}
@@ -106,8 +106,10 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 	delayStr := os.Getenv("YOUZHOU_EXTRA_PROPGATION_DEALY")
 	if delayStr != "" {
 		delayInSeconds, err := strconv.Atoi(delayStr)
-		if err != nil {
+		if err == nil {
 			extraPropagationDelay = uint64(delayInSeconds)
+			log.Infof("miner wait parents delay with extra delay:%d",
+				extraPropagationDelay)
 		}
 	}
 
