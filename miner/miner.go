@@ -228,20 +228,20 @@ type AnchorRespBlock struct {
 }
 
 type AnchorRespData struct {
-	Height int64             `json:"height"`
-	Blocks []AnchorRespBlock `json:"blocks"`
+	Height int64              `json:"height"`
+	Blocks []*AnchorRespBlock `json:"blocks"`
 }
 
 type AnchorResp struct {
-	Code int            `json:"code"`
-	Data AnchorRespData `json:"data"`
+	Code int             `json:"code"`
+	Data *AnchorRespData `json:"data"`
 }
 
 func (m *Miner) doAnchor(height abi.ChainEpoch) {
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
-	url := fmt.Sprintf("https://filfox.info/en/tipset/%d", height)
+	url := fmt.Sprintf("https://api.filscout.com/api/v1/tipset/%d", height)
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Errorf("doAnchor failed:%v, url:%s", err, url)
@@ -252,7 +252,7 @@ func (m *Miner) doAnchor(height abi.ChainEpoch) {
 	aresp := &AnchorResp{}
 	err = json.NewDecoder(resp.Body).Decode(aresp)
 	if err != nil {
-		log.Errorf("doAnchor failed:%v, url:%s", err, url)
+		log.Errorf("doAnchor json decode failed:%v, url:%s", err, url)
 		return
 	}
 
@@ -330,8 +330,8 @@ minerLoop:
 					blks := base.TipSet.Blocks()
 					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
 					if diff < deadline {
-						if m.anchorHeight != (base.TipSet.Height() - 1) {
-							m.doAnchor(base.TipSet.Height() - 1)
+						if m.anchorHeight != base.TipSet.Height() {
+							m.doAnchor(base.TipSet.Height())
 						}
 
 						if m.anchorBlkCount > len(blks) {
