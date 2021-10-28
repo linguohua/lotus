@@ -358,6 +358,8 @@ minerLoop:
 			}
 
 			if base != nil && base.TipSet.Height() == prebase.TipSet.Height() && base.NullRounds == prebase.NullRounds {
+				base = prebase
+
 				if m.waitParentsDelay {
 					btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
 					now := build.Clock.Now()
@@ -379,7 +381,6 @@ minerLoop:
 					}
 				}
 
-				base = prebase
 				break
 			}
 			if base != nil {
