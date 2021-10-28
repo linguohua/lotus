@@ -153,11 +153,13 @@ func (m *Miner) Start(_ context.Context) error {
 	if delayStr != "" {
 		delayInSeconds, err := strconv.Atoi(delayStr)
 		if err != nil {
+			log.Infof("YOUZHOU_MINE_WAIT_DOUBLE_DELAY enabled, delay %d seconds", delayInSeconds)
 			m.waitDoubleDelay = delayInSeconds
 		}
 	}
 
 	if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "true" {
+		log.Info("YOUZHOU_MINE_REDO_MINEONE enabled!")
 		m.redoMineOne = true
 	}
 
