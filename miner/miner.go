@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -130,7 +131,7 @@ type Miner struct {
 	evtTypes [1]journal.EventType
 	journal  journal.Journal
 
-	waitDoubleDelay bool
+	waitDoubleDelay int
 	redoMineOne     bool
 }
 
@@ -148,8 +149,12 @@ func (m *Miner) Start(_ context.Context) error {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
-	if os.Getenv("YOUZHOU_MINE_WAIT_DOUBLE_DELAY") == "true" {
-		m.waitDoubleDelay = true
+	delayStr := os.Getenv("YOUZHOU_MINE_WAIT_DOUBLE_DELAY")
+	if delayStr != "" {
+		delayInSeconds, err := strconv.Atoi(delayStr)
+		if err != nil {
+			m.waitDoubleDelay = delayInSeconds
+		}
 	}
 
 	if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "true" {
@@ -250,13 +255,14 @@ minerLoop:
 			}
 
 			if base != nil && base.TipSet.Height() == prebase.TipSet.Height() && base.NullRounds == prebase.NullRounds {
-				if m.waitDoubleDelay {
+				if m.waitDoubleDelay > 0 {
 					btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
 					now := build.Clock.Now()
 					deadline := time.Second * time.Duration(2*build.PropagationDelaySecs)
 					diff := now.Sub(btime)
 					blks := base.TipSet.Blocks()
-					if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
+					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
+					if diff < deadline {
 						log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v", len(blks), diff)
 						m.niceSleep(time.Duration(build.PropagationDelaySecs) * time.Second)
 						continue
