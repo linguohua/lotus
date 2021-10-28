@@ -5,7 +5,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -131,8 +133,13 @@ type Miner struct {
 	evtTypes [1]journal.EventType
 	journal  journal.Journal
 
-	waitDoubleDelay int
-	redoMineOne     bool
+	waitParentsDelay   bool
+	waitParentDeadline int
+	waitParentInterval int
+	// redoMineOne     bool
+
+	anchorHeight   abi.ChainEpoch
+	anchorBlkCount int
 }
 
 // Address returns the address of the miner.
@@ -149,19 +156,35 @@ func (m *Miner) Start(_ context.Context) error {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 
-	delayStr := os.Getenv("YOUZHOU_MINE_WAIT_DOUBLE_DELAY")
-	if delayStr != "" {
-		delayInSeconds, err := strconv.Atoi(delayStr)
-		if err != nil {
-			log.Infof("YOUZHOU_MINE_WAIT_DOUBLE_DELAY enabled, delay %d seconds", delayInSeconds)
-			m.waitDoubleDelay = delayInSeconds
+	if os.Getenv("YOUZHOU_WAIT_PARENT_DELAY") == "true" {
+		m.waitParentsDelay = true
+		m.waitParentDeadline = 13
+		m.waitParentInterval = 3
+
+		delayStr := os.Getenv("YOUZHOU_WAIT_PARENT_DEADLINE")
+		if delayStr != "" {
+			delayInSeconds, err := strconv.Atoi(delayStr)
+			if err != nil {
+				m.waitParentDeadline = delayInSeconds
+			}
 		}
+
+		delayStr = os.Getenv("YOUZHOU_WAIT_PARENT_INTERVAL")
+		if delayStr != "" {
+			delayInSeconds, err := strconv.Atoi(delayStr)
+			if err != nil {
+				m.waitParentInterval = delayInSeconds
+			}
+		}
+
+		log.Infof("miner wait parents delay enabled, waitParentDeadline:%d, waitParentInterval:%d",
+			m.waitParentDeadline, m.waitParentInterval)
 	}
 
-	if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "true" {
-		log.Info("YOUZHOU_MINE_REDO_MINEONE enabled!")
-		m.redoMineOne = true
-	}
+	// if os.Getenv("YOUZHOU_MINE_REDO_MINEONE") == "true" {
+	// 	log.Info("YOUZHOU_MINE_REDO_MINEONE enabled!")
+	// 	m.redoMineOne = true
+	// }
 
 	if m.stop != nil {
 		return fmt.Errorf("miner already started")
@@ -197,6 +220,48 @@ func (m *Miner) niceSleep(d time.Duration) bool {
 	case <-m.stop:
 		log.Infow("received interrupt while trying to sleep in mining cycle")
 		return false
+	}
+}
+
+type AnchorRespBlock struct {
+	Miner string `json:"miner"`
+}
+
+type AnchorRespData struct {
+	Height int64             `json:"height"`
+	Blocks []AnchorRespBlock `json:"blocks"`
+}
+
+type AnchorResp struct {
+	Code int            `json:"code"`
+	Data AnchorRespData `json:"data"`
+}
+
+func (m *Miner) doAnchor(height abi.ChainEpoch) {
+	client := http.Client{
+		Timeout: 2 * time.Second,
+	}
+	url := fmt.Sprintf("https://filfox.info/en/tipset/%d", height)
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Errorf("doAnchor failed:%v, url:%s", err, url)
+		return
+	}
+
+	defer resp.Body.Close()
+	aresp := &AnchorResp{}
+	err = json.NewDecoder(resp.Body).Decode(aresp)
+	if err != nil {
+		log.Errorf("doAnchor failed:%v, url:%s", err, url)
+		return
+	}
+
+	if aresp.Code == 200 {
+		m.anchorHeight = height
+		m.anchorBlkCount = len(aresp.Data.Blocks)
+		log.Infof("doAnchor ok, height:%d, anchorBlkCount:%d", m.anchorHeight, m.anchorBlkCount)
+	} else {
+		log.Errorf("doAnchor failed, code %d != 200, url:%s", aresp.Code, url)
 	}
 }
 
@@ -257,18 +322,24 @@ minerLoop:
 			}
 
 			if base != nil && base.TipSet.Height() == prebase.TipSet.Height() && base.NullRounds == prebase.NullRounds {
-				if m.waitDoubleDelay > 0 {
+				if m.waitParentsDelay {
 					btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
 					now := build.Clock.Now()
-					deadline := time.Second * time.Duration(1+uint64(m.waitDoubleDelay)+build.PropagationDelaySecs)
+					deadline := time.Second * time.Duration(uint64(m.waitParentDeadline))
 					diff := now.Sub(btime)
 					blks := base.TipSet.Blocks()
 					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
 					if diff < deadline {
-						log.Infof("try to wait more parent blocks, current:%d, base.TipSet time diff:%v, will delay %d more",
-							len(blks), diff, m.waitDoubleDelay)
-						m.niceSleep(time.Duration(m.waitDoubleDelay) * time.Second)
-						continue
+						if m.anchorHeight != (base.TipSet.Height() - 1) {
+							m.doAnchor(base.TipSet.Height() - 1)
+						}
+
+						if m.anchorBlkCount > len(blks) {
+							log.Infof("try to wait more parent blocks, current:%d < anchor:%d, base.TipSet time diff:%v, will delay %d more",
+								len(blks), m.anchorBlkCount, diff, m.waitParentInterval)
+							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
+							continue
+						}
 					}
 				}
 
@@ -335,19 +406,19 @@ minerLoop:
 		onDone(b != nil, h, nil)
 
 		if b != nil {
-			if m.redoMineOne {
-				newBase, err := m.GetBestMiningCandidate(ctx)
-				if err == nil {
-					newBlks := newBase.TipSet.Blocks()
-					lastBlks := lastBase.TipSet.Blocks()
-					if len(newBlks) != len(lastBlks) {
-						log.Warnf("mined new block will FAILED: parents not match newest one, base %d != %d, try to redo mineOne",
-							len(lastBlks), len(newBlks))
-						// redo mine one
-						continue
-					}
-				}
-			}
+			// if m.redoMineOne {
+			// 	newBase, err := m.GetBestMiningCandidate(ctx)
+			// 	if err == nil {
+			// 		newBlks := newBase.TipSet.Blocks()
+			// 		lastBlks := lastBase.TipSet.Blocks()
+			// 		if len(newBlks) != len(lastBlks) {
+			// 			log.Warnf("mined new block will FAILED: parents not match newest one, base %d != %d, try to redo mineOne",
+			// 				len(lastBlks), len(newBlks))
+			// 			// redo mine one
+			// 			continue
+			// 		}
+			// 	}
+			// }
 
 			m.journal.RecordEvent(m.evtTypes[evtTypeBlockMined], func() interface{} {
 				return map[string]interface{}{
