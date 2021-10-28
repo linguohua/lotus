@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -234,7 +235,7 @@ type AnchorRespData struct {
 
 type AnchorResp struct {
 	Code int             `json:"code"`
-	Data *AnchorRespData `json:"data"`
+	Data *AnchorRespData `json:"data,omitempty"`
 }
 
 func (m *Miner) doAnchor(height abi.ChainEpoch) {
@@ -249,8 +250,16 @@ func (m *Miner) doAnchor(height abi.ChainEpoch) {
 	}
 
 	defer resp.Body.Close()
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("doAnchor read body failed:%v, url:%s", err, url)
+		return
+	}
+	bodyString := string(bodyBytes)
+	log.Infof("doAnchor body:\n%s\n", bodyString)
+
 	aresp := &AnchorResp{}
-	err = json.NewDecoder(resp.Body).Decode(aresp)
+	err = json.Unmarshal(bodyBytes, aresp)
 	if err != nil {
 		log.Errorf("doAnchor json decode failed:%v, url:%s", err, url)
 		return
@@ -334,7 +343,7 @@ minerLoop:
 							m.doAnchor(base.TipSet.Height())
 						}
 
-						if m.anchorBlkCount > len(blks) {
+						if m.anchorHeight != base.TipSet.Height() || m.anchorBlkCount > len(blks) {
 							log.Infof("try to wait more parent blocks, current:%d < anchor:%d, base.TipSet time diff:%v, will delay %d more",
 								len(blks), m.anchorBlkCount, diff, m.waitParentInterval)
 							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
