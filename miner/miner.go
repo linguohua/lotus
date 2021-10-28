@@ -5,10 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -243,61 +240,14 @@ func (m *Miner) niceSleep(d time.Duration) bool {
 	}
 }
 
-type AnchorRespBlock struct {
-	Miner string `json:"Miner"`
-}
-
-type AnchorRespData struct {
-	Height int64              `json:"Height"`
-	Blocks []*AnchorRespBlock `json:"Blocks"`
-}
-
-type AnchorResp struct {
-	Result *AnchorRespData `json:"result"`
-}
-
-func (m *Miner) doAnchor(height abi.ChainEpoch) {
-	client := http.Client{
-		Timeout: 2 * time.Second,
-	}
-
-	url := "https://api.node.glif.io/rpc/v0"
-	jsonStr := "{ \"jsonrpc\": \"2.0\", \"method\": \"Filecoin.ChainHead\", \"params\": [], \"id\": 1 }"
-	resp, err := client.Post(url, "application/json", bytes.NewBuffer([]byte(jsonStr)))
-	if err != nil {
-		log.Errorf("doAnchor failed:%v, url:%s", err, url)
-		return
-	}
-
-	defer resp.Body.Close()
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Errorf("doAnchor read body failed:%v", err)
-		return
-	}
-
-	if resp.StatusCode != 200 {
-		log.Errorf("doAnchor req failed, status %d != 200", resp.StatusCode)
-		return
-	}
-
-	aresp := &AnchorResp{}
-	err = json.Unmarshal(bodyBytes, aresp)
-	if err != nil {
-		log.Errorf("doAnchor json decode failed:%v", err)
-		return
-	}
-
-	if aresp.Result != nil {
-		if aresp.Result.Height == int64(height) {
-			m.anchorHeight = height
-			m.anchorBlkCount = len(aresp.Result.Blocks)
-			log.Infof("doAnchor ok, aresp.Result Height %d, blocks:%d", m.anchorHeight, m.anchorBlkCount)
-		} else {
-			log.Errorf("doAnchor failed, aresp.Result Height %d != %d", aresp.Result.Height, height)
-		}
+func (m *Miner) doAnchor(ctx context.Context, height abi.ChainEpoch) {
+	blkCount, err := m.api.AnchorBlocksCountByHeight(ctx, height)
+	if err == nil {
+		m.anchorHeight = height
+		m.anchorBlkCount = blkCount
+		log.Infof("doAnchor ok, Height %d, blocks:%d", m.anchorHeight, m.anchorBlkCount)
 	} else {
-		log.Errorf("doAnchor failed, aresp.Result is nil")
+		log.Errorf("doAnchor BlocksCountByHeight failed:%v", err)
 	}
 }
 
@@ -369,7 +319,7 @@ minerLoop:
 					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
 					if diff < deadline {
 						if m.anchorHeight != base.TipSet.Height() {
-							m.doAnchor(base.TipSet.Height())
+							m.doAnchor(ctx, base.TipSet.Height())
 						}
 
 						if m.anchorHeight != base.TipSet.Height() || m.anchorBlkCount > len(blks) {

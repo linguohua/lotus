@@ -1,13 +1,20 @@
 package impl
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	logging "github.com/ipfs/go-log/v2"
 
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/node/impl/client"
@@ -39,6 +46,12 @@ type FullNodeAPI struct {
 
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
+
+	AnchorURL      string
+	AnchorTimeout  int
+	anchorLock     sync.Mutex
+	anchorHeight   abi.ChainEpoch
+	anchorBlkCount int
 }
 
 func (n *FullNodeAPI) CreateBackup(ctx context.Context, fpath string) error {
@@ -117,6 +130,91 @@ func (n *FullNodeAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (sta
 	}
 
 	return status, nil
+}
+
+type AnchorRespBlock struct {
+	Miner string `json:"Miner"`
+}
+
+type AnchorRespData struct {
+	Height int64              `json:"Height"`
+	Blocks []*AnchorRespBlock `json:"Blocks"`
+}
+
+type AnchorResp struct {
+	Result *AnchorRespData `json:"result"`
+}
+
+func (n *FullNodeAPI) callAnchor() {
+	timeout := 3
+	if n.AnchorTimeout > 0 {
+		timeout = n.AnchorTimeout
+	}
+
+	client := http.Client{
+		Timeout: time.Duration(timeout) * time.Second,
+	}
+
+	url := "https://api.node.glif.io/rpc/v0"
+	if n.AnchorURL != "" {
+		url = n.AnchorURL
+	}
+
+	jsonStr := "{ \"jsonrpc\": \"2.0\", \"method\": \"Filecoin.ChainHead\", \"params\": [], \"id\": 1 }"
+	resp, err := client.Post(url, "application/json", bytes.NewBuffer([]byte(jsonStr)))
+	if err != nil {
+		log.Errorf("callAnchor failed:%v, url:%s", err, url)
+		return
+	}
+
+	defer resp.Body.Close()
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("callAnchor read body failed:%v", err)
+		return
+	}
+
+	if resp.StatusCode != 200 {
+		log.Errorf("callAnchor req failed, status %d != 200", resp.StatusCode)
+		return
+	}
+
+	aresp := &AnchorResp{}
+	err = json.Unmarshal(bodyBytes, aresp)
+	if err != nil {
+		log.Errorf("callAnchor json decode failed:%v", err)
+		return
+	}
+
+	if aresp.Result != nil {
+		n.anchorBlkCount = len(aresp.Result.Blocks)
+		n.anchorHeight = abi.ChainEpoch(aresp.Result.Height)
+		log.Infof("callAnchor ok, aresp.Result Height %d, blocks:%d", n.anchorHeight, n.anchorBlkCount)
+	} else {
+		log.Errorf("callAnchor failed, aresp.Result is nil")
+	}
+}
+
+func (n *FullNodeAPI) AnchorBlocksCountByHeight(ctx context.Context, height abi.ChainEpoch) (int, error) {
+	n.anchorLock.Lock()
+	defer n.anchorLock.Unlock()
+
+	if height < n.anchorHeight {
+		return 0, fmt.Errorf("lotus current anchor height:%d > req %d", n.anchorHeight, height)
+	}
+
+	if height == n.anchorHeight {
+		return n.anchorBlkCount, nil
+	}
+
+	n.callAnchor()
+
+	if height == n.anchorHeight {
+		return n.anchorBlkCount, nil
+	}
+
+	return 0, fmt.Errorf("lotus current anchor height:%d != req %d after call to anchor, maybe call failed, check lotus log",
+		n.anchorHeight, height)
 }
 
 var _ api.FullNode = &FullNodeAPI{}

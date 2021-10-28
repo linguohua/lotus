@@ -141,6 +141,8 @@ type FullNodeStruct struct {
 
 		ChainHead func(p0 context.Context) (*types.TipSet, error) `perm:"read"`
 
+		AnchorBlocksCountByHeight func(p0 context.Context, p1 abi.ChainEpoch) (int, error) `perm:"read"`
+
 		ChainNotify func(p0 context.Context) (<-chan []*HeadChange, error) `perm:"read"`
 
 		ChainReadObj func(p0 context.Context, p1 cid.Cid) ([]byte, error) `perm:"read"`
@@ -1241,6 +1243,17 @@ func (s *FullNodeStruct) ChainHead(p0 context.Context) (*types.TipSet, error) {
 
 func (s *FullNodeStub) ChainHead(p0 context.Context) (*types.TipSet, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) AnchorBlocksCountByHeight(p0 context.Context, p1 abi.ChainEpoch) (int, error) {
+	if s.Internal.AnchorBlocksCountByHeight == nil {
+		return 0, ErrNotSupported
+	}
+	return s.Internal.AnchorBlocksCountByHeight(p0, p1)
+}
+
+func (s *FullNodeStub) AnchorBlocksCountByHeight(p0 context.Context, p1 abi.ChainEpoch) (int, error) {
+	return 0, ErrNotSupported
 }
 
 func (s *FullNodeStruct) ChainNotify(p0 context.Context) (<-chan []*HeadChange, error) {
