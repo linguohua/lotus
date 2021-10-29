@@ -233,7 +233,7 @@ func utilCopy2(from, to, bandwidth string) error {
 
 	var errOut bytes.Buffer
 	var cmd *exec.Cmd
-	log.Infof("utilCopy, call /usr/bin/env rsync bein:%s ----> %s", from, to)
+	log.Infof("utilCopy, call /usr/bin/env rsync bein:%s ----> %s, with bandwidth:%s", from, to, bandwidth)
 	if bandwidth != "" {
 		cmd = exec.Command("/usr/bin/env", "rsync", "--bwlimit", bandwidth, from, toDir) // nolint
 	} else {
