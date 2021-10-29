@@ -88,6 +88,8 @@ type Local struct {
 	localLk sync.RWMutex
 	groupID string
 	role    string
+
+	finalizeBandwidth string
 }
 
 type path struct {
@@ -195,6 +197,8 @@ func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []st
 		role:    role,
 		groupID: groupID,
 	}
+
+	l.finalizeBandwidth = os.Getenv("YOUZHOU_FINALIZE_BANDWIDTH")
 
 	return l, l.open(ctx)
 }
@@ -742,7 +746,7 @@ func (st *Local) MoveStorage(ctx context.Context, s storage.SectorRef, types sto
 		log.Infof("moving %v(%d) to storage: %s(se:%t; st:%t) -> %s(se:%t; st:%t)", s, fileType, sst.ID, sst.CanSeal, sst.CanStore, dst.ID, dst.CanSeal, dst.CanStore)
 
 		srcPath := storiface.PathByType(src, fileType)
-		if err := utilCopy(srcPath, storiface.PathByType(dest, fileType)); err != nil {
+		if err := utilCopy2(srcPath, storiface.PathByType(dest, fileType), st.finalizeBandwidth); err != nil {
 			// TODO: attempt some recovery (check if src is still there, re-declare)
 			return xerrors.Errorf("moving sector %v(%d): %w", s, fileType, err)
 		}
