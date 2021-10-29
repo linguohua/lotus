@@ -186,7 +186,7 @@ func callAnchor() {
 	aresp := &AnchorResp{}
 	err = json.Unmarshal(bodyBytes, aresp)
 	if err != nil {
-		log.Errorf("callAnchor json decode failed:%v", err)
+		log.Errorf("callAnchor json decode failed:%v. body str:%s", err, string(bodyBytes))
 		return
 	}
 
@@ -195,7 +195,7 @@ func callAnchor() {
 		AnchorData.anchorHeight = abi.ChainEpoch(aresp.Result.Height)
 		log.Infof("callAnchor ok, aresp.Result Height %d, blocks:%d", AnchorData.anchorHeight, AnchorData.anchorBlkCount)
 	} else {
-		log.Errorf("callAnchor failed, aresp.Result is nil")
+		log.Errorf("callAnchor failed, aresp.Result is nil, body str:%s", string(bodyBytes))
 	}
 }
 
