@@ -749,7 +749,13 @@ func (st *Local) MoveStorage(ctx context.Context, s storage.SectorRef, types sto
 		log.Infof("moving %v(%d) to storage: %s(se:%t; st:%t) -> %s(se:%t; st:%t)", s, fileType, sst.ID, sst.CanSeal, sst.CanStore, dst.ID, dst.CanSeal, dst.CanStore)
 
 		srcPath := storiface.PathByType(src, fileType)
-		if err := utilCopy2(srcPath, storiface.PathByType(dest, fileType), st.finalizeBandwidth); err != nil {
+		if st.finalizeBandwidth != "" {
+			err = utilCopy2(srcPath, storiface.PathByType(dest, fileType), st.finalizeBandwidth)
+		} else {
+			err = utilCopy(srcPath, storiface.PathByType(dest, fileType))
+		}
+
+		if err != nil {
 			// TODO: attempt some recovery (check if src is still there, re-declare)
 			return xerrors.Errorf("moving sector %v(%d): %w", s, fileType, err)
 		}

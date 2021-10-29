@@ -111,7 +111,6 @@ import (
 // 	return nil
 // }
 
-//lint:ignore U1000 keep old code
 func utilCopy(from, to string) error {
 	from, err := homedir.Expand(from)
 	if err != nil {
