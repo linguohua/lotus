@@ -260,14 +260,14 @@ func FullAPI(out *api.FullNode, fopts ...FullOption) Option {
 			if delayStr != "" {
 				delayInSeconds, err := strconv.Atoi(delayStr)
 				if err == nil {
-					resAPI.AnchorTimeout = delayInSeconds
+					impl.AnchorData.AnchorTimeout = delayInSeconds
 					log.Infof("USE Anchor timeout:%d", delayInSeconds)
 				}
 			}
 
 			url := os.Getenv("YOUZHOU_ANCHOR_URL")
 			if url != "" {
-				resAPI.AnchorURL = url
+				impl.AnchorData.AnchorURL = url
 				log.Infof("USE Anchor URL:%s", url)
 			}
 

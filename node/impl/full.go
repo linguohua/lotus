@@ -28,8 +28,12 @@ import (
 )
 
 var log = logging.Logger("node")
+var AnchorData = AnchorData2{}
 
-type AnchorData struct {
+type AnchorData2 struct {
+	AnchorURL     string
+	AnchorTimeout int
+
 	anchorLock     sync.Mutex
 	anchorHeight   abi.ChainEpoch
 	anchorBlkCount int
@@ -52,10 +56,6 @@ type FullNodeAPI struct {
 
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
-
-	AnchorURL     string
-	AnchorTimeout int
-	AnchorData    AnchorData
 }
 
 func (n *FullNodeAPI) CreateBackup(ctx context.Context, fpath string) error {
@@ -149,10 +149,10 @@ type AnchorResp struct {
 	Result *AnchorRespData `json:"result"`
 }
 
-func (n *FullNodeAPI) callAnchor() {
+func callAnchor() {
 	timeout := 3
-	if n.AnchorTimeout > 0 {
-		timeout = n.AnchorTimeout
+	if AnchorData.AnchorTimeout > 0 {
+		timeout = AnchorData.AnchorTimeout
 	}
 
 	client := http.Client{
@@ -160,8 +160,8 @@ func (n *FullNodeAPI) callAnchor() {
 	}
 
 	url := "https://api.node.glif.io/rpc/v0"
-	if n.AnchorURL != "" {
-		url = n.AnchorURL
+	if AnchorData.AnchorURL != "" {
+		url = AnchorData.AnchorURL
 	}
 
 	jsonStr := "{ \"jsonrpc\": \"2.0\", \"method\": \"Filecoin.ChainHead\", \"params\": [], \"id\": 1 }"
@@ -191,34 +191,34 @@ func (n *FullNodeAPI) callAnchor() {
 	}
 
 	if aresp.Result != nil {
-		n.AnchorData.anchorBlkCount = len(aresp.Result.Blocks)
-		n.AnchorData.anchorHeight = abi.ChainEpoch(aresp.Result.Height)
-		log.Infof("callAnchor ok, aresp.Result Height %d, blocks:%d", n.AnchorData.anchorHeight, n.AnchorData.anchorBlkCount)
+		AnchorData.anchorBlkCount = len(aresp.Result.Blocks)
+		AnchorData.anchorHeight = abi.ChainEpoch(aresp.Result.Height)
+		log.Infof("callAnchor ok, aresp.Result Height %d, blocks:%d", AnchorData.anchorHeight, AnchorData.anchorBlkCount)
 	} else {
 		log.Errorf("callAnchor failed, aresp.Result is nil")
 	}
 }
 
 func (n *FullNodeAPI) AnchorBlocksCountByHeight(ctx context.Context, height abi.ChainEpoch) (int, error) {
-	n.AnchorData.anchorLock.Lock()
-	defer n.AnchorData.anchorLock.Unlock()
+	AnchorData.anchorLock.Lock()
+	defer AnchorData.anchorLock.Unlock()
 
-	if height < n.AnchorData.anchorHeight {
-		return 0, fmt.Errorf("lotus current anchor height:%d > req %d", n.AnchorData.anchorHeight, height)
+	if height < AnchorData.anchorHeight {
+		return 0, fmt.Errorf("lotus current anchor height:%d > req %d", AnchorData.anchorHeight, height)
 	}
 
-	if height == n.AnchorData.anchorHeight {
-		return n.AnchorData.anchorBlkCount, nil
+	if height == AnchorData.anchorHeight {
+		return AnchorData.anchorBlkCount, nil
 	}
 
-	n.callAnchor()
+	callAnchor()
 
-	if height == n.AnchorData.anchorHeight {
-		return n.AnchorData.anchorBlkCount, nil
+	if height == AnchorData.anchorHeight {
+		return AnchorData.anchorBlkCount, nil
 	}
 
 	return 0, fmt.Errorf("lotus current anchor height:%d != req %d after call to anchor, maybe call failed, check lotus log",
-		n.AnchorData.anchorHeight, height)
+		AnchorData.anchorHeight, height)
 }
 
 var _ api.FullNode = &FullNodeAPI{}
