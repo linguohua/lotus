@@ -199,6 +199,9 @@ func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []st
 	}
 
 	l.finalizeBandwidth = os.Getenv("YOUZHOU_FINALIZE_BANDWIDTH")
+	if l.finalizeBandwidth != "" {
+		log.Warnf("Local use finalize bandwidth limit:%s", l.finalizeBandwidth)
+	}
 
 	return l, l.open(ctx)
 }
