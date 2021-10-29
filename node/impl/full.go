@@ -29,6 +29,12 @@ import (
 
 var log = logging.Logger("node")
 
+type AnchorData struct {
+	anchorLock     sync.Mutex
+	anchorHeight   abi.ChainEpoch
+	anchorBlkCount int
+}
+
 type FullNodeAPI struct {
 	common.CommonAPI
 	net.NetAPI
@@ -47,11 +53,9 @@ type FullNodeAPI struct {
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
 
-	AnchorURL      string
-	AnchorTimeout  int
-	anchorLock     sync.Mutex
-	anchorHeight   abi.ChainEpoch
-	anchorBlkCount int
+	AnchorURL     string
+	AnchorTimeout int
+	AnchorData    AnchorData
 }
 
 func (n *FullNodeAPI) CreateBackup(ctx context.Context, fpath string) error {
@@ -187,34 +191,34 @@ func (n *FullNodeAPI) callAnchor() {
 	}
 
 	if aresp.Result != nil {
-		n.anchorBlkCount = len(aresp.Result.Blocks)
-		n.anchorHeight = abi.ChainEpoch(aresp.Result.Height)
-		log.Infof("callAnchor ok, aresp.Result Height %d, blocks:%d", n.anchorHeight, n.anchorBlkCount)
+		n.AnchorData.anchorBlkCount = len(aresp.Result.Blocks)
+		n.AnchorData.anchorHeight = abi.ChainEpoch(aresp.Result.Height)
+		log.Infof("callAnchor ok, aresp.Result Height %d, blocks:%d", n.AnchorData.anchorHeight, n.AnchorData.anchorBlkCount)
 	} else {
 		log.Errorf("callAnchor failed, aresp.Result is nil")
 	}
 }
 
 func (n *FullNodeAPI) AnchorBlocksCountByHeight(ctx context.Context, height abi.ChainEpoch) (int, error) {
-	n.anchorLock.Lock()
-	defer n.anchorLock.Unlock()
+	n.AnchorData.anchorLock.Lock()
+	defer n.AnchorData.anchorLock.Unlock()
 
-	if height < n.anchorHeight {
-		return 0, fmt.Errorf("lotus current anchor height:%d > req %d", n.anchorHeight, height)
+	if height < n.AnchorData.anchorHeight {
+		return 0, fmt.Errorf("lotus current anchor height:%d > req %d", n.AnchorData.anchorHeight, height)
 	}
 
-	if height == n.anchorHeight {
-		return n.anchorBlkCount, nil
+	if height == n.AnchorData.anchorHeight {
+		return n.AnchorData.anchorBlkCount, nil
 	}
 
 	n.callAnchor()
 
-	if height == n.anchorHeight {
-		return n.anchorBlkCount, nil
+	if height == n.AnchorData.anchorHeight {
+		return n.AnchorData.anchorBlkCount, nil
 	}
 
 	return 0, fmt.Errorf("lotus current anchor height:%d != req %d after call to anchor, maybe call failed, check lotus log",
-		n.anchorHeight, height)
+		n.AnchorData.anchorHeight, height)
 }
 
 var _ api.FullNode = &FullNodeAPI{}
