@@ -320,6 +320,7 @@ minerLoop:
 					if diff < deadline {
 						if m.anchorHeight != base.TipSet.Height() {
 							m.doAnchor(ctx, base.TipSet.Height())
+							continue
 						}
 
 						if m.anchorHeight != base.TipSet.Height() {

@@ -3,6 +3,7 @@ package node
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -265,10 +266,11 @@ func FullAPI(out *api.FullNode, fopts ...FullOption) Option {
 				}
 			}
 
-			url := os.Getenv("YOUZHOU_ANCHOR_URL")
-			if url != "" {
-				impl.AnchorData.AnchorURL = url
-				log.Infof("USE Anchor URL:%s", url)
+			urls := os.Getenv("YOUZHOU_ANCHOR_URLS")
+			if urls != "" {
+				s := strings.Split(urls, ",")
+				impl.AnchorData.AnchorURLs = s
+				log.Infof("USE Anchor URL:%s", urls)
 			}
 
 			*out = resAPI
