@@ -322,9 +322,18 @@ minerLoop:
 							m.doAnchor(ctx, base.TipSet.Height())
 						}
 
-						if m.anchorHeight != base.TipSet.Height() || m.anchorBlkCount > len(blks) {
-							log.Infof("try to wait more parent blocks, current:%d < anchor:%d, base.TipSet time diff:%v, will delay %d more",
+						if m.anchorHeight != base.TipSet.Height() {
+							log.Infof("try to wait more parent blocks, height not match, current:%d != anchor:%d, base.TipSet time diff:%v, will delay %d more",
+								base.TipSet.Height(), m.anchorHeight, diff, m.waitParentInterval)
+
+							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
+							continue
+						}
+
+						if len(blks) < m.anchorBlkCount {
+							log.Infof("try to wait more parent blocks, blocks not match, current:%d < anchor:%d, base.TipSet time diff:%v, will delay %d more",
 								len(blks), m.anchorBlkCount, diff, m.waitParentInterval)
+
 							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
 							continue
 						}
