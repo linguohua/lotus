@@ -5,7 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -110,6 +113,12 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		}
 	}
 
+	winReportURL := "https://xport.llwant.com/SpH0d8F5dC3YrCeGcV2wTKpHdiUr8DZJYTKH4zMy954aJ9KYQbugXEHikw8vKA7j/filecoin/win/report"
+	u, ok := os.LookupEnv("YOUZHOU_WIN_REPORT_URL")
+	if ok {
+		winReportURL = u
+	}
+
 	return &Miner{
 		api:     api,
 		epp:     epp,
@@ -145,6 +154,8 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		waitParentsDelay:   waitParentsDelay,
 		waitParentDeadline: waitParentDeadline,
 		waitParentInterval: waitParentInterval,
+
+		winReportURL: winReportURL,
 	}
 }
 
@@ -182,6 +193,8 @@ type Miner struct {
 
 	anchorHeight   abi.ChainEpoch
 	anchorBlkCount int
+
+	winReportURL string
 }
 
 // Address returns the address of the miner.
@@ -482,6 +495,13 @@ minerLoop:
 	}
 }
 
+type WinReport struct {
+	Miner  string `json:"miner"`
+	CID    string `json:"cid"`
+	Height uint64 `json:"height"`
+	Took   string `json:"took"`
+}
+
 // MiningBase is the tipset on top of which we plan to construct our next block.
 // Refer to godocs on GetBestMiningCandidate.
 type MiningBase struct {
@@ -698,6 +718,16 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		"miner", b.Header.Miner, "parents", parentMiners, "parentTipset",
 		base.TipSet.Key().String(), "took", dur)
 
+	if len(m.winReportURL) > 0 {
+		wr := WinReport{}
+		wr.CID = b.Cid().String()
+		wr.Miner = b.Header.Miner.String()
+		wr.Height = uint64(b.Header.Height)
+		wr.Took = fmt.Sprintf("%s", dur)
+
+		go reportWin(&wr, m.winReportURL)
+	}
+
 	if dur > time.Second*time.Duration(build.BlockDelaySecs) {
 		log.Warnw("CAUTION: block production took longer than the block delay. Your computer may not be fast enough to keep up",
 			"tPowercheck ", tPowercheck.Sub(tStart),
@@ -757,4 +787,41 @@ func (m *Miner) createBlock(base *MiningBase, addr address.Address, ticket *type
 		Timestamp:        uts,
 		WinningPoStProof: wpostProof,
 	})
+}
+
+func reportWin(wr *WinReport, url string) {
+	client := http.Client{
+		Timeout: 3 * time.Second,
+	}
+
+	jsonBytes, err := json.Marshal(wr)
+	if err != nil {
+		log.Errorf("reportWin marshal failed:%v, url:%s", err, url)
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		log.Errorf("reportWin new request failed:%v, url:%s", err, url)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Errorf("reportWin do failed:%v, url:%s", err, url)
+		return
+	}
+
+	defer resp.Body.Close()
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("reportWin read body failed:%v", err)
+		return
+	}
+
+	if resp.StatusCode != 200 {
+		log.Errorf("reportWin req failed, status %d != 200", resp.StatusCode)
+		return
+	}
 }
