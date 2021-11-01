@@ -496,10 +496,11 @@ minerLoop:
 }
 
 type WinReport struct {
-	Miner  string `json:"miner"`
-	CID    string `json:"cid"`
-	Height uint64 `json:"height"`
-	Took   string `json:"took"`
+	Miner   string `json:"miner"`
+	CID     string `json:"cid"`
+	Height  uint64 `json:"height"`
+	Took    string `json:"took"`
+	Parents int    `json:"parents"`
 }
 
 // MiningBase is the tipset on top of which we plan to construct our next block.
@@ -724,6 +725,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		wr.Miner = b.Header.Miner.String()
 		wr.Height = uint64(b.Header.Height)
 		wr.Took = fmt.Sprintf("%s", dur)
+		wr.Parents = len(parentMiners)
 
 		go reportWin(&wr, m.winReportURL)
 	}
