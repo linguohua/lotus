@@ -221,7 +221,7 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 		})
 	}
 
-	bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, nil)
+	bad, err := s.faultTracker.CheckProvable2(ctx, s.proofType, tocheck)
 	if err != nil {
 		return bitfield.BitField{}, xerrors.Errorf("checking provable sectors: %w", err)
 	}
@@ -621,6 +621,8 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 			skipCount := uint64(0)
 			var partitions []miner.PoStPartition
 			var sinfos []proof2.SectorInfo
+			tsStart := build.Clock.Now()
+
 			for partIdx, partition := range batch {
 				// TODO: Can do this in parallel
 				toProve, err := bitfield.SubtractBitField(partition.LiveSectors, partition.FaultySectors)
@@ -675,14 +677,15 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 				break
 			}
 
+			elapsed2 := time.Since(tsStart)
+
 			// Generate proof
 			log.Infow("running window post",
 				"chain-random", rand,
 				"deadline", di,
 				"height", ts.Height(),
-				"skipped", skipCount)
-
-			tsStart := build.Clock.Now()
+				"skipped", skipCount,
+				"check-elapsed", elapsed2)
 
 			mid, err := address.IDFromAddress(s.actor)
 			if err != nil {
@@ -693,6 +696,7 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 			elapsed := time.Since(tsStart)
 
 			log.Infow("computing window post", "batch", batchIdx, "elapsed",
+				"check-elapsed", elapsed2,
 				elapsed, "deadline", di, "sectors", len(sinfos))
 
 			if err == nil {
