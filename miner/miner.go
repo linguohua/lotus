@@ -620,7 +620,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	}()
 
 	var postProof []proof2.PoStProof = nil
-	var sectorNumber abi.SectorNumber
+	var sectorNumber = abi.SectorNumber(0)
+	var prevsectorNumber = abi.SectorNumber(0)
 	var dPowercheck time.Duration
 	var dTicket time.Duration
 	var dSeed time.Duration
@@ -629,8 +630,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	var dCreateBlock time.Duration
 	var dur time.Duration
 	var tXX time.Time
-	var try = 0
+	var retry = 0
 	var ticket *types.Ticket
+	var prevticket *types.Ticket
 	var bvals []types.BeaconEntry
 	var parentMiners []address.Address
 
@@ -651,7 +653,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			return nil, nil
 		}
 
-		sectorNumber = abi.SectorNumber(0)
 		if len(mbi.Sectors) > 0 {
 			sectorNumber = mbi.Sectors[0].SectorNumber
 		}
@@ -714,9 +715,13 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			}
 
 			dProof = build.Clock.Now().Sub(tXX)
+
+			// save proof used parameters
+			prevsectorNumber = sectorNumber
+			prevticket = ticket
 		}
 
-		if try < 1 {
+		if retry < 1 {
 			newBase, err := m.GetBestMiningCandidate(ctx)
 			if err == nil {
 				newBlks := newBase.TipSet.Blocks()
@@ -726,13 +731,20 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 					// redo mine one
 					base = newBase
-					try = try + 1
+					retry = retry + 1
 					continue
 				}
 			}
 		}
 
 		break
+	}
+
+	if retry > 0 {
+		// log sector diff
+		// ticket diff
+		log.Warnf("redo mineOne done, prev-sector:%d, sector:%d, prev-ticket:%v, ticket:%v",
+			prevsectorNumber, sectorNumber, prevticket.VRFProof, ticket.VRFProof)
 	}
 
 	tXX = build.Clock.Now()
