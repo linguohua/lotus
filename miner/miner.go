@@ -619,77 +619,123 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		}
 	}()
 
-	mbi, err = m.api.MinerGetBaseInfo(ctx, m.address, round, base.TipSet.Key())
-	if err != nil {
-		err = xerrors.Errorf("failed to get mining base info: %w", err)
-		return nil, err
+	var postProof []proof2.PoStProof = nil
+	var sectorNumber abi.SectorNumber
+	var dPowercheck time.Duration
+	var dTicket time.Duration
+	var dSeed time.Duration
+	var dProof time.Duration
+	var dPending time.Duration
+	var dCreateBlock time.Duration
+	var dur time.Duration
+	var tXX time.Time
+	var try = 0
+	var ticket *types.Ticket
+	var bvals []types.BeaconEntry
+	var parentMiners []address.Address
+
+	for {
+		// collect parents
+		parentMiners = make([]address.Address, len(base.TipSet.Blocks()))
+		for i, header := range base.TipSet.Blocks() {
+			parentMiners[i] = header.Miner
+		}
+
+		tXX = build.Clock.Now()
+		mbi, err = m.api.MinerGetBaseInfo(ctx, m.address, round, base.TipSet.Key())
+		if err != nil {
+			err = xerrors.Errorf("failed to get mining base info: %w", err)
+			return nil, err
+		}
+		if mbi == nil {
+			return nil, nil
+		}
+
+		sectorNumber = abi.SectorNumber(0)
+		if len(mbi.Sectors) > 0 {
+			sectorNumber = mbi.Sectors[0].SectorNumber
+		}
+
+		if !mbi.EligibleForMining {
+			// slashed or just have no power yet
+			return nil, nil
+		}
+
+		dPowercheck = build.Clock.Now().Sub(tXX)
+
+		bvals = mbi.BeaconEntries
+		rbase = mbi.PrevBeaconEntry
+		if len(bvals) > 0 {
+			rbase = bvals[len(bvals)-1]
+		}
+
+		tXX = build.Clock.Now()
+		ticket, err = m.computeTicket(ctx, &rbase, base, mbi)
+		if err != nil {
+			err = xerrors.Errorf("scratching ticket failed: %w", err)
+			return nil, err
+		}
+		dTicket = build.Clock.Now().Sub(tXX)
+
+		if postProof == nil {
+			// lingh: how to ensure exactly 5 winners a round?
+			winner, err = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
+			if err != nil {
+				err = xerrors.Errorf("failed to check if we win next round: %w", err)
+				return nil, err
+			}
+
+			if winner == nil {
+				return nil, nil
+			}
+
+			tXX = build.Clock.Now()
+			buf := new(bytes.Buffer)
+			if err := m.address.MarshalCBOR(buf); err != nil {
+				err = xerrors.Errorf("failed to marshal miner address: %w", err)
+				return nil, err
+			}
+
+			rand, err := lrand.DrawRandomness(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
+			if err != nil {
+				err = xerrors.Errorf("failed to get randomness for winning post: %w", err)
+				return nil, err
+			}
+
+			dSeed = build.Clock.Now().Sub(tXX)
+
+			tXX = build.Clock.Now()
+			prand := abi.PoStRandomness(rand)
+			// lingh: winning POST
+			postProof, err = m.epp.ComputeProof(ctx, mbi.Sectors, prand)
+			if err != nil {
+				err = xerrors.Errorf("failed to compute winning post proof: %w", err)
+				return nil, err
+			}
+
+			dProof = build.Clock.Now().Sub(tXX)
+		}
+
+		if try < 1 {
+			newBase, err := m.GetBestMiningCandidate(ctx)
+			if err == nil {
+				newBlks := newBase.TipSet.Blocks()
+				if base.TipSet.Height() == newBase.TipSet.Height() && len(newBlks) != len(parentMiners) {
+					log.Warnf("parents not match newest one, base %d != %d, try to redo mineOne",
+						len(parentMiners), len(newBlks))
+
+					// redo mine one
+					base = newBase
+					try = try + 1
+					continue
+				}
+			}
+		}
+
+		break
 	}
-	if mbi == nil {
-		return nil, nil
-	}
 
-	sectorNumber := abi.SectorNumber(0)
-	if len(mbi.Sectors) > 0 {
-		sectorNumber = mbi.Sectors[0].SectorNumber
-	}
-
-	if !mbi.EligibleForMining {
-		// slashed or just have no power yet
-		return nil, nil
-	}
-
-	tPowercheck := build.Clock.Now()
-
-	bvals := mbi.BeaconEntries
-	rbase = mbi.PrevBeaconEntry
-	if len(bvals) > 0 {
-		rbase = bvals[len(bvals)-1]
-	}
-
-	ticket, err := m.computeTicket(ctx, &rbase, base, mbi)
-	if err != nil {
-		err = xerrors.Errorf("scratching ticket failed: %w", err)
-		return nil, err
-	}
-
-	// lingh: how to ensure exactly 5 winners a round?
-	winner, err = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
-	if err != nil {
-		err = xerrors.Errorf("failed to check if we win next round: %w", err)
-		return nil, err
-	}
-
-	if winner == nil {
-		return nil, nil
-	}
-
-	tTicket := build.Clock.Now()
-
-	buf := new(bytes.Buffer)
-	if err := m.address.MarshalCBOR(buf); err != nil {
-		err = xerrors.Errorf("failed to marshal miner address: %w", err)
-		return nil, err
-	}
-
-	rand, err := lrand.DrawRandomness(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
-	if err != nil {
-		err = xerrors.Errorf("failed to get randomness for winning post: %w", err)
-		return nil, err
-	}
-
-	prand := abi.PoStRandomness(rand)
-
-	tSeed := build.Clock.Now()
-
-	// lingh: winning POST
-	postProof, err := m.epp.ComputeProof(ctx, mbi.Sectors, prand)
-	if err != nil {
-		err = xerrors.Errorf("failed to compute winning post proof: %w", err)
-		return nil, err
-	}
-
-	tProof := build.Clock.Now()
-
+	tXX = build.Clock.Now()
 	// get pending messages early,
 	msgs, err := m.api.MpoolSelect(context.TODO(), base.TipSet.Key(), ticket.Quality())
 	if err != nil {
@@ -697,8 +743,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		return nil, err
 	}
 
-	tPending := build.Clock.Now()
-
+	dPending = build.Clock.Now().Sub(tXX)
+	tXX = build.Clock.Now()
 	// TODO: winning post proof
 	minedBlock, err = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs)
 	if err != nil {
@@ -706,12 +752,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		return nil, err
 	}
 
-	tCreateBlock := build.Clock.Now()
-	dur := tCreateBlock.Sub(tStart)
-	parentMiners := make([]address.Address, len(base.TipSet.Blocks()))
-	for i, header := range base.TipSet.Blocks() {
-		parentMiners[i] = header.Miner
-	}
+	dCreateBlock = build.Clock.Now().Sub(tXX)
+	dur = build.Clock.Now().Sub(tStart)
 
 	b := minedBlock
 	log.Infow("mined new block", "sector-number", sectorNumber,
@@ -725,19 +767,19 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		wr.Miner = b.Header.Miner.String()
 		wr.Height = uint64(b.Header.Height)
 		wr.Took = fmt.Sprintf("%s", dur)
-		wr.Parents = len(parentMiners)
+		wr.Parents = len(base.TipSet.Blocks())
 
 		go reportWin(&wr, m.winReportURL)
 	}
 
 	if dur > time.Second*time.Duration(build.BlockDelaySecs) {
 		log.Warnw("CAUTION: block production took longer than the block delay. Your computer may not be fast enough to keep up",
-			"tPowercheck ", tPowercheck.Sub(tStart),
-			"tTicket ", tTicket.Sub(tPowercheck),
-			"tSeed ", tSeed.Sub(tTicket),
-			"tProof ", tProof.Sub(tSeed),
-			"tPending ", tPending.Sub(tProof),
-			"tCreateBlock ", tCreateBlock.Sub(tPending),
+			"tPowercheck ", dPowercheck,
+			"tTicket ", dTicket,
+			"tSeed ", dSeed,
+			"tProof ", dProof,
+			"tPending ", dPending,
+			"tCreateBlock ", dCreateBlock,
 			"sector-number", sectorNumber,
 		)
 	}
