@@ -354,6 +354,8 @@ type storedSector struct {
 	store stores.SectorStorageInfo
 
 	unsealed, sealed, cache bool
+
+	index int
 }
 
 var storageFindCmd = &cli.Command{
@@ -419,7 +421,7 @@ var storageFindCmd = &cli.Command{
 			}
 			sts.unsealed = true
 		}
-		for _, info := range s {
+		for i, info := range s {
 			sts, ok := byId[info.ID]
 			if !ok {
 				sts = &storedSector{
@@ -429,6 +431,7 @@ var storageFindCmd = &cli.Command{
 				byId[info.ID] = sts
 			}
 			sts.sealed = true
+			sts.index = i
 		}
 		for _, info := range c {
 			sts, ok := byId[info.ID]
@@ -452,7 +455,7 @@ var storageFindCmd = &cli.Command{
 			out = append(out, sector)
 		}
 		sort.Slice(out, func(i, j int) bool {
-			return out[i].id < out[j].id
+			return out[i].index < out[j].index
 		})
 
 		for _, info := range out {
