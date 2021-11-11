@@ -481,6 +481,7 @@ loop:
 
 				if i != 0 {
 					arr[0], arr[i] = arr[i], arr[0]
+					log.Warnf("multiple sector %v storages, will prefer %s", s, storageID)
 				}
 
 				continue loop
@@ -496,7 +497,9 @@ loop:
 		arr2[0] = meta
 		if len(arr) > 0 {
 			copy(arr2[1:], arr)
+			log.Warnf("multiple sector %v storages, will prefer %s", s, storageID)
 		}
+
 		i.sectors[d] = arr2
 	}
 
