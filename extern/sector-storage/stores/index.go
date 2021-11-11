@@ -471,13 +471,18 @@ loop:
 		d := Decl{s, fileType}
 		var arr = i.sectors[d]
 
-		for _, sid := range arr {
+		for i, sid := range arr {
 			if sid.storage == storageID {
 				if !sid.primary && primary {
 					sid.primary = true
 				} else {
 					log.Warnf("sector %v redeclared in %s", s, storageID)
 				}
+
+				if i != 0 {
+					arr[0], arr[i] = arr[i], arr[0]
+				}
+
 				continue loop
 			}
 		}
