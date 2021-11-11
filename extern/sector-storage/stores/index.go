@@ -395,26 +395,26 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 	}
 
 	// remove all decl made by this storage
-	sectors := make(map[Decl]struct{})
-	for decl, ids := range i.sectors {
-		found := false
-		for _, id := range ids {
-			if id.storage == si.ID {
-				found = true
-				break
-			}
-		}
+	// sectors := make(map[Decl]struct{})
+	// for decl, ids := range i.sectors {
+	// 	found := false
+	// 	for _, id := range ids {
+	// 		if id.storage == si.ID {
+	// 			found = true
+	// 			break
+	// 		}
+	// 	}
 
-		if found {
-			sectors[decl] = struct{}{}
-		}
-	}
+	// 	if found {
+	// 		sectors[decl] = struct{}{}
+	// 	}
+	// }
 
-	if len(sectors) > 0 {
-		for k := range sectors {
-			delete(i.sectors, k)
-		}
-	}
+	// if len(sectors) > 0 {
+	// 	for k := range sectors {
+	// 		delete(i.sectors, k)
+	// 	}
+	// }
 
 	return nil
 }
@@ -469,8 +469,9 @@ loop:
 		}
 
 		d := Decl{s, fileType}
+		var arr = i.sectors[d]
 
-		for _, sid := range i.sectors[d] {
+		for _, sid := range arr {
 			if sid.storage == storageID {
 				if !sid.primary && primary {
 					sid.primary = true
@@ -481,10 +482,17 @@ loop:
 			}
 		}
 
-		i.sectors[d] = append(i.sectors[d], &declMeta{
+		var meta = &declMeta{
 			storage: storageID,
 			primary: primary,
-		})
+		}
+
+		var arr2 = make([]*declMeta, len(arr)+1)
+		arr2[0] = meta
+		if len(arr) > 0 {
+			copy(arr2[1:], arr)
+		}
+		i.sectors[d] = arr2
 	}
 
 	store, exist := i.stores[storageID]
