@@ -331,14 +331,15 @@ minerLoop:
 					blks := base.TipSet.Blocks()
 					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
 					if diff < deadline {
-						if m.anchorHeight != base.TipSet.Height() {
-							m.doAnchor(ctx, base.TipSet.Height())
+						expectedHeight := base.TipSet.Height() + base.NullRounds
+						if m.anchorHeight != expectedHeight {
+							m.doAnchor(ctx, expectedHeight)
 							continue
 						}
 
-						if m.anchorHeight != base.TipSet.Height() {
+						if m.anchorHeight != expectedHeight {
 							log.Infof("try to wait more parent blocks, height not match, current:%d != anchor:%d, base.TipSet time diff:%v, will delay %d more",
-								base.TipSet.Height(), m.anchorHeight, diff, m.waitParentInterval)
+								expectedHeight, m.anchorHeight, diff, m.waitParentInterval)
 
 							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
 							continue
