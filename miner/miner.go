@@ -119,6 +119,12 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		winReportURL = u
 	}
 
+	var discardMinedBlock = false
+	if os.Getenv("YOUZHOU_DISCARD_WIN_BLOCK") == "true" {
+		discardMinedBlock = true
+		log.Warn("YOUZHOU_DISCARD_WIN_BLOCK == true, will discard all winning blocks")
+	}
+
 	return &Miner{
 		api:     api,
 		epp:     epp,
@@ -155,7 +161,8 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		waitParentDeadline: waitParentDeadline,
 		waitParentInterval: waitParentInterval,
 
-		winReportURL: winReportURL,
+		winReportURL:      winReportURL,
+		discardMinedBlock: discardMinedBlock,
 	}
 }
 
@@ -194,7 +201,8 @@ type Miner struct {
 	anchorHeight   abi.ChainEpoch
 	anchorBlkCount int
 
-	winReportURL string
+	winReportURL      string
+	discardMinedBlock bool
 }
 
 // Address returns the address of the miner.
@@ -741,6 +749,11 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			"tCreateBlock ", tCreateBlock.Sub(tPending),
 			"sector-number", sectorNumber,
 		)
+	}
+
+	if m.discardMinedBlock {
+		log.Warnw("YOUZHOU_DISCARD_WIN_BLOCK = true, will discard winning block, loss rewards")
+		minedBlock = nil
 	}
 
 	return minedBlock, nil
