@@ -79,7 +79,7 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 
 	if os.Getenv("YOUZHOU_WAIT_PARENT_DELAY") == "true" {
 		waitParentsDelay = true
-		waitParentDeadline = 13
+		waitParentDeadline = 21
 		waitParentInterval = 3
 
 		delayStr := os.Getenv("YOUZHOU_WAIT_PARENT_DEADLINE")
