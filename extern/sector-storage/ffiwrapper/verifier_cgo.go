@@ -83,9 +83,9 @@ func (sb *Sealer) pubSectorToPriv(ctx context.Context, mid abi.ActorID, sectorIn
 		}
 
 		// ensure sector has storage info
-		err := sb.sectors.MakeSureSectorStore(ctx, sid.ID)
+		err := sb.sectors.DiscoverSectorStore(ctx, sid.ID)
 		if err != nil {
-			log.Errorw("failed to MakeSureSectorStore, skipping", "sector", sid.ID, "error", err)
+			log.Errorw("failed to DiscoverSectorStore, skipping", "sector", sid.ID, "error", err)
 			skipped = append(skipped, sid.ID)
 			continue
 		}

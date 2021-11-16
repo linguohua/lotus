@@ -560,7 +560,7 @@ func (st *Local) lookupPaths() []*cpath {
 	return st.lookupPathsCached
 }
 
-func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) error {
+func (st *Local) DiscoverSectorStore(ctx context.Context, sector abi.SectorID) error {
 	storeIDs, err := st.index.StorageFindSector(ctx, sector, storiface.FTSealed, abi.SectorSize(0), false)
 	if err != nil {
 		return err
@@ -573,18 +573,18 @@ func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) e
 
 	// find in path, redeclare it
 	sectorName := storiface.SectorName(sector)
-	log.Infof("Local.MakeSureSectorStore try to found sector id:%s", sectorName)
+	log.Infof("Local.DiscoverSectorStore try to found sector id:%s", sectorName)
 
 	t := storiface.FTSealed | storiface.FTCache
 	for _, cp := range st.lookupPaths() {
 		// only check sealed file, assume cached file under the same directory
 		pathoo := filepath.Join(cp.p.local, storiface.FTSealed.String(), sectorName)
-		log.Infof("Local.MakeSureSectorStore try to found sector %s", pathoo)
+		log.Infof("Local.DiscoverSectorStore try to found sector %s", pathoo)
 		_, err = os.Stat(pathoo)
 		if err == nil {
-			log.Infof("Local.MakeSureSectorStore re-declare sector %s", pathoo)
+			log.Infof("Local.DiscoverSectorStore re-declare sector %s", pathoo)
 			if err := st.index.StorageDeclareSector(ctx, cp.id, sector, t, cp.canStore); err != nil {
-				return xerrors.Errorf("MakeSureSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, cp.id, err)
+				return xerrors.Errorf("DiscoverSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, cp.id, err)
 			}
 
 			// found
@@ -592,7 +592,7 @@ func (st *Local) MakeSureSectorStore(ctx context.Context, sector abi.SectorID) e
 		}
 	}
 
-	return xerrors.Errorf("MakeSureSectorStore can't found sector:%s", sectorName)
+	return xerrors.Errorf("DiscoverSectorStore can't found sector:%s", sectorName)
 }
 
 func (st *Local) Local(ctx context.Context) ([]StoragePath, error) {

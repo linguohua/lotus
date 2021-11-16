@@ -40,6 +40,6 @@ func (l *readonlyProvider) AcquireSector(ctx context.Context, id storage.SectorR
 	return p, cancel, err
 }
 
-func (l *readonlyProvider) MakeSureSectorStore(ctx context.Context, id abi.SectorID) error {
-	return l.stor.MakeSureSectorStore(ctx, id)
+func (l *readonlyProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
+	return l.stor.DiscoverSectorStore(ctx, id)
 }

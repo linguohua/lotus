@@ -278,8 +278,8 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 	}, nil
 }
 
-func (l *localWorkerPathProvider) MakeSureSectorStore(ctx context.Context, id abi.SectorID) error {
-	return fmt.Errorf("MakeSureSectorStore not implemented for localWorkerPathProvider")
+func (l *localWorkerPathProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
+	return fmt.Errorf("DiscoverSectorStore not implemented for localWorkerPathProvider")
 }
 
 func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {
