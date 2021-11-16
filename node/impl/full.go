@@ -30,7 +30,7 @@ import (
 var log = logging.Logger("node")
 var AnchorData = AnchorData2{
 	AnchorURLs:    []string{"https://xport.llwant.com/SpH0d8F5dC3YrCeGcV2wTKpHdiUr8DZJYTKH4zMy954aJ9KYQbugXEHikw8vKA7j/filecoin/head"},
-	AnchorTimeout: 6,
+	AnchorTimeout: 15,
 }
 
 type AnchorData2 struct {
