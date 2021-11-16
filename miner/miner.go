@@ -332,11 +332,12 @@ minerLoop:
 				base = prebase
 
 				if m.waitParentsDelay {
-					btime := time.Unix(int64(base.TipSet.MinTimestamp()), 0)
+					btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)+build.PropagationDelaySecs), 0)
 					now := build.Clock.Now()
 					deadline := time.Second * time.Duration(uint64(m.waitParentDeadline))
 					diff := now.Sub(btime)
 					blks := base.TipSet.Blocks()
+
 					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
 					if diff < deadline {
 						expectedHeight := base.TipSet.Height() + base.NullRounds
