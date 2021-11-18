@@ -701,11 +701,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	tProof := build.Clock.Now()
 
 	// check if we have new base
+	oldbase := *base
 	newBase, err := m.GetBestMiningCandidate(ctx)
 	if err == nil {
-		oblks := base.TipSet.Blocks()
+		oblks := oldbase.TipSet.Blocks()
 		nblks := newBase.TipSet.Blocks()
-		if len(oblks) != len(nblks) && base.TipSet.Height() == newBase.TipSet.Height() && base.NullRounds == newBase.NullRounds {
+		if len(oblks) != len(nblks) && oldbase.TipSet.Height() == newBase.TipSet.Height() && oldbase.NullRounds == newBase.NullRounds {
 			log.Warnf("old base parents number %d != %d, replace with new base", len(oblks), len(nblks))
 			// replace with new base
 			base = newBase
