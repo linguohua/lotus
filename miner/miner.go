@@ -407,7 +407,14 @@ minerLoop:
 			continue
 		}
 
-		b, err := m.mineOne(ctx, base)
+		var fakeBase MiningBase = *base
+		var bb = base.TipSet.Blocks()
+		if len(bb) > 1 {
+			bb = bb[0:(len(bb) - 1)]
+		}
+		fakeBase.TipSet, _ = types.NewTipSet(bb)
+
+		b, err := m.mineOne(ctx, &fakeBase)
 		if err != nil {
 			log.Errorf("mining block failed: %+v", err)
 			if !m.niceSleep(time.Second) {
@@ -700,6 +707,21 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tProof := build.Clock.Now()
 
+	// get newest base
+	parentMiners := make([]address.Address, len(base.TipSet.Blocks()))
+	for i, header := range base.TipSet.Blocks() {
+		parentMiners[i] = header.Miner
+	}
+
+	newBase, err := m.GetBestMiningCandidate(ctx)
+	if err == nil {
+		nblks := newBase.TipSet.Blocks()
+		if len(nblks) != len(parentMiners) {
+			log.Warnf("old base parents number %d != %d, replace with new baswe", len(parentMiners), len(nblks))
+			base = newBase
+		}
+	}
+
 	// get pending messages early,
 	msgs, err := m.api.MpoolSelect(context.TODO(), base.TipSet.Key(), ticket.Quality())
 	if err != nil {
@@ -718,10 +740,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tCreateBlock := build.Clock.Now()
 	dur := tCreateBlock.Sub(tStart)
-	parentMiners := make([]address.Address, len(base.TipSet.Blocks()))
-	for i, header := range base.TipSet.Blocks() {
-		parentMiners[i] = header.Miner
-	}
 
 	b := minedBlock
 	log.Infow("mined new block", "sector-number", sectorNumber,
