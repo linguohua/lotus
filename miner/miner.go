@@ -716,10 +716,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	newBase, err := m.GetBestMiningCandidate(ctx)
 	if err == nil {
 		nblks := newBase.TipSet.Blocks()
-		if len(nblks) != len(parentMiners) {
+		if len(nblks) != len(parentMiners) && base.TipSet.Height() == newBase.TipSet.Height() && base.NullRounds == newBase.NullRounds {
 			log.Warnf("old base parents number %d != %d, replace with new baswe", len(parentMiners), len(nblks))
 			base = newBase
 		}
+	} else {
+		log.Errorf("mineOne GetBestMiningCandidate error:%v", err)
 	}
 
 	// get pending messages early,
