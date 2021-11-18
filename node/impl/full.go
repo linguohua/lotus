@@ -37,9 +37,10 @@ type AnchorData2 struct {
 	AnchorURLs    []string
 	AnchorTimeout int
 
-	anchorLock     sync.Mutex
-	anchorHeight   abi.ChainEpoch
-	anchorBlkCount int
+	anchorLock        sync.Mutex
+	anchorHeight      abi.ChainEpoch
+	anchorQueryHeight abi.ChainEpoch
+	anchorBlkCount    int
 }
 
 type FullNodeAPI struct {
@@ -228,6 +229,8 @@ func callAnchor(height uint64) {
 	if len(results) > 0 {
 		AnchorData.anchorBlkCount = results[0].Blocks
 		AnchorData.anchorHeight = abi.ChainEpoch(results[0].Height)
+		AnchorData.anchorQueryHeight = abi.ChainEpoch(height)
+
 		log.Infof("callAnchor ok, Height %d, blocks:%d", AnchorData.anchorHeight, AnchorData.anchorBlkCount)
 	} else {
 		log.Errorf("callAnchor failed, len(results) == 0")
@@ -246,7 +249,9 @@ func (n *FullNodeAPI) AnchorBlocksCountByHeight(ctx context.Context, height abi.
 		return AnchorData.anchorBlkCount, nil
 	}
 
-	callAnchor(uint64(height))
+	if AnchorData.anchorQueryHeight != height {
+		callAnchor(uint64(height))
+	}
 
 	if height == AnchorData.anchorHeight {
 		return AnchorData.anchorBlkCount, nil
