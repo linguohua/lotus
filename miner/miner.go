@@ -700,6 +700,20 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tProof := build.Clock.Now()
 
+	// check if we have new base
+	newBase, err := m.GetBestMiningCandidate(ctx)
+	if err == nil {
+		oblks := base.TipSet.Blocks()
+		nblks := newBase.TipSet.Blocks()
+		if len(nblks) != len(oblks) && base.TipSet.Height() == newBase.TipSet.Height() && base.NullRounds == newBase.NullRounds {
+			log.Warnf("old base parents number %d != %d, replace with new baswe", len(oblks), len(nblks))
+			// replace with new base
+			base = newBase
+		}
+	} else {
+		log.Errorf("mineOne GetBestMiningCandidate error:%v", err)
+	}
+
 	// get pending messages early,
 	msgs, err := m.api.MpoolSelect(context.TODO(), base.TipSet.Key(), ticket.Quality())
 	if err != nil {
