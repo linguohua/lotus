@@ -317,6 +317,7 @@ minerLoop:
 		var base *MiningBase
 		var onDone func(bool, abi.ChainEpoch, error)
 		var injectNulls abi.ChainEpoch
+		var anchoWait int = 0
 
 		for {
 			prebase, err := m.GetBestMiningCandidate(ctx)
@@ -351,6 +352,7 @@ minerLoop:
 								expectedHeight, m.anchorHeight, diff, m.waitParentInterval)
 
 							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
+							anchoWait = anchoWait + 1
 							continue
 						}
 
@@ -359,6 +361,7 @@ minerLoop:
 								len(blks), m.anchorBlkCount, diff, m.waitParentInterval)
 
 							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
+							anchoWait = anchoWait + 1
 							continue
 						}
 					}
@@ -407,7 +410,7 @@ minerLoop:
 			continue
 		}
 
-		b, err := m.mineOne(ctx, base)
+		b, err := m.mineOne(ctx, base, anchoWait)
 		if err != nil {
 			log.Errorf("mining block failed: %+v", err)
 			if !m.niceSleep(time.Second) {
@@ -511,6 +514,9 @@ type WinReport struct {
 	Height  uint64 `json:"height"`
 	Took    string `json:"took"`
 	Parents int    `json:"parents"`
+
+	AnchorWait int  `json:"anchorWait"`
+	NewBase    bool `json:"rebase"`
 }
 
 // MiningBase is the tipset on top of which we plan to construct our next block.
@@ -569,7 +575,7 @@ func (m *Miner) GetBestMiningCandidate(ctx context.Context) (*MiningBase, error)
 // This method does the following:
 //
 //  1.
-func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *types.BlockMsg, err error) {
+func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (minedBlock *types.BlockMsg, err error) {
 	log.Debugw("attempting to mine a block", "tipset", types.LogCids(base.TipSet.Cids()))
 	tStart := build.Clock.Now()
 
@@ -701,6 +707,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	tProof := build.Clock.Now()
 
 	// check if we have new base
+	var replaceBase bool = false
 	oldbase := *base
 	newBase, err := m.GetBestMiningCandidate(ctx)
 	if err == nil {
@@ -711,6 +718,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			log.Warnf("old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
 			// replace with new base
 			base = newBase
+			replaceBase = true
 		}
 	} else {
 		log.Errorf("mineOne GetBestMiningCandidate error:%v", err)
@@ -752,7 +760,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		wr.Height = uint64(b.Header.Height)
 		wr.Took = fmt.Sprintf("%s", dur)
 		wr.Parents = len(parentMiners)
-
+		wr.AnchorWait = anchorWait
+		wr.NewBase = replaceBase
 		go reportWin(&wr, m.winReportURL)
 	}
 
