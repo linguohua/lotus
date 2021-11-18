@@ -708,16 +708,15 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	tProof := build.Clock.Now()
 
 	// get newest base
-	parentMiners := make([]address.Address, len(base.TipSet.Blocks()))
-	for i, header := range base.TipSet.Blocks() {
-		parentMiners[i] = header.Miner
-	}
-
+	oldbase := *base
 	newBase, err := m.GetBestMiningCandidate(ctx)
 	if err == nil {
+		oblks := oldbase.TipSet.Blocks()
 		nblks := newBase.TipSet.Blocks()
-		if len(nblks) != len(parentMiners) && base.TipSet.Height() == newBase.TipSet.Height() && base.NullRounds == newBase.NullRounds {
-			log.Warnf("old base parents number %d != %d, replace with new baswe", len(parentMiners), len(nblks))
+		oheight := (oldbase.TipSet.Height() + oldbase.NullRounds)
+		if len(oblks) != len(nblks) && oheight == (newBase.TipSet.Height()+newBase.NullRounds) {
+			log.Warnf("old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
+			// replace with new base
 			base = newBase
 		}
 	} else {
@@ -742,6 +741,10 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tCreateBlock := build.Clock.Now()
 	dur := tCreateBlock.Sub(tStart)
+	parentMiners := make([]address.Address, len(base.TipSet.Blocks()))
+	for i, header := range base.TipSet.Blocks() {
+		parentMiners[i] = header.Miner
+	}
 
 	b := minedBlock
 	log.Infow("mined new block", "sector-number", sectorNumber,
