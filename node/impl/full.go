@@ -36,6 +36,7 @@ var AnchorData = AnchorData2{
 type AnchorData2 struct {
 	AnchorURLs    []string
 	AnchorTimeout int
+	HardcoreDelay int
 
 	anchorLock        sync.Mutex
 	anchorHeight      abi.ChainEpoch
@@ -186,7 +187,7 @@ func httpCallAnchor(url string, timeout int, height uint64) AnchorHeightReply {
 
 func callAnchor(height uint64) {
 	timeout := AnchorData.AnchorTimeout
-
+	now := time.Now()
 	var wg sync.WaitGroup
 	var xresults = make([]AnchorHeightReply, len(AnchorData.AnchorURLs))
 	for i, c := range AnchorData.AnchorURLs {
@@ -226,14 +227,14 @@ func callAnchor(height uint64) {
 		return false
 	})
 
+	took := time.Since(now)
 	if len(results) > 0 {
 		AnchorData.anchorBlkCount = results[0].Blocks
 		AnchorData.anchorHeight = abi.ChainEpoch(results[0].Height)
-		AnchorData.anchorQueryHeight = abi.ChainEpoch(height)
 
-		log.Infof("callAnchor ok, Height %d, blocks:%d", AnchorData.anchorHeight, AnchorData.anchorBlkCount)
+		log.Infof("callAnchor ok, Height %d, blocks:%d, took:%s", AnchorData.anchorHeight, AnchorData.anchorBlkCount, took)
 	} else {
-		log.Errorf("callAnchor failed, len(results) == 0")
+		log.Errorf("callAnchor failed, len(results) == 0, took:%s", took)
 	}
 }
 
@@ -245,12 +246,23 @@ func (n *FullNodeAPI) AnchorBlocksCountByHeight(ctx context.Context, height abi.
 		return 0, fmt.Errorf("lotus current anchor height:%d > req %d", AnchorData.anchorHeight, height)
 	}
 
+	if height < AnchorData.anchorQueryHeight {
+		return 0, fmt.Errorf("lotus current anchor query height:%d > req %d", AnchorData.anchorQueryHeight, height)
+	}
+
 	if height == AnchorData.anchorHeight {
 		return AnchorData.anchorBlkCount, nil
 	}
 
 	if AnchorData.anchorQueryHeight != height {
+		if AnchorData.HardcoreDelay > 0 {
+			time.Sleep(time.Duration(AnchorData.HardcoreDelay) * time.Second)
+		}
+
 		callAnchor(uint64(height))
+
+		// save query height, avoid sleep multiple times
+		AnchorData.anchorQueryHeight = height
 	}
 
 	if height == AnchorData.anchorHeight {

@@ -73,37 +73,17 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		panic(err)
 	}
 
-	waitParentsDelay := false
-	waitParentDeadline := 0
-	waitParentInterval := 0
-
-	if os.Getenv("YOUZHOU_WAIT_PARENT_DELAY") == "true" {
-		waitParentsDelay = true
-		waitParentDeadline = 21
-		waitParentInterval = 3
-
-		delayStr := os.Getenv("YOUZHOU_WAIT_PARENT_DEADLINE")
-		if delayStr != "" {
-			delayInSeconds, err := strconv.Atoi(delayStr)
-			if err == nil {
-				waitParentDeadline = delayInSeconds
-			}
+	createBlockDeadline := 0
+	delayStr := os.Getenv("YOUZHOU_CREATE_BLOCK_DEADLINE")
+	if delayStr != "" {
+		delayInSeconds, err := strconv.Atoi(delayStr)
+		if err == nil {
+			createBlockDeadline = delayInSeconds
 		}
-
-		delayStr = os.Getenv("YOUZHOU_WAIT_PARENT_INTERVAL")
-		if delayStr != "" {
-			delayInSeconds, err := strconv.Atoi(delayStr)
-			if err == nil {
-				waitParentInterval = delayInSeconds
-			}
-		}
-
-		log.Infof("miner wait parents delay enabled, waitParentDeadline:%d, waitParentInterval:%d",
-			waitParentDeadline, waitParentInterval)
 	}
 
 	var extraPropagationDelay uint64 = 0
-	delayStr := os.Getenv("YOUZHOU_EXTRA_PROPGATION_DEALY")
+	delayStr = os.Getenv("YOUZHOU_EXTRA_PROPGATION_DEALY")
 	if delayStr != "" {
 		delayInSeconds, err := strconv.Atoi(delayStr)
 		if err == nil {
@@ -157,9 +137,7 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		},
 		journal: j,
 
-		waitParentsDelay:   waitParentsDelay,
-		waitParentDeadline: waitParentDeadline,
-		waitParentInterval: waitParentInterval,
+		createBlockDeadline: createBlockDeadline,
 
 		winReportURL:      winReportURL,
 		discardMinedBlock: discardMinedBlock,
@@ -193,10 +171,7 @@ type Miner struct {
 	evtTypes [1]journal.EventType
 	journal  journal.Journal
 
-	waitParentsDelay   bool
-	waitParentDeadline int
-	waitParentInterval int
-	// redoMineOne     bool
+	createBlockDeadline int
 
 	anchorHeight   abi.ChainEpoch
 	anchorBlkCount int
@@ -261,19 +236,6 @@ func (m *Miner) niceSleep(d time.Duration) bool {
 	}
 }
 
-func (m *Miner) doAnchor(ctx context.Context, height abi.ChainEpoch) {
-	now := time.Now()
-	blkCount, err := m.api.AnchorBlocksCountByHeight(ctx, height)
-	took := time.Since(now)
-	if err == nil {
-		m.anchorHeight = height
-		m.anchorBlkCount = blkCount
-		log.Infof("doAnchor ok, Height %d, blocks:%d, took:%s", m.anchorHeight, m.anchorBlkCount, took)
-	} else {
-		log.Errorf("doAnchor failed :%v, took:%s", err, took)
-	}
-}
-
 // mine runs the mining loop. It performs the following:
 //
 //  1.  Queries our current best currently-known mining candidate (tipset to
@@ -319,7 +281,6 @@ minerLoop:
 		var base *MiningBase
 		var onDone func(bool, abi.ChainEpoch, error)
 		var injectNulls abi.ChainEpoch
-		var anchoWait int = 0
 
 		for {
 			prebase, err := m.GetBestMiningCandidate(ctx)
@@ -333,42 +294,6 @@ minerLoop:
 
 			if base != nil && base.TipSet.Height() == prebase.TipSet.Height() && base.NullRounds == prebase.NullRounds {
 				base = prebase
-
-				if m.waitParentsDelay {
-					btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)+build.PropagationDelaySecs), 0)
-					now := build.Clock.Now()
-					deadline := time.Second * time.Duration(uint64(m.waitParentDeadline))
-					diff := now.Sub(btime)
-					blks := base.TipSet.Blocks()
-
-					// if len(blks) < int(build.BlocksPerEpoch) && diff < deadline {
-					if diff < deadline {
-						expectedHeight := base.TipSet.Height() + base.NullRounds
-						if m.anchorHeight != expectedHeight {
-							m.doAnchor(ctx, expectedHeight)
-							continue
-						}
-
-						if m.anchorHeight != expectedHeight {
-							log.Infof("try to wait more parent blocks, height not match, current:%d != anchor:%d, base.TipSet time diff:%v, will delay %d more",
-								expectedHeight, m.anchorHeight, diff, m.waitParentInterval)
-
-							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
-							anchoWait = anchoWait + 1
-							continue
-						}
-
-						if len(blks) < m.anchorBlkCount {
-							log.Infof("try to wait more parent blocks, blocks not match, current:%d < anchor:%d, base.TipSet time diff:%v, will delay %d more",
-								len(blks), m.anchorBlkCount, diff, m.waitParentInterval)
-
-							m.niceSleep(time.Duration(m.waitParentInterval) * time.Second)
-							anchoWait = anchoWait + 1
-							continue
-						}
-					}
-				}
-
 				break
 			}
 			if base != nil {
@@ -412,7 +337,7 @@ minerLoop:
 			continue
 		}
 
-		b, err := m.mineOne(ctx, base, anchoWait)
+		b, err := m.mineOne(ctx, base)
 		if err != nil {
 			log.Errorf("mining block failed: %+v", err)
 			if !m.niceSleep(time.Second) {
@@ -517,8 +442,7 @@ type WinReport struct {
 	Took    string `json:"took"`
 	Parents int    `json:"parents"`
 
-	AnchorWait int  `json:"anchorWait"`
-	NewBase    bool `json:"rebase"`
+	NewBase bool `json:"rebase"`
 }
 
 // MiningBase is the tipset on top of which we plan to construct our next block.
@@ -577,7 +501,7 @@ func (m *Miner) GetBestMiningCandidate(ctx context.Context) (*MiningBase, error)
 // This method does the following:
 //
 //  1.
-func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (minedBlock *types.BlockMsg, err error) {
+func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *types.BlockMsg, err error) {
 	log.Debugw("attempting to mine a block", "tipset", types.LogCids(base.TipSet.Cids()))
 	tStart := build.Clock.Now()
 
@@ -708,6 +632,20 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (
 
 	tProof := build.Clock.Now()
 
+	// delay more time to wait
+	if m.createBlockDeadline > 0 {
+		btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)), 0)
+		now := build.Clock.Now()
+		deadline := time.Second * time.Duration(uint64(m.createBlockDeadline))
+		diff := now.Sub(btime)
+
+		if diff < deadline {
+			m.niceSleep(deadline - diff)
+		}
+	}
+
+	tHardDelay := build.Clock.Now()
+
 	// check if we have new base
 	var replaceBase bool = false
 	oldbase := *base
@@ -726,6 +664,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (
 		log.Errorf("mineOne GetBestMiningCandidate error:%v", err)
 	}
 
+	tHardReplace := build.Clock.Now()
+
 	// get pending messages early,
 	msgs, err := m.api.MpoolSelect(context.TODO(), base.TipSet.Key(), ticket.Quality())
 	if err != nil {
@@ -735,7 +675,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (
 
 	tPending := build.Clock.Now()
 
-	// TODO: winning post proof
 	minedBlock, err = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs)
 	if err != nil {
 		err = xerrors.Errorf("failed to create block: %w", err)
@@ -751,9 +690,14 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (
 
 	b := minedBlock
 	log.Infow("mined new block", "sector-number", sectorNumber,
-		"cid", b.Cid(), "height", int64(b.Header.Height),
-		"miner", b.Header.Miner, "parents", parentMiners, "parentTipset",
-		base.TipSet.Key().String(), "took", dur)
+		"cid", b.Cid(),
+		"height", int64(b.Header.Height),
+		"miner", b.Header.Miner,
+		"parents", parentMiners,
+		"parentTipset", base.TipSet.Key().String(),
+		"tHardDealy ", tHardDelay.Sub(tProof),
+		"tHardReplace ", tHardReplace.Sub(tHardDelay),
+		"took", dur)
 
 	if len(m.winReportURL) > 0 {
 		wr := WinReport{}
@@ -762,7 +706,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (
 		wr.Height = uint64(b.Header.Height)
 		wr.Took = fmt.Sprintf("%s", dur)
 		wr.Parents = len(parentMiners)
-		wr.AnchorWait = anchorWait
 		wr.NewBase = replaceBase
 		go reportWin(&wr, m.winReportURL)
 	}
@@ -773,7 +716,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase, anchorWait int) (
 			"tTicket ", tTicket.Sub(tPowercheck),
 			"tSeed ", tSeed.Sub(tTicket),
 			"tProof ", tProof.Sub(tSeed),
-			"tPending ", tPending.Sub(tProof),
+			"tHardDealy ", tHardDelay.Sub(tProof),
+			"tHardReplace ", tHardReplace.Sub(tHardDelay),
+			"tPending ", tPending.Sub(tHardReplace),
 			"tCreateBlock ", tCreateBlock.Sub(tPending),
 			"sector-number", sectorNumber,
 		)
