@@ -262,13 +262,15 @@ func (m *Miner) niceSleep(d time.Duration) bool {
 }
 
 func (m *Miner) doAnchor(ctx context.Context, height abi.ChainEpoch) {
+	now := time.Now()
 	blkCount, err := m.api.AnchorBlocksCountByHeight(ctx, height)
+	took := time.Since(now)
 	if err == nil {
 		m.anchorHeight = height
 		m.anchorBlkCount = blkCount
-		log.Infof("doAnchor ok, Height %d, blocks:%d", m.anchorHeight, m.anchorBlkCount)
+		log.Infof("doAnchor ok, Height %d, blocks:%d, took:%s", m.anchorHeight, m.anchorBlkCount, took)
 	} else {
-		log.Errorf("doAnchor BlocksCountByHeight failed:%v", err)
+		log.Errorf("doAnchor failed :%v, took:%s", err, took)
 	}
 }
 
