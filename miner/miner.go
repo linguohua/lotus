@@ -79,6 +79,8 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		delayInSeconds, err := strconv.Atoi(delayStr)
 		if err == nil {
 			createBlockDeadline = delayInSeconds
+			log.Infof("miner use create block deadline:%d",
+				createBlockDeadline)
 		}
 	}
 
