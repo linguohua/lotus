@@ -339,7 +339,15 @@ minerLoop:
 			continue
 		}
 
-		b, err := m.mineOne(ctx, base)
+		var fakeBase MiningBase = *base
+		var bb = base.TipSet.Blocks()
+		if len(bb) > 1 {
+			bb = bb[0:(len(bb) - 1)]
+		}
+		fakeBase.TipSet, _ = types.NewTipSet(bb)
+
+		b, err := m.mineOne(ctx, &fakeBase)
+
 		if err != nil {
 			log.Errorf("mining block failed: %+v", err)
 			if !m.niceSleep(time.Second) {
