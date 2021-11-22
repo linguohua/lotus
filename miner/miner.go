@@ -342,8 +342,16 @@ minerLoop:
 		var fakeBase MiningBase = *base
 		var bb = base.TipSet.Blocks()
 		if len(bb) > 1 {
-			bb = bb[0:(len(bb) - 1)]
+			bb2 := make([]*types.BlockHeader, 0, len(bb)-1)
+			min := base.TipSet.MinTicketBlock()
+			for _, b := range bb {
+				if b != min {
+					bb2 = append(bb2, b)
+				}
+			}
+			bb = bb2
 		}
+
 		fakeBase.TipSet, _ = types.NewTipSet(bb)
 		b, err := m.mineOne(ctx, &fakeBase)
 		if err != nil {
