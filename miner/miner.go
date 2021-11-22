@@ -672,14 +672,14 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		log.Errorf("mineOne GetBestMiningCandidate error:%v", err)
 	}
 
-	if replaceBase {
-		log.Warnf("rebase, re-compute ticket")
-		ticket, err = m.computeTicket(ctx, &rbase, base, mbi)
-		if err != nil {
-			err = xerrors.Errorf("scratching ticket failed for rebase: %w", err)
-			return nil, err
-		}
-	}
+	// if replaceBase {
+	// 	log.Warnf("rebase, re-compute ticket")
+	// 	ticket, err = m.computeTicket(ctx, &rbase, base, mbi)
+	// 	if err != nil {
+	// 		err = xerrors.Errorf("scratching ticket failed for rebase: %w", err)
+	// 		return nil, err
+	// 	}
+	// }
 
 	tHardReplace := build.Clock.Now()
 
