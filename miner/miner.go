@@ -657,7 +657,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		nblks := newBase.TipSet.Blocks()
 		oheight := (oldbase.TipSet.Height() + oldbase.NullRounds)
 		if len(oblks) != len(nblks) && oheight == (newBase.TipSet.Height()+newBase.NullRounds) {
-			log.Warnf("old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
+			log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
 			// replace with new base
 			base = newBase
 			replaceBase = true
@@ -667,6 +667,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	}
 
 	if replaceBase {
+		log.Warnf("rebase, re-compute ticket")
 		ticket, err = m.computeTicket(ctx, &rbase, base, mbi)
 		if err != nil {
 			err = xerrors.Errorf("scratching ticket failed for rebase: %w", err)
