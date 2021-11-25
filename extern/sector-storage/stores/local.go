@@ -35,7 +35,7 @@ type StoragePath struct {
 type LocalStorageMeta struct {
 	GroupID string
 
-	// when as sealing storage, how many sealing instances can this storage support
+	// how many sector instances can this storage allow
 	MaxSealingSectors int
 
 	ID ID

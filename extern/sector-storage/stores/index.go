@@ -123,7 +123,7 @@ func NewIndex() *Index {
 	}
 }
 
-func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID, ft storiface.SectorFileType) (StorageInfo, error) {
+func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.SectorFileType) (StorageInfo, error) {
 	log.Debugf("allocStorageForFinalize: sector %s, ft:%d", sector, ft)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 	for _, fileType := range storiface.PathTypes {
@@ -140,6 +140,7 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 					log.Debugf("allocStorageForFinalize found sector: %d bind to storage %s, path:%v , filetype:%d, return it",
 						sector, s.info.ID, s.info.URLs, ft)
 
+					// already allocated
 					return *s.info, nil
 				}
 			}
@@ -157,6 +158,13 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 
 		// readonly storage
 		if p.info.Weight == 0 {
+			continue
+		}
+
+		// user set limit
+		if p.info.MaxSealingSectors > 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
+			log.Debugf("allocStorageForFinalize not allocating on %s,  sector count exceed MaxSealingSectors %d",
+				p.info.ID, p.info.MaxSealingSectors)
 			continue
 		}
 
@@ -182,7 +190,7 @@ func (i *Index) allocStorageForFinalize(ctx context.Context, sector abi.SectorID
 
 	// random select one
 	candidate := candidateSelect(candidates)
-	if candidate.info.MaxSealingSectors != 0 {
+	if candidate.info.MaxSealingSectors > 0 {
 		candidate.bindSectors[sector] = struct{}{}
 	}
 
@@ -227,9 +235,13 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storifac
 		log.Debugf("TryBindSector2SealStorage worker pathType is PathStorage, sector:%s, return a storage path", sector)
 
 		// just continue
-		return i.allocStorageForFinalize(ctx, sector, fileType)
+		return i.allocStorageForFinalize(sector, fileType)
 	}
 
+	return i.allocStorageForSealing(sector, groupID)
+}
+
+func (i *Index) allocStorageForSealing(sector abi.SectorID, groupID string) (StorageInfo, error) {
 	var candidates []*storageEntry
 	for _, p := range i.stores {
 		// only bind to sealing storage
@@ -251,7 +263,7 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storifac
 			continue
 		}
 
-		if p.info.MaxSealingSectors != 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
+		if p.info.MaxSealingSectors > 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
 			_, ok := p.bindSectors[sector]
 			if ok {
 				// log.Infof("TryBindSector2SealStorage bind ok, already bind: sector %s, storage ID:%s",
@@ -286,7 +298,8 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storifac
 
 	// random select one
 	candidate := candidates[rand.Int()%len(candidates)]
-	if candidate.info.MaxSealingSectors != 0 {
+	if candidate.info.MaxSealingSectors > 0 {
+		// early bind
 		candidate.bindSectors[sector] = struct{}{}
 	}
 
@@ -299,22 +312,22 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storifac
 }
 
 func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
-	log.Debugf("UnBindSector2SealStorage: %s", sector)
+	log.Errorf("UnBindSector2SealStorage: %s is not implemented", sector)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 
-	i.lk.Lock()
-	defer i.lk.Unlock()
+	// i.lk.Lock()
+	// defer i.lk.Unlock()
 
-	for _, p := range i.stores {
-		_, ok := p.bindSectors[sector]
-		if ok {
-			delete(p.bindSectors, sector)
-			log.Debugf("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
-			return nil
-		}
-	}
+	// for _, p := range i.stores {
+	// 	_, ok := p.bindSectors[sector]
+	// 	if ok {
+	// 		delete(p.bindSectors, sector)
+	// 		log.Debugf("UnBindSector2SealStorage ok: sector %s, storage ID:%s", sector, p.info.ID)
+	// 		return nil
+	// 	}
+	// }
 
-	log.Debugf("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
+	// log.Debugf("UnBindSector2SealStorage ok: sector %s not yet bind to any storage", sector)
 	return nil
 }
 
@@ -374,15 +387,16 @@ func (i *Index) StorageAttach(ctx context.Context, si StorageInfo, st fsutil.FsS
 		// 		i.stores[si.ID].info.URLs = append(i.stores[si.ID].info.URLs, u)
 		// 	}
 
-		i.stores[si.ID].info.URLs = si.URLs
-		i.stores[si.ID].info.Weight = si.Weight
-		i.stores[si.ID].info.MaxStorage = si.MaxStorage
-		i.stores[si.ID].info.CanSeal = si.CanSeal
-		i.stores[si.ID].info.CanStore = si.CanStore
-		i.stores[si.ID].info.GroupID = si.GroupID
-		i.stores[si.ID].info.MaxSealingSectors = si.MaxSealingSectors
+		var s = i.stores[si.ID]
+		s.info.URLs = si.URLs
+		s.info.Weight = si.Weight
+		s.info.MaxStorage = si.MaxStorage
+		s.info.CanSeal = si.CanSeal
+		s.info.CanStore = si.CanStore
+		s.info.GroupID = si.GroupID
+		s.info.MaxSealingSectors = si.MaxSealingSectors
 		// clear bind sectors
-		i.stores[si.ID].bindSectors = make(map[abi.SectorID]struct{})
+		s.bindSectors = make(map[abi.SectorID]struct{})
 
 		return nil
 	}
@@ -504,20 +518,8 @@ loop:
 	}
 
 	store, exist := i.stores[storageID]
-	if exist && store.info.GroupID != "" {
-		// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
-		_, ok := store.bindSectors[s]
-		if ok {
-			log.Infof("sector %v declared in %s, store already bind to it", s, storageID)
-		} else {
-			if len(store.bindSectors) < store.info.MaxSealingSectors {
-				store.bindSectors[s] = struct{}{}
-				log.Infof("sector %v declared in %s, re-bind store to sector", s, storageID)
-			} else {
-				log.Errorf("sector %v declared in %s, but store has bind fulled",
-					s, storageID)
-			}
-		}
+	if exist {
+		store.bindSectors[s] = struct{}{}
 	}
 
 	return nil
@@ -556,17 +558,8 @@ func (i *Index) StorageDropSector(ctx context.Context, storageID ID, s abi.Secto
 
 	// only remove bind when release sealed
 	store, exist := i.stores[storageID]
-	if exist && store.info.GroupID != "" {
-		// NOTE: store.info.GroupID != "" means store.info.MaxSealingSectors > 0
-		_, ok := store.bindSectors[s]
-		if ok {
-			log.Infof("sector %v drop in %s, unbind",
-				s, storageID)
-			delete(store.bindSectors, s)
-		} else {
-			log.Infof("sector %v drop in %s, but store has not bind to it",
-				s, storageID)
-		}
+	if exist {
+		delete(store.bindSectors, s)
 	}
 
 	return nil
@@ -729,7 +722,7 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 			continue
 		}
 
-		if p.info.MaxSealingSectors != 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
+		if p.info.MaxSealingSectors > 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
 			//log.Debugf("not allocating on %s, it already bind full", p.info.ID)
 			continue
 		}

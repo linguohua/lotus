@@ -107,8 +107,8 @@ var storageAttachCmd = &cli.Command{
 				return xerrors.Errorf("worker manage storage must specify group id")
 			}
 
-			maxSealingSectors := cctx.Int("maxsealing")
-			if maxSealingSectors < 1 {
+			MaxSealingSectors := cctx.Int("maxsealing")
+			if MaxSealingSectors < 1 {
 				return xerrors.Errorf("worker manage storage must specify maxsealing > 0")
 			}
 
@@ -119,7 +119,7 @@ var storageAttachCmd = &cli.Command{
 				CanStore:          cctx.Bool("store"),
 				MaxStorage:        uint64(maxStor),
 				GroupID:           groupID,
-				MaxSealingSectors: maxSealingSectors,
+				MaxSealingSectors: MaxSealingSectors,
 			}
 
 			if !(cfg.CanStore || cfg.CanSeal) {

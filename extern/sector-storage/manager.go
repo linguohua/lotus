@@ -673,7 +673,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	// }
 
 	// lingh: release seal storage
-	m.index.UnBindSector2SealStorage(ctx, sector.ID)
+	// m.index.UnBindSector2SealStorage(ctx, sector.ID)
 
 	return nil
 }
@@ -703,9 +703,9 @@ func (m *Manager) Remove(ctx context.Context, sector storage.SectorRef) error {
 		err = multierror.Append(err, xerrors.Errorf("removing sector (unsealed): %w", rerr))
 	}
 
-	if err == nil {
-		m.index.UnBindSector2SealStorage(ctx, sector.ID)
-	}
+	// if err == nil {
+	// 	m.index.UnBindSector2SealStorage(ctx, sector.ID)
+	// }
 
 	return err
 }
