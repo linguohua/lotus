@@ -468,7 +468,7 @@ func TestReader(t *testing.T) {
 				tc.indexFnc(index, tc.serverUrl)
 			}
 
-			remoteStore := stores.NewRemote(lstore, index, nil, 6000, pfhandler)
+			remoteStore := stores.NewRemote(lstore, index, nil, 6000, pfhandler, "")
 
 			rd, err := remoteStore.Reader(ctx, sectorRef, offset, size)
 

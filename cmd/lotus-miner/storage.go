@@ -148,6 +148,10 @@ over time
 				return xerrors.Errorf("must specify at least one of --store or --seal")
 			}
 
+			if cfg.CanSeal {
+				return xerrors.Errorf("miner storage should not can-seal, only worker storage can-seal")
+			}
+
 			b, err := json.MarshalIndent(cfg, "", "  ")
 			if err != nil {
 				return xerrors.Errorf("marshaling storage config: %w", err)
@@ -252,7 +256,7 @@ var storageListCmd = &cli.Command{
 			var barCols = int64(50)
 
 			// filesystem use bar
-			{
+			if st.Capacity > 0 {
 				usedPercent := (st.Capacity - st.FSAvailable) * 100 / st.Capacity
 
 				percCol := color.FgGreen
@@ -350,6 +354,8 @@ type storedSector struct {
 	store stores.SectorStorageInfo
 
 	unsealed, sealed, cache bool
+
+	index int
 }
 
 var storageFindCmd = &cli.Command{
@@ -415,7 +421,7 @@ var storageFindCmd = &cli.Command{
 			}
 			sts.unsealed = true
 		}
-		for _, info := range s {
+		for i, info := range s {
 			sts, ok := byId[info.ID]
 			if !ok {
 				sts = &storedSector{
@@ -425,6 +431,7 @@ var storageFindCmd = &cli.Command{
 				byId[info.ID] = sts
 			}
 			sts.sealed = true
+			sts.index = i
 		}
 		for _, info := range c {
 			sts, ok := byId[info.ID]
@@ -448,7 +455,7 @@ var storageFindCmd = &cli.Command{
 			out = append(out, sector)
 		}
 		sort.Slice(out, func(i, j int) bool {
-			return out[i].id < out[j].id
+			return out[i].index < out[j].index
 		})
 
 		for _, info := range out {

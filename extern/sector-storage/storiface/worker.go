@@ -24,21 +24,77 @@ type WorkerInfo struct {
 	// Default should be false (zero value, i.e. resources taken into account).
 	IgnoreResources bool
 	Resources       WorkerResources
+
+	GroupID string
 }
 
 type WorkerResources struct {
-	MemPhysical uint64
-	MemSwap     uint64
+	//MemPhysical uint64
+	//MemSwap     uint64
 
-	MemReserved uint64 // Used by system / other processes
+	//MemReserved uint64 // Used by system / other processes
 
-	CPUs uint64 // Logical cores
-	GPUs []string
+	//CPUs uint64 // Logical cores
+	//GPUs []string
+	P1  uint32
+	P2  uint32
+	C1  uint32
+	C2  uint32
+	AP  uint32
+	FIN uint32
+}
+
+func (wr *WorkerResources) Windows() uint32 {
+	return wr.P1 + wr.P2 + wr.C1 + wr.C2 + wr.AP + wr.FIN
+}
+
+func (wr *WorkerResources) ValidTaskType() ([]sealtasks.TaskType, []uint32) {
+	tt := make([]sealtasks.TaskType, 0, 6)
+	counts := make([]uint32, 0, 6)
+	if wr.P1 > 0 {
+		tt = append(tt, sealtasks.TTPreCommit1)
+		counts = append(counts, wr.P1)
+	}
+
+	if wr.P2 > 0 {
+		tt = append(tt, sealtasks.TTPreCommit2)
+		counts = append(counts, wr.P2)
+	}
+
+	if wr.C1 > 0 {
+		tt = append(tt, sealtasks.TTCommit1)
+		counts = append(counts, wr.C1)
+	}
+
+	if wr.C2 > 0 {
+		tt = append(tt, sealtasks.TTCommit2)
+		counts = append(counts, wr.C2)
+	}
+
+	if wr.AP > 0 {
+		tt = append(tt, sealtasks.TTAddPiece)
+		counts = append(counts, wr.AP)
+	}
+
+	if wr.FIN > 0 {
+		tt = append(tt, sealtasks.TTFinalize)
+		counts = append(counts, wr.FIN)
+	}
+
+	return tt, counts
 }
 
 type WorkerStats struct {
 	Info    WorkerInfo
 	Enabled bool
+
+	TaskTypes  []sealtasks.TaskType
+	TaskCounts []uint32
+
+	Url  string
+	UUID string
+
+	Paused string
 
 	MemUsedMin uint64
 	MemUsedMax uint64

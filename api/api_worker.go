@@ -28,9 +28,10 @@ type Worker interface {
 	Version(context.Context) (Version, error) //perm:admin
 
 	// TaskType -> Weight
-	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error) //perm:admin
-	Paths(context.Context) ([]stores.StoragePath, error)                //perm:admin
-	Info(context.Context) (storiface.WorkerInfo, error)                 //perm:admin
+	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error)          //perm:admin
+	Paths(context.Context) ([]stores.StoragePath, error)                         //perm:admin
+	Info(context.Context) (storiface.WorkerInfo, error)                          //perm:admin
+	HasResourceForNewTask(ctx context.Context, tasktype sealtasks.TaskType) bool //perm:admin
 
 	// storiface.WorkerCalls
 	AddPiece(ctx context.Context, sector storage.SectorRef, pieceSizes []abi.UnpaddedPieceSize, newPieceSize abi.UnpaddedPieceSize, pieceData storage.Data) (storiface.CallID, error)                    //perm:admin

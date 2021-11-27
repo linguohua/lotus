@@ -97,13 +97,14 @@ func GetAPIInfo(ctx *cli.Context, t repo.RepoType) (APIInfo, error) {
 	// Check if there was a flag passed with the listen address of the API
 	// server (only used by the tests)
 	apiFlags := flagsForAPI(t)
+	log.Debugf("GetAPIInfo, first try apiFlags:%s from command line", apiFlags)
 	for _, f := range apiFlags {
 		if !ctx.IsSet(f) {
 			continue
 		}
 		strma := ctx.String(f)
 		strma = strings.TrimSpace(strma)
-
+		log.Debugf("GetAPIInfo, use command line :%s", strma)
 		return APIInfo{Addr: strma}, nil
 	}
 
@@ -112,8 +113,10 @@ func GetAPIInfo(ctx *cli.Context, t repo.RepoType) (APIInfo, error) {
 	// CLI flags (repo flags below).
 	//
 	primaryEnv, fallbacksEnvs, deprecatedEnvs := EnvsForAPIInfos(t)
+	log.Debugf("GetAPIInfo, second try primaryEnv:%s from env", primaryEnv)
 	env, ok := os.LookupEnv(primaryEnv)
 	if ok {
+		log.Debugf("GetAPIInfo, use env :%s", env)
 		return ParseApiInfo(env), nil
 	}
 
@@ -126,6 +129,7 @@ func GetAPIInfo(ctx *cli.Context, t repo.RepoType) (APIInfo, error) {
 	}
 
 	repoFlags := flagsForRepo(t)
+	log.Debugf("GetAPIInfo, third try repoFlags:%s from local dir", repoFlags)
 	for _, f := range repoFlags {
 		// cannot use ctx.IsSet because it ignores default values
 		path := ctx.String(f)
@@ -162,6 +166,7 @@ func GetAPIInfo(ctx *cli.Context, t repo.RepoType) (APIInfo, error) {
 			log.Warnf("Couldn't load CLI token, capabilities may be limited: %v", err)
 		}
 
+		log.Debugf("GetAPIInfo, use local repo ma:%s , token:%s", ma.String(), token)
 		return APIInfo{
 			Addr:  ma.String(),
 			Token: token,

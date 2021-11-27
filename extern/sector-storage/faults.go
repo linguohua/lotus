@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
+	"time"
 
 	"golang.org/x/xerrors"
 
@@ -20,6 +23,7 @@ import (
 // FaultTracker TODO: Track things more actively
 type FaultTracker interface {
 	CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef, rg storiface.RGetter) (map[abi.SectorID]string, error)
+	CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorID]string, error)
 }
 
 // CheckProvable returns unprovable sectors
@@ -31,11 +35,20 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 		return nil, err
 	}
 
+	var logLarge = os.Getenv("FIL_PROOFS_LOG_CHECK_SECTOR") == "true"
+
 	// TODO: More better checks
 	for _, sector := range sectors {
 		err := func() error {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
+
+			err := m.localStore.DiscoverSectorStore(ctx, sector.ID)
+			if err != nil {
+				log.Warnw("CheckProvable Sector FAULT: DiscoverSectorStore in checkProvable", "sector", sector, "error", err)
+				bad[sector.ID] = fmt.Sprintf("acquire sector failed: %s", err)
+				return nil
+			}
 
 			locked, err := m.index.StorageTryLock(ctx, sector.ID, storiface.FTSealed|storiface.FTCache, storiface.FTNone)
 			if err != nil {
@@ -68,6 +81,7 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 
 			addCachePathsForSectorSize(toCheck, lp.Cache, ssize)
 
+			start := time.Now()
 			for p, sz := range toCheck {
 				st, err := os.Stat(p)
 				if err != nil {
@@ -82,6 +96,13 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 						bad[sector.ID] = fmt.Sprintf("%s is wrong size (got %d, expect %d)", p, st.Size(), int64(ssize)*sz)
 						return nil
 					}
+				}
+			}
+
+			if logLarge {
+				var elapsed = time.Since(start)
+				if elapsed >= time.Second {
+					log.Warnw("CheckProvable Sector LARGE delay", "elapsed", elapsed, "sector", sector, "sealed", lp.Sealed, "cache", lp.Cache)
 				}
 			}
 
@@ -136,6 +157,67 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 	}
 
 	return bad, nil
+}
+
+func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorID]string, error) {
+	result := make(map[abi.SectorID]string)
+	if len(sectors) < 1 {
+		return result, nil
+	}
+
+	var numCPU = runtime.NumCPU()
+	var chunkSize = len(sectors) / numCPU
+	if chunkSize < 1 {
+		chunkSize = 1
+	}
+
+	var begin = 0
+	var index = 0
+	var chunkCnt = len(sectors)/chunkSize + 1
+	var wg sync.WaitGroup
+	var bads = make([]map[abi.SectorID]string, chunkCnt)
+	var errs = make([]error, chunkCnt)
+
+	for {
+		var end = begin + chunkSize
+		if end > len(sectors) {
+			end = len(sectors)
+		}
+
+		var sectorsSplit = sectors[begin:end]
+		var ix = index
+		wg.Add(1)
+
+		go func() {
+			bad, err := m.CheckProvable(ctx, pp, sectorsSplit, nil)
+			bads[ix] = bad
+			errs[ix] = err
+
+			wg.Done()
+		}()
+
+		index = index + 1
+		begin = end
+
+		if begin >= len(sectors) {
+			break
+		}
+	}
+
+	wg.Wait()
+	for _, e := range errs {
+		if e != nil {
+			return result, e
+		}
+	}
+
+	for _, m := range bads {
+		for k, v := range m {
+			result[k] = v
+		}
+	}
+
+	return result, nil
 }
 
 func addCachePathsForSectorSize(chk map[string]int64, cacheDir string, ssize abi.SectorSize) {
