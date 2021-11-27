@@ -34,7 +34,7 @@ type Remote struct {
 	// fetchLk  sync.Mutex
 	// fetching map[abi.SectorID]chan struct{}
 
-	pfHandler partialFileHandler
+	pfHandler PartialFileHandler
 
 	//fetchLk  sync.Mutex
 	//fetching map[abi.SectorID]chan struct{}
@@ -49,7 +49,7 @@ func (r *Remote) RemoveCopies(ctx context.Context, s abi.SectorID, types storifa
 	return r.local.RemoveCopies(ctx, s, types)
 }
 
-func NewRemote(local Store, index SectorIndex, auth http.Header, fetchLimit int, pfHandler partialFileHandler, groupID string) *Remote {
+func NewRemote(local Store, index SectorIndex, auth http.Header, fetchLimit int, pfHandler PartialFileHandler, groupID string) *Remote {
 	return &Remote{
 		local:   local,
 		index:   index,
@@ -405,8 +405,13 @@ storeLoop:
 	return nil
 }
 
-func (r *Remote) deleteFromRemote(ctx context.Context, url string) error {
-	log.Debugf("Delete %s", url)
+func (r *Remote) deleteFromRemote(ctx context.Context, url string, keepIn *ID) error {
+	if keepIn != nil {
+		url = url + "?keep=" + string(*keepIn)
+	}
+
+	log.Infof("Delete %s", url)
+
 	// req, err := http.NewRequest("DELETE", url, nil)
 	// if err != nil {
 	// 	return xerrors.Errorf("request: %w", err)
@@ -424,6 +429,7 @@ func (r *Remote) deleteFromRemote(ctx context.Context, url string) error {
 	// 	return xerrors.Errorf("non-200 code: %d", resp.StatusCode)
 	// }
 	log.Debugf("-lin- this version not support Delete %s", url)
+
 	return nil
 }
 
