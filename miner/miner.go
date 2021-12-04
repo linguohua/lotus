@@ -655,8 +655,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	if err == nil {
 		oblks := oldbase.TipSet.Blocks()
 		nblks := newBase.TipSet.Blocks()
-		oheight := (oldbase.TipSet.Height() + oldbase.NullRounds)
-		if len(oblks) != len(nblks) && oheight == (newBase.TipSet.Height()+newBase.NullRounds) {
+
+		oheight := oldbase.TipSet.Height()
+		onull := oldbase.NullRounds
+		nheight := newBase.TipSet.Height()
+		nnull := newBase.NullRounds
+		if len(oblks) != len(nblks) && oheight == nheight && onull == nnull {
 			log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
 			// replace with new base
 			base = newBase
