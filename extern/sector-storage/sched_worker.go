@@ -621,7 +621,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 			// w.lk.Lock()
 			// w.preparing.free(w.info.Resources, needRes)
 			// w.lk.Unlock()
-			sh.workersLk.Unlock()
+			// sh.workersLk.Unlock()
 			// release window
 			sw.releaseWindowOfTasktype(window.todo.taskType)
 
