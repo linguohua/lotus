@@ -112,8 +112,8 @@ type workerHandle struct {
 
 	info storiface.WorkerInfo
 
-	acceptTaskTypes     []sealtasks.TaskType
-	taskTypeValidcounts []uint32
+	acceptTaskTypes  []sealtasks.TaskType
+	taskTypeCounters []uint32
 
 	//preparing *activeResources
 	//active *activeResources
@@ -123,7 +123,7 @@ type workerHandle struct {
 	wndLk         sync.Mutex // can be taken inside sched.workersLk.RLock
 	activeWindows []*schedWindow
 	// count all request windows
-	requestedWindowsCounter map[sealtasks.TaskType]int
+	windowCounters map[sealtasks.TaskType]int
 
 	paused map[sealtasks.TaskType]struct{}
 
@@ -919,32 +919,32 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 			groupID, f1bucket.atomicTikets)
 	}
 
-	for wnd, windowRequest := range openWindowsTT {
-		worker, ok := sh.workers[windowRequest.worker]
+	for wndIdx, availableWindow := range openWindowsTT {
+		worker, ok := sh.workers[availableWindow.worker]
 		if !ok {
 			log.Errorf("worker referenced by windowRequest not found (worker: %s)",
-				windowRequest.worker)
+				availableWindow.worker)
 			// TODO: How to move forward here?
 			continue
 		}
 
 		if !worker.enabled {
-			log.Debugw("skipping disabled worker", "worker", windowRequest.worker)
+			log.Debugw("skipping disabled worker", "worker", availableWindow.worker)
 			continue
 		}
 
 		if _, paused := worker.paused[taskType]; paused {
-			log.Debugw("skipping paused worker", "worker", windowRequest.worker)
+			log.Debugw("skipping paused worker", "worker", availableWindow.worker)
 			continue
 		}
 
-		if taskType == sealtasks.TTCommit2 && windowRequest.groupID != "" {
+		if taskType == sealtasks.TTCommit2 && availableWindow.groupID != "" {
 			// check if group has P2, then P2 first
-			g, kk := sh.openWindowGroups[windowRequest.groupID]
+			g, kk := sh.openWindowGroups[availableWindow.groupID]
 			if kk {
 				p2Tasks, hasP2 := g.tasks[sealtasks.TTPreCommit2]
 				if hasP2 && len(p2Tasks) > 0 {
-					log.Debugf("C2 skipping worker that has P2 task, group:%s", windowRequest.groupID)
+					log.Debugf("C2 skipping worker that has P2 task, group:%s", availableWindow.groupID)
 					continue
 				}
 			}
@@ -956,7 +956,7 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 		if err != nil {
 			log.Errorf("trySched(1) sector:%d, group:%s, task-type:%s, req.sel.Ok error: %+v",
 				schReq.sector.ID.Number,
-				windowRequest.groupID, taskType, err)
+				availableWindow.groupID, taskType, err)
 			continue
 		}
 
@@ -967,26 +967,26 @@ func (sh *scheduler) trySchedReq(schReq *workerRequest, groupID string,
 
 		log.Debugf("SCHED assign sector %d to window %d, group:%s, task-type:%s",
 			schReq.sector.ID.Number,
-			wnd, windowRequest.groupID, schReq.taskType)
+			wndIdx, availableWindow.groupID, schReq.taskType)
 
 		window := schedWindow{
 			todo:    schReq,
-			groupID: windowRequest.groupID,
+			groupID: availableWindow.groupID,
 		}
 
 		select {
-		case windowRequest.done <- &window:
+		case availableWindow.done <- &window:
 		default:
 			log.Errorf("expected sh.openWindows[wnd].done to be buffered, sector %d to window %d, group:%s, task-type:%s",
 				schReq.sector.ID.Number,
-				wnd, windowRequest.groupID, schReq.taskType)
+				wndIdx, availableWindow.groupID, schReq.taskType)
 			// found next available window
 			continue
 		}
 
 		// done, remove that open window
 		l := len(openWindowsTT)
-		openWindowsTT[l-1], openWindowsTT[wnd] = openWindowsTT[wnd], openWindowsTT[l-1]
+		openWindowsTT[l-1], openWindowsTT[wndIdx] = openWindowsTT[wndIdx], openWindowsTT[l-1]
 		// update windows
 		result = true
 		windows = openWindowsTT[0:(l - 1)]

@@ -748,7 +748,7 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 	}
 
 	if len(candidates) == 0 {
-		log.Debugf("StorageBestAlloc, no good path found found")
+		log.Debugf("StorageBestAlloc, no good path found")
 		return nil, nil
 	}
 

@@ -46,13 +46,14 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 		return xerrors.Errorf("worker already closed")
 	}
 
-	acceptTaskTypes, taskTypeValidcounts := info.Resources.ValidTaskType()
+	acceptTaskTypes, taskTypeCounters := info.Resources.ValidTaskType()
 	worker := &workerHandle{
 		workerRpc: w,
 		info:      info,
 
-		acceptTaskTypes:     acceptTaskTypes,
-		taskTypeValidcounts: taskTypeValidcounts,
+		acceptTaskTypes:  acceptTaskTypes,
+		taskTypeCounters: taskTypeCounters,
+
 		//preparing: &activeResources{},
 		//active:  &activeResources{},
 		enabled: true,
@@ -62,7 +63,7 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker, url string) error 
 		closingMgr: make(chan struct{}),
 		closedMgr:  make(chan struct{}),
 
-		requestedWindowsCounter: make(map[sealtasks.TaskType]int),
+		windowCounters: make(map[sealtasks.TaskType]int),
 	}
 
 	wid := WorkerID(sessID)
@@ -280,7 +281,7 @@ func (sw *schedWorker) handleWorker() {
 
 			// ask for more windows if we need them (non-blocking)
 			if enabled {
-				if !sw.requestWindows() {
+				if !sw.fillWindows() {
 					return // graceful shutdown
 				}
 			}
@@ -367,7 +368,7 @@ func (sw *schedWorker) disable(ctx context.Context) error {
 	}
 
 	sw.worker.activeWindows = sw.worker.activeWindows[:0]
-	sw.worker.requestedWindowsCounter = make(map[sealtasks.TaskType]int)
+	sw.worker.windowCounters = make(map[sealtasks.TaskType]int)
 
 	return nil
 }
@@ -425,8 +426,8 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 	}
 }
 
-func (sw *schedWorker) requestWindowsByTasktype(taskType sealtasks.TaskType, i int) bool {
-	log.Infof("schedWorker.requestWindowsByTasktype task type:%s, window count:%d, worker url:%s", taskType, i, sw.worker.url)
+func (sw *schedWorker) fillWindowsByTasktype(taskType sealtasks.TaskType, i int) bool {
+	log.Infof("schedWorker.fillWindowsByTasktype task type:%s, window count:%d, worker url:%s", taskType, i, sw.worker.url)
 	for idx := 0; idx < i; idx++ {
 		select {
 		case sw.sched.windowRequests <- &schedWindowRequest{
@@ -446,28 +447,28 @@ func (sw *schedWorker) requestWindowsByTasktype(taskType sealtasks.TaskType, i i
 
 func (sw *schedWorker) releaseWindowOfTasktype(taskType sealtasks.TaskType) {
 	sw.worker.wndLk.Lock()
-	count, _ := sw.worker.requestedWindowsCounter[taskType]
+	count, _ := sw.worker.windowCounters[taskType]
 	count = count - 1
 	if count < 0 {
 		count = 0
 	}
-	sw.worker.requestedWindowsCounter[taskType] = count
+	sw.worker.windowCounters[taskType] = count
 	sw.worker.wndLk.Unlock()
 }
 
-func (sw *schedWorker) requestWindows() bool {
+func (sw *schedWorker) fillWindows() bool {
 	// acceptTaskType, validcounts := sw.worker.info.Resources.ValidTaskType()
 	for i, t := range sw.worker.acceptTaskTypes {
-		x := sw.worker.taskTypeValidcounts[i]
+		x := sw.worker.taskTypeCounters[i]
 
 		sw.worker.wndLk.Lock()
-		count, _ := sw.worker.requestedWindowsCounter[t]
+		count, _ := sw.worker.windowCounters[t]
 		diff := int(x) - count
-		sw.worker.requestedWindowsCounter[t] = count + diff
+		sw.worker.windowCounters[t] = count + diff
 		sw.worker.wndLk.Unlock()
 
 		if diff > 0 {
-			b := sw.requestWindowsByTasktype(t, diff)
+			b := sw.fillWindowsByTasktype(t, diff)
 			if !b {
 				return false
 			}
@@ -614,6 +615,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 	go func() {
 		// first run the prepare step (e.g. fetching sector data from other worker)
 		req := window.todo
+		log.Debugf("startProcessingTask call prepare %d", req.sector.ID.Number)
 		err := req.prepare(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
 		//sh.workersLk.Lock()
 
@@ -665,6 +667,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 			return nil
 		}
 
+		log.Debugf("startProcessingTask call dowork %d", req.sector.ID.Number)
 		err = dowork()
 		//sh.workersLk.Unlock()
 
