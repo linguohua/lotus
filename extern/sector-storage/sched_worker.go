@@ -615,8 +615,10 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 	go func() {
 		// first run the prepare step (e.g. fetching sector data from other worker)
 		req := window.todo
-		log.Debugf("startProcessingTask call prepare %d", req.sector.ID.Number)
-		err := req.prepare(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
+		//log.Debugf("startProcessingTask call prepare %d", req.sector.ID.Number)
+		tw := sh.workTracker.worker(sw.wid, w.info, w.workerRpc)
+		tw.start()
+		err := req.prepare(req.ctx, tw)
 		//sh.workersLk.Lock()
 
 		if err != nil {
@@ -648,7 +650,9 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 
 		dowork := func() error {
 			// Do the work!
-			err = req.work(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
+			tw := sh.workTracker.worker(sw.wid, w.info, w.workerRpc)
+			tw.start()
+			err = req.work(req.ctx, tw)
 
 			select {
 			case req.ret <- workerResponse{err: err}:
@@ -667,7 +671,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 			return nil
 		}
 
-		log.Debugf("startProcessingTask call dowork %d", req.sector.ID.Number)
+		//log.Debugf("startProcessingTask call dowork %d", req.sector.ID.Number)
 		err = dowork()
 		//sh.workersLk.Unlock()
 
