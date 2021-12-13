@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,10 +93,24 @@ type LocalWorker struct {
 	// p2, c2 exclusive
 	p2c2Semaphore *semaphore.Weighted
 	// p1 exclusive
-	p1Mutex sync.Mutex
+	p1Semaphore *semaphore.Weighted
 
 	role    string
 	c2Count int
+}
+
+func loadP1CountFromEnv() int {
+	if os.Getenv("FIL_PROOFS_STEP_STYLE") != "true" {
+		return 1
+	}
+
+	stepsEnv := os.Getenv("FIL_PROOFS_STEPS")
+	if len(stepsEnv) < 1 {
+		log.Fatal("FIL_PROOFS_STEPS should be configured when FIL_PROOFS_STEP_STYLE=true")
+	}
+
+	steps := strings.Split(stepsEnv, ",")
+	return len(steps)
 }
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
@@ -213,6 +228,14 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		} else {
 			log.Infof("LocalWorker.New role is P1, try allocate completed: ", err)
 		}
+
+		// parse p1 count
+		var p1Count = loadP1CountFromEnv()
+		log.Infof("worker use P1 count:%d", p1Count)
+		// reset P1 count
+		parallelConfig[sealtasks.TTPreCommit1] = uint32(p1Count)
+		// new P1 semaphore
+		w.p1Semaphore = semaphore.NewWeighted(int64(p1Count))
 	}
 
 	// if w.role == "C2" || w.role == "P2C2" {
@@ -573,12 +596,14 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 		}
 
 		// lock P1 mutex
-		l.p1Mutex.Lock()
+		err = l.p1Semaphore.Acquire(context.TODO(), 1)
+		if err != nil {
+			return nil, err
+		}
+		defer l.p1Semaphore.Release(1)
+
 		l.counterTask(sealtasks.TTPreCommit1, 1)
-		defer func() {
-			l.p1Mutex.Unlock()
-			l.counterTask(sealtasks.TTPreCommit1, -1)
-		}()
+		defer l.counterTask(sealtasks.TTPreCommit1, -1)
 
 		return sb.SealPreCommit1(ctx, sector, ticket, pieces)
 	})
