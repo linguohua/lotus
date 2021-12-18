@@ -96,6 +96,10 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 				return err
 			}
 		} else {
+			if m.recoverMode {
+				return ctx.Send(SectorRedoPacked{FillerPieces: fillerPieces, GroupID: gid})
+			}
+
 			return ctx.Send(SectorPacked{FillerPieces: fillerPieces, GroupID: gid})
 		}
 	}

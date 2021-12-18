@@ -421,7 +421,9 @@ type SectorRedoPacked struct {
 	GroupID      string
 }
 
-func (evt SectorRedoPacked) apply(*SectorInfo) {}
+func (evt SectorRedoPacked) apply(state *SectorInfo) {
+	state.SealGroupID = evt.GroupID
+}
 
 type SectorRedoPreCommit1 struct {
 	PreCommit1Out storage.PreCommit1Out
