@@ -36,7 +36,32 @@ func (m *Miner) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
 		return storage.SectorRef{}, xerrors.Errorf("PledgeSector failed, miner is sealing disable")
 	}
 
+	if m.recoverMode {
+		return storage.SectorRef{}, xerrors.Errorf("Miner PledgeSector failed, miner is in recover mode")
+	}
+
 	return m.sealing.PledgeSector(ctx)
+}
+
+func (m *Miner) RecoverSector(ctx context.Context, sectorNumber abi.SectorNumber) (storage.SectorRef, error) {
+	if m.sealingDisable {
+		return storage.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is sealing disable")
+	}
+
+	if !m.recoverMode {
+		return storage.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is not in recover mode")
+	}
+
+	info, err := m.SectorsStatus(ctx, sectorNumber, false)
+	if err != nil {
+		return storage.SectorRef{}, xerrors.Errorf("Miner getting recover sector info: %w", err)
+	}
+
+	if info.State != api.SectorState(sealing.Proving) {
+		return storage.SectorRef{}, xerrors.Errorf("Miner recover sector failed, sector state %s no Proving:", info.State)
+	}
+
+	return m.sealing.RecoverSector(ctx, sectorNumber)
 }
 
 func (m *Miner) ForceSectorState(ctx context.Context, id abi.SectorNumber, state sealing.SectorState) error {

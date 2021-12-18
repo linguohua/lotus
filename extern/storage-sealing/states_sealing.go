@@ -192,6 +192,14 @@ func (m *Sealing) getTicket(ctx statemachine.Context, sector SectorInfo) (abi.Se
 }
 
 func (m *Sealing) handleGetTicket(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode {
+		log.Infof("recover mode handleGetTicket, sector:%d, reuse ticket value:%v, ticket epoch:%d", sector.SectorNumber, sector.TicketValue, sector.TicketEpoch)
+		return ctx.Send(SectorTicket{
+			TicketValue: sector.TicketValue,
+			TicketEpoch: sector.TicketEpoch,
+		})
+	}
+
 	ticketValue, ticketEpoch, allocated, err := m.getTicket(ctx, sector)
 	if err != nil {
 		if allocated {
@@ -214,6 +222,19 @@ func (m *Sealing) handleGetTicket(ctx statemachine.Context, sector SectorInfo) e
 }
 
 func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode {
+		log.Infof("recover mode handlePreCommit1 start, sector:%d, ticket value:%v", sector.SectorNumber, sector.TicketValue)
+		pc1o, err := m.sealer.SealPreCommit1(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.TicketValue, sector.pieceInfos())
+		if err != nil {
+			return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("seal pre commit(1) failed: %w", err)})
+		}
+
+		log.Infof("recover mode handlePreCommit1 finish, sector:%d", sector.SectorNumber)
+		return ctx.Send(SectorPreCommit1{
+			PreCommit1Out: pc1o,
+		})
+	}
+
 	if err := checkPieces(ctx.Context(), m.maddr, sector, m.Api); err != nil { // Sanity check state
 		switch err.(type) {
 		case *ErrApi:
@@ -280,6 +301,10 @@ func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) 
 }
 
 func (m *Sealing) handlePreCommit2(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode {
+		log.Infof("recover mode handlePreCommit2 start, sector:%d", sector.SectorNumber)
+	}
+
 	cids, err := m.sealer.SealPreCommit2(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.PreCommit1Out)
 	if err != nil {
 		return ctx.Send(SectorSealPreCommit2Failed{xerrors.Errorf("seal pre commit(2) failed: %w", err)})
@@ -287,6 +312,11 @@ func (m *Sealing) handlePreCommit2(ctx statemachine.Context, sector SectorInfo) 
 
 	if cids.Unsealed == cid.Undef {
 		return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("seal pre commit(2) returned undefined CommD")})
+	}
+
+	if m.recoverMode {
+		log.Infof("recover mode handlePreCommit2 finish, sector:%d", sector.SectorNumber)
+		return ctx.Send(SectorRedoPreCommit2{})
 	}
 
 	return ctx.Send(SectorPreCommit2{

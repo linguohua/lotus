@@ -67,6 +67,8 @@ type Miner struct {
 	journal journal.Journal
 
 	sealingDisable bool
+
+	recoverMode bool
 }
 
 // SealingStateEvt is a journal event that records a sector state transition.
@@ -143,6 +145,11 @@ func NewMiner(api fullNodeFilteredAPI,
 	as *AddressSelector) (*Miner, error) {
 
 	sealingDisable := os.Getenv("YOUZHOU_SEALING_DISABLE") == "true"
+	recoverMode := os.Getenv("YOUZHOU_RECOVER_MODE") == "true"
+	if recoverMode {
+		log.Warn("Miner works in recover mode")
+	}
+
 	m := &Miner{
 		api:     api,
 		feeCfg:  feeCfg,
@@ -159,6 +166,7 @@ func NewMiner(api fullNodeFilteredAPI,
 		sealingEvtType: journal.RegisterEventType("storage", "sealing_states"),
 
 		sealingDisable: sealingDisable,
+		recoverMode:    recoverMode,
 	}
 
 	return m, nil

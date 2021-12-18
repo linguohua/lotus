@@ -440,8 +440,6 @@ func (evt SectorRedoSealPreCommit2Failed) FormatError(xerrors.Printer) (next err
 func (evt SectorRedoSealPreCommit2Failed) apply(si *SectorInfo)                     {}
 
 type SectorRedoPreCommit2 struct {
-	Sealed   cid.Cid
-	Unsealed cid.Cid
 }
 
 func (evt SectorRedoPreCommit2) apply(state *SectorInfo) {}

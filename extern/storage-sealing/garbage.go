@@ -5,6 +5,7 @@ import (
 
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/specs-storage/storage"
 )
 
@@ -41,4 +42,19 @@ func (m *Sealing) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
 		ID:         sid,
 		SectorType: spt,
 	})
+}
+
+func (m *Sealing) RecoverSector(ctx context.Context, sid abi.SectorNumber) (storage.SectorRef, error) {
+	m.startupWait.Wait()
+
+	m.inputLk.Lock()
+	defer m.inputLk.Unlock()
+
+	spt, err := m.currentSealProof(ctx)
+	if err != nil {
+		return storage.SectorRef{}, xerrors.Errorf("getting seal proof type: %w", err)
+	}
+
+	log.Infof("Recover CC sector %d", sid)
+	return m.minerSector(spt, sid), m.sectors.Send(uint64(sid), SectorRedoPacked{})
 }

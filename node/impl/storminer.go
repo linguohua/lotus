@@ -177,6 +177,32 @@ func (sm *StorageMinerAPI) PledgeSector(ctx context.Context) (abi.SectorID, erro
 	}
 }
 
+func (sm *StorageMinerAPI) ReoverSector(ctx context.Context, sectorNumber abi.SectorNumber) (abi.SectorID, error) {
+	_, err := sm.Miner.RecoverSector(ctx, sectorNumber)
+	if err != nil {
+		return abi.SectorID{}, err
+	}
+
+	// wait for the sector to enter the Packing state
+	// TODO: instead of polling implement some pubsub-type thing in storagefsm
+	for {
+		info, err := sm.Miner.SectorsStatus(ctx, sectorNumber, false)
+		if err != nil {
+			return abi.SectorID{}, xerrors.Errorf("getting recover sector info failed: %w", err)
+		}
+
+		if info.State != api.SectorState(sealing.Proving) {
+			return abi.SectorID{}, nil
+		}
+
+		select {
+		case <-time.After(10 * time.Millisecond):
+		case <-ctx.Done():
+			return abi.SectorID{}, ctx.Err()
+		}
+	}
+}
+
 func (sm *StorageMinerAPI) SectorsStatus(ctx context.Context, sid abi.SectorNumber, showOnChainInfo bool) (api.SectorInfo, error) {
 	sInfo, err := sm.Miner.SectorsStatus(ctx, sid, false)
 	if err != nil {
