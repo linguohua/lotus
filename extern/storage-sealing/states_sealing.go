@@ -64,6 +64,11 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		return xerrors.Errorf("handlePacking failed, too much data in sector %d: %d > %d", sector.SectorNumber, allocated, ubytes)
 	}
 
+	if m.recoverMode {
+		log.Infof("recover mode reset allocated from %d to 0", allocated)
+		allocated = 0
+	}
+
 	fillerSizes, err := fillersFromRem(ubytes - allocated)
 	if err != nil {
 		return err
@@ -75,7 +80,13 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 
 	// lingh: pledge AddPiece call
 	for {
-		fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
+		existingPieceSizes := sector.existingPieceSizes()
+		if m.recoverMode {
+			log.Infof("recover mode reset existingPieceSizes from %+v to empty", existingPieceSizes)
+			existingPieceSizes = []abi.UnpaddedPieceSize{}
+		}
+
+		fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), existingPieceSizes, fillerSizes...)
 		if err != nil {
 			log.Errorf("filling up the sector %d (%v): %w", sector.SectorNumber, fillerSizes, err)
 			err = failedCooldown(ctx, sector)
