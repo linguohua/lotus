@@ -849,7 +849,7 @@ func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorIn
 	// 	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
 	// }
 	log.Infof("Sealing handleFinalizeSector, sector:%d", sector.SectorNumber)
-	if !sector.HasFinalized {
+	if m.recoverMode || !sector.HasFinalized {
 		if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), nil); err != nil {
 			return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
 		}
