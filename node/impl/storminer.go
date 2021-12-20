@@ -178,7 +178,7 @@ func (sm *StorageMinerAPI) PledgeSector(ctx context.Context) (abi.SectorID, erro
 }
 
 func (sm *StorageMinerAPI) RecoverSector(ctx context.Context, sectorNumber abi.SectorNumber) (abi.SectorID, error) {
-	_, err := sm.Miner.RecoverSector(ctx, sectorNumber)
+	sid, err := sm.Miner.RecoverSector(ctx, sectorNumber)
 	if err != nil {
 		return abi.SectorID{}, err
 	}
@@ -192,7 +192,7 @@ func (sm *StorageMinerAPI) RecoverSector(ctx context.Context, sectorNumber abi.S
 		}
 
 		if info.State != api.SectorState(sealing.Proving) {
-			return abi.SectorID{}, nil
+			return sid.ID, nil
 		}
 
 		select {
