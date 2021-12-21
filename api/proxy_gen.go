@@ -614,6 +614,8 @@ type StorageMinerStruct struct {
 
 		CheckProvable func(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef, p3 bool) (map[abi.SectorNumber]string, error) `perm:"admin"`
 
+		CheckProvableExt func(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef) (map[abi.SectorNumber]string, error) `perm:"admin"`
+
 		ComputeProof func(p0 context.Context, p1 []builtin.SectorInfo, p2 abi.PoStRandomness) ([]builtin.PoStProof, error) `perm:"read"`
 
 		CreateBackup func(p0 context.Context, p1 string) error `perm:"admin"`
@@ -3654,6 +3656,17 @@ func (s *StorageMinerStruct) CheckProvable(p0 context.Context, p1 abi.Registered
 }
 
 func (s *StorageMinerStub) CheckProvable(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef, p3 bool) (map[abi.SectorNumber]string, error) {
+	return *new(map[abi.SectorNumber]string), ErrNotSupported
+}
+
+func (s *StorageMinerStruct) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef) (map[abi.SectorNumber]string, error) {
+	if s.Internal.CheckProvableExt == nil {
+		return *new(map[abi.SectorNumber]string), ErrNotSupported
+	}
+	return s.Internal.CheckProvableExt(p0, p1, p2)
+}
+
+func (s *StorageMinerStub) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef) (map[abi.SectorNumber]string, error) {
 	return *new(map[abi.SectorNumber]string), ErrNotSupported
 }
 

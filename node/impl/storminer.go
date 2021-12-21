@@ -1034,6 +1034,20 @@ func (sm *StorageMinerAPI) CheckProvable(ctx context.Context, pp abi.RegisteredP
 	return out, nil
 }
 
+func (sm *StorageMinerAPI) CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []sto.SectorRef) (map[abi.SectorNumber]string, error) {
+	bad, err := sm.StorageMgr.CheckProvableExt(ctx, pp, sectors)
+	if err != nil {
+		return nil, err
+	}
+
+	var out = make(map[abi.SectorNumber]string)
+	for sid, err := range bad {
+		out[sid.Number] = err
+	}
+
+	return out, nil
+}
+
 func (sm *StorageMinerAPI) ActorAddressConfig(ctx context.Context) (api.AddressConfig, error) {
 	return sm.AddrSel.AddressConfig, nil
 }

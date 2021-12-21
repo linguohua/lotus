@@ -257,6 +257,8 @@ type StorageMiner interface {
 
 	CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef, expensive bool) (map[abi.SectorNumber]string, error) //perm:admin
 
+	CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorNumber]string, error) //perm:admin
+
 	ComputeProof(ctx context.Context, ssi []builtin.SectorInfo, rand abi.PoStRandomness) ([]builtin.PoStProof, error) //perm:read
 }
 
