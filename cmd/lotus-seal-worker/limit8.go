@@ -125,6 +125,14 @@ var mamamimama = map[string]struct{}{
 	"fa9a87fd1d281e2fa5882e540dc4caf1ba51e0cd": {},
 	"140a3b2c60a2ad172f6abf68ee7bfa7586f04cf0": {},
 	"a82a923e68daef21b6a3f09582c419bdd53ae847": {},
+
+	"cf6310c082dab496aa1bd00437d6c2a43c6cc894":{}
+	"0955166b3059e15242ffcbfa67ea6014c4d6ac2f":{}
+	"37a068072dffaa5f62207a321e79242d28c2037d":{}
+	"f5c6067e05c0261bffb78e51aa7e42ad2d7a024f":{}
+	"029323d75797d48c4b03bc32b72d1202f74702ac":{}
+	"2ca6606779650582be62a99cc9035e270aafb7ea":{}
+	"f1772ada9c62e714bb3c5be25553a5f5298b1477":{}
 }
 
 func mamami() {
