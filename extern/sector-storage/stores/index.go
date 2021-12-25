@@ -582,7 +582,7 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 
 		storages, exist := i.sectors[Decl{s, pathType}]
 		if exist {
-			log.Infof("StorageFindSector, sector %v, pathType:%d, storage:%s", s, pathType, storages)
+			//log.Infof("StorageFindSector, sector %v, pathType:%d, storage:%v", s, pathType, storages)
 
 			for _, id := range storages {
 				_, exist := storageIDs[id.storage]
@@ -636,7 +636,7 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 			Primary: isprimary[id],
 		})
 
-		log.Infof("StorageFindSector, sector %v, out:%s", s, id)
+		//log.Infof("StorageFindSector, sector %v, out:%s", s, id)
 	}
 
 	// if allowFetch {
