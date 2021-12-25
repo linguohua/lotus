@@ -432,6 +432,8 @@ var storageFindCmd = &cli.Command{
 			}
 			sts.sealed = true
 			sts.index = i
+
+			fmt.Printf("----id:%s, index:%d----", info.ID, i)
 		}
 		for _, info := range c {
 			sts, ok := byId[info.ID]
