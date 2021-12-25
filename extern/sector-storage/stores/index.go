@@ -572,6 +572,7 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 	defer i.lk.RUnlock()
 
 	storageIDs := map[ID]uint64{}
+	storageArray := make([]ID, 0, 4)
 	isprimary := map[ID]bool{}
 
 	for _, pathType := range storiface.PathTypes {
@@ -580,6 +581,11 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 		}
 
 		for _, id := range i.sectors[Decl{s, pathType}] {
+			_, exist := storageIDs[id.storage]
+			if !exist {
+				storageArray = append(storageArray, id.storage)
+			}
+
 			storageIDs[id.storage]++
 			isprimary[id.storage] = isprimary[id.storage] || id.primary
 		}
@@ -587,7 +593,7 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 
 	out := make([]SectorStorageInfo, 0, len(storageIDs))
 
-	for id, n := range storageIDs {
+	for _, id := range storageArray {
 		st, ok := i.stores[id]
 		if !ok {
 			log.Warnf("storage %s is not present in sector index (referenced by sector %v)", id, s)
@@ -611,6 +617,7 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 			continue
 		}
 
+		n := storageIDs[id]
 		out = append(out, SectorStorageInfo{
 			GroupID:           st.info.GroupID,
 			MaxSealingSectors: st.info.MaxSealingSectors,
