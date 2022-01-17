@@ -157,7 +157,7 @@ type schedWindow struct {
 
 type workerDisableReq struct {
 	//activeWindows []*schedWindow
-	wid     WorkerID
+	wid     storiface.WorkerID
 	groupID string
 
 	//cond    *sync.Cond
@@ -304,7 +304,7 @@ func (sh *scheduler) loadEnv() {
 
 func newScheduler() *scheduler {
 	sch := &scheduler{
-		workers: map[WorkerID]*workerHandle{},
+		workers: map[storiface.WorkerID]*workerHandle{},
 
 		schedule:       make(chan *workerRequest),
 		windowRequests: make(chan *schedWindowRequest, 20),
@@ -405,7 +405,7 @@ func (g *schedWindowRequestsGroup) addReq(req *workerRequest) {
 	g.tasks[tt] = queue
 }
 
-func (g *schedWindowRequestsGroup) removeByWorkerID(wid WorkerID) {
+func (g *schedWindowRequestsGroup) removeByWorkerID(wid storiface.WorkerID) {
 	for k, windowOfTT := range g.openWindows {
 		openWindows := make([]*schedWindowRequest, 0, len(windowOfTT))
 		for _, window := range windowOfTT {

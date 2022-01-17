@@ -580,7 +580,7 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 	storageArray := make([]ID, 0, 4)
 	isprimary := map[ID]bool{}
 
-	allowTo := map[Group]struct{}{}
+	// allowTo := map[Group]struct{}{}
 
 	for _, pathType := range storiface.PathTypes {
 		if ft&pathType == 0 {

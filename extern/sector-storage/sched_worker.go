@@ -149,7 +149,7 @@ func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool,
 
 	log.Infof("pauseWorker call wait RLock")
 	sh.workersLk.RLock()
-	worker, exist := sh.workers[WorkerID(wid)]
+	worker, exist := sh.workers[storiface.WorkerID(wid)]
 	sh.workersLk.RUnlock()
 
 	if !exist {
@@ -202,7 +202,7 @@ func (sh *scheduler) removeWorker(ctx context.Context, uuid2 string) error {
 
 	log.Infof("removeWorker call wait RLock")
 	sh.workersLk.RLock()
-	worker, exist := sh.workers[WorkerID(wid)]
+	worker, exist := sh.workers[storiface.WorkerID(wid)]
 	sh.workersLk.RUnlock()
 
 	if !exist {

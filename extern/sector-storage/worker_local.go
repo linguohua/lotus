@@ -135,7 +135,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 			st: cst,
 		},
 
-		envLookup:       envLookup,
+		// envLookup:       envLookup,
 		ignoreResources: wcfg.IgnoreResourceFiltering,
 
 		acceptTasks:  acceptTasks,
