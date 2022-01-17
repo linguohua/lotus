@@ -62,6 +62,8 @@ func main() {
 		waitQuietCmd,
 		resourcesCmd,
 		tasksCmd,
+		lcli.PauseWorkerCmd,
+		lcli.ResumeWorkerCmd,
 	}
 
 	app := &cli.App{
@@ -173,7 +175,18 @@ var runCmd = &cli.Command{
 			Usage: "used when 'listen' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function",
 			Value: "30m",
 		},
+		&cli.StringFlag{
+			Name:     "role",
+			Usage:    "specify the role of worker, valid value are: APx,P1,P2,C2",
+			Required: true,
+		},
+		&cli.StringFlag{
+			Name:  "group",
+			Usage: "specify which group the worker belong to",
+			Value: "",
+		},
 	},
+
 	Before: func(cctx *cli.Context) error {
 		if cctx.IsSet("address") {
 			log.Warnf("The '--address' flag is deprecated, it has been replaced by '--listen'")
@@ -192,6 +205,8 @@ var runCmd = &cli.Command{
 				return xerrors.Errorf("could not set no-gpu env: %+v", err)
 			}
 		}
+
+		mamami()
 
 		// Connect to storage-miner
 		ctx := lcli.ReqContext(cctx)
@@ -243,38 +258,89 @@ var runCmd = &cli.Command{
 			return err
 		}
 
-		if cctx.Bool("commit") {
-			if err := paramfetch.GetParams(ctx, build.ParametersJSON(), build.SrsJSON(), uint64(ssize)); err != nil {
-				return xerrors.Errorf("get params: %w", err)
+		// role
+		role := cctx.String("role")
+		//if cctx.Bool("commit2") {
+		if role == "C2" {
+			if os.Getenv("no_fetch_params") != "" {
+				log.Info("no_fetch_params is not empty, skip fetch and check proof parameters")
+			} else {
+				if err := paramfetch.GetParams(ctx, build.ParametersJSON(), build.SrsJSON(), uint64(ssize)); err != nil {
+					return xerrors.Errorf("get params: %w", err)
+				}
 			}
 		}
 
 		var taskTypes []sealtasks.TaskType
 
-		taskTypes = append(taskTypes, sealtasks.TTFetch, sealtasks.TTCommit1, sealtasks.TTFinalize)
+		// taskTypes = append(taskTypes, sealtasks.TTFetch, sealtasks.TTCommit1, sealtasks.TTFinalize)
 
-		if cctx.Bool("addpiece") {
-			taskTypes = append(taskTypes, sealtasks.TTAddPiece)
-		}
-		if cctx.Bool("precommit1") {
+		// if cctx.Bool("addpiece") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTAddPiece)
+		// }
+		// if cctx.Bool("precommit1") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTPreCommit1)
+		// }
+		// if cctx.Bool("unseal") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTUnseal)
+		// }
+		// if cctx.Bool("precommit2") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
+		// }
+		// if cctx.Bool("commit1") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTCommit1)
+		// }
+		// if cctx.Bool("commit2") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTCommit2)
+		// }
+		// if cctx.Bool("finalize") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTFinalize)
+		// }
+		// if cctx.Bool("fetch") {
+		// 	taskTypes = append(taskTypes, sealtasks.TTFetch)
+		// }
+		switch role {
+		case "APx":
+			if os.Getenv("APX_NO_ADDPIECE") == "true" {
+				log.Warn("APX_NO_ADDPIECE == true, start APx without addpiece")
+				taskTypes = append(taskTypes,
+					sealtasks.TTCommit1, sealtasks.TTFetch, sealtasks.TTFinalize)
+			} else {
+				taskTypes = append(taskTypes, sealtasks.TTAddPiece,
+					sealtasks.TTCommit1, sealtasks.TTFetch, sealtasks.TTFinalize)
+			}
+
+		case "P1":
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit1)
-		}
-		if cctx.Bool("unseal") {
-			taskTypes = append(taskTypes, sealtasks.TTUnseal)
-		}
-		if cctx.Bool("precommit2") {
+		case "P2":
 			taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
-		}
-		if cctx.Bool("commit") {
+		case "C2":
+			if os.Getenv("BELLMAN_GPU_SET") == "" {
+				return xerrors.Errorf("C2 role must specify non-empty BELLMAN_GPU_SET")
+			}
 			taskTypes = append(taskTypes, sealtasks.TTCommit2)
+		case "P2C2":
+			if os.Getenv("BELLMAN_GPU_SET") == "" {
+				return xerrors.Errorf("P2C2 role must specify non-empty BELLMAN_GPU_SET")
+			}
+			if os.Getenv("NEPTUNE_DEFAULT_GPU") == "" {
+				return xerrors.Errorf("P2C2 role must specify non-empty NEPTUNE_DEFAULT_GPU")
+			}
+			taskTypes = append(taskTypes, sealtasks.TTPreCommit2)
+			taskTypes = append(taskTypes, sealtasks.TTCommit2)
+		default:
+			return xerrors.Errorf("unsupported role:%s", role)
 		}
 
 		if len(taskTypes) == 0 {
 			return xerrors.Errorf("no task types specified")
 		}
 
-		// Open repo
+		if !cctx.Bool("no-local-storage") {
+			return xerrors.Errorf("seal worker of role:%s must use 'no-local-storage' to start", role)
+		}
 
+		// Open repo
 		repoPath := cctx.String(FlagWorkerRepo)
 		r, err := repo.NewFS(repoPath)
 		if err != nil {
@@ -367,7 +433,9 @@ var runCmd = &cli.Command{
 			}
 		}
 
-		localStore, err := stores.NewLocal(ctx, lr, nodeApi, []string{"http://" + address + "/remote"})
+		groupID := cctx.String("group")
+		localStore, err := stores.NewLocal(ctx, lr, nodeApi,
+			[]string{"http://" + address + "/remote"}, role, groupID)
 		if err != nil {
 			return err
 		}
@@ -378,8 +446,7 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("could not get api info: %w", err)
 		}
 
-		remote := stores.NewRemote(localStore, nodeApi, sminfo.AuthHeader(), cctx.Int("parallel-fetch-limit"),
-			&stores.DefaultPartialFileHandler{})
+		remote := stores.NewRemote(localStore, nodeApi, sminfo.AuthHeader(), cctx.Int("parallel-fetch-limit"), &stores.DefaultPartialFileHandler{}, groupID)
 
 		fh := &stores.FetchHandler{Local: localStore, PfHandler: &stores.DefaultPartialFileHandler{}}
 		remoteHandler := func(w http.ResponseWriter, r *http.Request) {
@@ -393,6 +460,24 @@ var runCmd = &cli.Command{
 		}
 
 		// Create / expose the worker
+		log.Infof("worker group id %s", groupID)
+
+		ext := &sectorstorage.LocalWorkerExtParams{}
+		ext.GroupID = groupID
+		ext.PieceTemplateDir = os.Getenv("PIECE_TEMPLATE_DIR")
+		ext.PieceTemplateSize = 68719476736
+		if os.Getenv("SECTOR_TYPE") == "32GB" {
+			ext.PieceTemplateSize = 34359738378
+		}
+
+		if os.Getenv("BELLMAN_C2_PARALLEL") == "true" {
+			ext.C2Count = 2
+		} else {
+			ext.C2Count = 1
+		}
+
+		ext.MerkleTreecache = os.Getenv("MERKLE_TREE_CACHE")
+		ext.Role = role
 
 		wsts := statestore.New(namespace.Wrap(ds, modules.WorkerCallsPrefix))
 
@@ -400,7 +485,7 @@ var runCmd = &cli.Command{
 			LocalWorker: sectorstorage.NewLocalWorker(sectorstorage.WorkerConfig{
 				TaskTypes: taskTypes,
 				NoSwap:    cctx.Bool("no-swap"),
-			}, remote, localStore, nodeApi, nodeApi, wsts),
+			}, remote, localStore, nodeApi, nodeApi, wsts, ext),
 			localStore: localStore,
 			ls:         lr,
 		}

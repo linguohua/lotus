@@ -9,6 +9,7 @@ USAGE:
 VERSION:
    1.13.2
 
+
 COMMANDS:
    run         Start lotus worker
    info        Print worker info
@@ -47,7 +48,7 @@ OPTIONS:
    --parallel-fetch-limit value  maximum fetch operations to run in parallel (default: 5)
    --timeout value               used when 'listen' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function (default: "30m")
    --help, -h                    show help (default: false)
-   
+
 ```
 
 ## lotus-worker info
@@ -60,7 +61,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-worker storage
@@ -78,7 +79,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-worker storage attach
@@ -98,7 +99,7 @@ OPTIONS:
    --groups value       path group names
    --allow-to value     path groups allowed to pull data from this path (allow all if not specified)
    --help, -h           show help (default: false)
-   
+
 ```
 
 ## lotus-worker set
@@ -112,7 +113,7 @@ USAGE:
 OPTIONS:
    --enabled   enable/disable new task processing (default: true)
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-worker wait-quiet
@@ -125,7 +126,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ## lotus-worker resources
@@ -159,7 +160,7 @@ COMMANDS:
 OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
-   
+
 ```
 
 ### lotus-worker tasks enable
@@ -172,7 +173,7 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```
 
 ### lotus-worker tasks disable
@@ -185,5 +186,5 @@ USAGE:
 
 OPTIONS:
    --help, -h  show help (default: false)
-   
+
 ```

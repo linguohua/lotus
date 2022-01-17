@@ -54,6 +54,9 @@ type StorageMiner interface {
 	// Temp api for testing
 	PledgeSector(context.Context) (abi.SectorID, error) //perm:write
 
+	// Temp api for testing
+	RecoverSector(context.Context, abi.SectorNumber) (abi.SectorID, error) //perm:write
+
 	// Get the status of a given sector by ID
 	SectorsStatus(ctx context.Context, sid abi.SectorNumber, showOnChainInfo bool) (SectorInfo, error) //perm:read
 
@@ -116,6 +119,12 @@ type StorageMiner interface {
 	WorkerConnect(context.Context, string) error                              //perm:admin retry:true
 	WorkerStats(context.Context) (map[uuid.UUID]storiface.WorkerStats, error) //perm:admin
 	WorkerJobs(context.Context) (map[uuid.UUID][]storiface.WorkerJob, error)  //perm:admin
+	// go run gen/api/proxygen.go
+	WorkerRemove(context.Context, string) error                                         //perm:admin
+	WorkerPause(context.Context, string, string) error                                  //perm:admin
+	WorkerResume(context.Context, string, string) error                                 //perm:admin
+	UpdateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error //perm:admin
+	UpdateP1TicketsParams(ctx context.Context, tickets uint, interval uint) error       //perm:admin
 
 	//storiface.WorkerReturn
 	ReturnAddPiece(ctx context.Context, callID storiface.CallID, pi abi.PieceInfo, err *storiface.CallError) error                //perm:admin retry:true
@@ -145,6 +154,8 @@ type StorageMiner interface {
 	StorageLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) error                                          //perm:admin
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)                               //perm:admin
 	StorageList(ctx context.Context) (map[stores.ID][]stores.Decl, error)                                                                                               //perm:admin
+	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) (stores.StorageInfo, error)
+	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 
 	StorageLocal(ctx context.Context) (map[stores.ID]string, error)       //perm:admin
 	StorageStat(ctx context.Context, id stores.ID) (fsutil.FsStat, error) //perm:admin
@@ -246,6 +257,8 @@ type StorageMiner interface {
 
 	CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef, expensive bool) (map[abi.SectorNumber]string, error) //perm:admin
 
+	CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorNumber]string, error) //perm:admin
+
 	ComputeProof(ctx context.Context, ssi []builtin.SectorInfo, rand abi.PoStRandomness) ([]builtin.PoStProof, error) //perm:read
 }
 
@@ -304,6 +317,10 @@ type SectorInfo struct {
 	// non-zero if sector is faulty, epoch at which it will be permanently
 	// removed if it doesn't recover
 	Early abi.ChainEpoch
+
+	// lingh: bind sector to specific storage groupID when seal
+	SealGroupID  string
+	HasFinalized bool
 }
 
 type SealedRef struct {

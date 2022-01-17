@@ -2,6 +2,8 @@ package node
 
 import (
 	"os"
+	"strconv"
+	"strings"
 
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -254,6 +256,34 @@ func FullAPI(out *api.FullNode, fopts ...FullOption) Option {
 		func(s *Settings) error {
 			resAPI := &impl.FullNodeAPI{}
 			s.invokes[ExtractApiKey] = fx.Populate(resAPI)
+
+			delayStr := os.Getenv("YOUZHOU_ANCHOR_DEADLINE")
+			if delayStr != "" {
+				delayInSeconds, err := strconv.Atoi(delayStr)
+				if err == nil {
+					defulat2 := impl.AnchorData.AnchorTimeout
+					impl.AnchorData.AnchorTimeout = delayInSeconds
+					log.Warnf("USE new Anchor timeout:%d, default:%d", delayInSeconds, defulat2)
+				}
+			}
+
+			delayStr = os.Getenv("YOUZHOU_ANCHOR_HARDCORE_DELAY")
+			if delayStr != "" {
+				delayInSeconds, err := strconv.Atoi(delayStr)
+				if err == nil {
+					defulat2 := impl.AnchorData.HardcoreDelay
+					impl.AnchorData.HardcoreDelay = delayInSeconds
+					log.Warnf("USE new Anchor HardcoreDelay:%d, default:%d", delayInSeconds, defulat2)
+				}
+			}
+
+			urls := os.Getenv("YOUZHOU_ANCHOR_URLS")
+			if urls != "" {
+				s := strings.Split(urls, ",")
+				impl.AnchorData.AnchorURLs = s
+				log.Warnf("USE Anchor URL:%s", urls)
+			}
+
 			*out = resAPI
 			return nil
 		},

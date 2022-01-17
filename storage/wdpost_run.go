@@ -86,6 +86,11 @@ func (s *WindowPoStScheduler) startGeneratePoST(
 
 		posts, err := s.runGeneratePoST(ctx, ts, deadline)
 		completeGeneratePoST(posts, err)
+
+		// try pre-load paux files
+		if s.preloadPaux {
+			s.preloadPAuxFiles(deadline)
+		}
 	}()
 
 	return abort
@@ -216,7 +221,7 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 		})
 	}
 
-	bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, nil)
+	bad, err := s.faultTracker.CheckProvable2(ctx, s.proofType, tocheck)
 	if err != nil {
 		return bitfield.BitField{}, xerrors.Errorf("checking provable sectors: %w", err)
 	}
@@ -441,6 +446,54 @@ func (s *WindowPoStScheduler) declareFaults(ctx context.Context, dlIdx uint64, p
 	return faults, sm, nil
 }
 
+func (s *WindowPoStScheduler) preloadPAuxFiles(di *dline.Info) {
+	// next deadline
+	declDeadline := (di.Index + 1) % di.WPoStPeriodDeadlines
+	log.Infof("preloadPAuxFiles, for next index:%d, current:%d, total:%d", declDeadline, di.Index, di.WPoStPeriodDeadlines)
+
+	ctx := context.TODO()
+	partitions, err := s.api.StateMinerPartitions(ctx, s.actor, declDeadline, types.EmptyTSK)
+	if err != nil {
+		log.Errorf("preloadPAuxFiles, StateMinerPartitions failed:%v", err)
+		return
+	}
+
+	mid, err := address.IDFromAddress(s.actor)
+	if err != nil {
+		log.Errorf("preloadPAuxFiles, IDFromAddress failed:%v", err)
+		return
+	}
+
+	var tocheck []proof2.SectorInfo
+	for _, par := range partitions {
+		sectors := make(map[abi.SectorNumber]struct{})
+
+		sectorInfos, err := s.api.StateMinerSectors(ctx, s.actor, &par.LiveSectors, types.EmptyTSK)
+		if err != nil {
+			log.Errorf("preloadPAuxFiles, StateMinerSectors failed:%v", err)
+			return
+		}
+
+		for _, info := range sectorInfos {
+			sectors[info.SectorNumber] = struct{}{}
+			tocheck = append(tocheck, proof2.SectorInfo{
+				SectorNumber: info.SectorNumber,
+				SealedCID:    info.SealedCID,
+				SealProof:    info.SealProof,
+			})
+		}
+	}
+
+	mid = 0                  // zero id
+	rand := make([]byte, 32) // zero rand
+	_, _, err = s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), tocheck, append(abi.PoStRandomness{}, rand...))
+	if err.Error() != "goodboy" {
+		log.Errorf("preloadPAuxFiles, GenerateWindowPoSt failed:%v", err)
+	} else {
+		log.Infof("preloadPAuxFiles, for next index:%d, sectors:%d, completed", declDeadline, len(tocheck))
+	}
+}
+
 // runPoStCycle runs a full cycle of the PoSt process:
 //
 //  1. performs recovery declarations for the next deadline.
@@ -568,6 +621,8 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 			skipCount := uint64(0)
 			var partitions []miner.PoStPartition
 			var sinfos []proof2.SectorInfo
+			tsStart := build.Clock.Now()
+
 			for partIdx, partition := range batch {
 				// TODO: Can do this in parallel
 				toProve, err := bitfield.SubtractBitField(partition.LiveSectors, partition.FaultySectors)
@@ -622,14 +677,15 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 				break
 			}
 
+			elapsed2 := time.Since(tsStart)
+
 			// Generate proof
 			log.Infow("running window post",
 				"chain-random", rand,
 				"deadline", di,
 				"height", ts.Height(),
-				"skipped", skipCount)
-
-			tsStart := build.Clock.Now()
+				"skipped", skipCount,
+				"check-elapsed", elapsed2)
 
 			mid, err := address.IDFromAddress(s.actor)
 			if err != nil {
@@ -639,7 +695,9 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 			postOut, ps, err := s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), sinfos, append(abi.PoStRandomness{}, rand...))
 			elapsed := time.Since(tsStart)
 
-			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed)
+			log.Infow("computing window post", "batch", batchIdx, "elapsed",
+				"check-elapsed", elapsed2,
+				elapsed, "deadline", di, "sectors", len(sinfos))
 
 			if err == nil {
 				// If we proved nothing, something is very wrong.

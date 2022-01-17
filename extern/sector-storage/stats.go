@@ -17,13 +17,17 @@ func (m *Manager) WorkerStats() map[uuid.UUID]storiface.WorkerStats {
 	for id, handle := range m.sched.workers {
 		handle.lk.Lock()
 		out[uuid.UUID(id)] = storiface.WorkerStats{
-			Info:    handle.info,
-			Enabled: handle.enabled,
-
-			MemUsedMin: handle.active.memUsedMin,
-			MemUsedMax: handle.active.memUsedMax,
-			GpuUsed:    handle.active.gpuUsed,
-			CpuUse:     handle.active.cpuUse,
+			Info:       handle.info,
+			Enabled:    handle.enabled,
+			Url:        handle.url,
+			UUID:       id.String(),
+			Paused:     handle.pauseStat(),
+			TaskTypes:  handle.acceptTaskTypes,
+			TaskCounts: handle.taskTypeCounters,
+			// MemUsedMin: handle.active.memUsedMin,
+			// MemUsedMax: handle.active.memUsedMax,
+			// GpuUsed:    handle.active.gpuUsed,
+			// CpuUse:     handle.active.cpuUse,
 		}
 		handle.lk.Unlock()
 	}
@@ -51,15 +55,23 @@ func (m *Manager) WorkerJobs() map[uuid.UUID][]storiface.WorkerJob {
 	for id, handle := range m.sched.workers {
 		handle.wndLk.Lock()
 		for wi, window := range handle.activeWindows {
-			for _, request := range window.todo {
-				out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
-					ID:      storiface.UndefCall,
-					Sector:  request.sector.ID,
-					Task:    request.taskType,
-					RunWait: wi + 2,
-					Start:   request.start,
-				})
-			}
+			// for _, request := range window.todo {
+			// 	out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
+			// 		ID:      storiface.UndefCall,
+			// 		Sector:  request.sector.ID,
+			// 		Task:    request.taskType,
+			// 		RunWait: wi + 1,
+			// 		Start:   request.start,
+			// 	})
+			// }
+			request := window.todo
+			out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
+				ID:      storiface.UndefCall,
+				Sector:  request.sector.ID,
+				Task:    request.taskType,
+				RunWait: wi + 1,
+				Start:   request.start,
+			})
 		}
 		handle.wndLk.Unlock()
 	}

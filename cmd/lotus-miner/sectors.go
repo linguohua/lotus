@@ -44,6 +44,7 @@ var sectorsCmd = &cli.Command{
 		sectorsRefsCmd,
 		sectorsUpdateCmd,
 		sectorsPledgeCmd,
+		sectorsRecoverCmd,
 		sectorsCheckExpireCmd,
 		sectorsExpiredCmd,
 		sectorsRenewCmd,
@@ -69,12 +70,46 @@ var sectorsPledgeCmd = &cli.Command{
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
 
+		// lingh: pledge beginning
 		id, err := nodeApi.PledgeSector(ctx)
 		if err != nil {
 			return err
 		}
 
 		fmt.Println("Created CC sector: ", id.Number)
+
+		return nil
+	},
+}
+
+var sectorsRecoverCmd = &cli.Command{
+	Name:      "recover",
+	Usage:     "recover a proving sector",
+	ArgsUsage: "<sectorNum>",
+	Action: func(cctx *cli.Context) error {
+		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		if cctx.Args().Len() != 1 {
+			return xerrors.Errorf("must pass sector number")
+		}
+
+		sid, err := strconv.ParseUint(cctx.Args().Get(0), 10, 64)
+		if err != nil {
+			return xerrors.Errorf("could not parse sector number: %w", err)
+		}
+
+		// lingh: pledge beginning
+		id, err := nodeApi.RecoverSector(ctx, abi.SectorNumber(sid))
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Recover CC sector: ", id)
 
 		return nil
 	},
@@ -143,6 +178,9 @@ var sectorsStatusCmd = &cli.Command{
 		}
 		fmt.Printf("Deals:\t\t%v\n", status.Deals)
 		fmt.Printf("Retries:\t%d\n", status.Retries)
+		fmt.Printf("HasFinalized:\t%v\n", status.HasFinalized)
+		fmt.Printf("SealGroupID:\t%s\n", status.SealGroupID)
+
 		if status.LastErr != "" {
 			fmt.Printf("Last Error:\t\t%s\n", status.LastErr)
 		}
