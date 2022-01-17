@@ -124,7 +124,7 @@ leshan: build
 hongkong: GOFLAGS+=-tags=hongkong
 hongkong: build
 
-calibnet: GOFLAGS+=-tags=calibnet
+calibnet: GOFLAGS+=-tags=calibnet,lin
 calibnet: build-devnets
 
 butterflynet: GOFLAGS+=-tags=butterflynet
