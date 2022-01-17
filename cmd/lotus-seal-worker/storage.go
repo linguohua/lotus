@@ -58,11 +58,11 @@ var storageAttachCmd = &cli.Command{
 		&cli.StringSliceFlag{
 			Name:  "allow-to",
 			Usage: "path groups allowed to pull data from this path (allow all if not specified)",
+		},
 		&cli.StringFlag{
 			Name:  "group",
 			Usage: "group id when use in sealing",
 		},
-
 		&cli.IntFlag{
 			Name:  "maxsealing",
 			Usage: "max parrallel sealing in this storage",
@@ -127,8 +127,8 @@ var storageAttachCmd = &cli.Command{
 				MaxStorage:        uint64(maxStor),
 				GroupID:           groupID,
 				MaxSealingSectors: MaxSealingSectors,
-				Groups:     cctx.StringSlice("groups"),
-				AllowTo:    cctx.StringSlice("allow-to"),
+				Groups:            cctx.StringSlice("groups"),
+				AllowTo:           cctx.StringSlice("allow-to"),
 			}
 
 			if !(cfg.CanStore || cfg.CanSeal) {
