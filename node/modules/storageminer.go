@@ -98,9 +98,11 @@ func GetParams(spt abi.RegisteredSealProof) error {
 		return nil
 	}
 
-	// TODO: We should fetch the params for the actual proof type, not just based on the size.
-	if err := paramfetch.GetParams(context.TODO(), build.ParametersJSON(), build.SrsJSON(), uint64(ssize)); err != nil {
-		return xerrors.Errorf("fetching proof parameters: %w", err)
+	if os.Getenv("no_fetch_params") == "" {
+		// TODO: We should fetch the params for the actual proof type, not just based on the size.
+		if err := paramfetch.GetParams(context.TODO(), build.ParametersJSON(), build.SrsJSON(), uint64(ssize)); err != nil {
+			return xerrors.Errorf("fetching proof parameters: %w", err)
+		}
 	}
 
 	return nil
@@ -239,9 +241,12 @@ func StorageMiner(fc config.MinerFeeConfig) func(params StorageMinerParams) (*st
 
 		ctx := helpers.LifecycleCtx(mctx, lc)
 
-		fps, err := storage.NewWindowedPoStScheduler(api, fc, as, sealer, verif, sealer, j, maddr)
-		if err != nil {
-			return nil, err
+		var fps *storage.WindowPoStScheduler = nil
+		if os.Getenv("YOUZHOU_WINDOW_POST_DISABLE") != "true" {
+			fps, err = storage.NewWindowedPoStScheduler(api, fc, as, sealer, verif, sealer, j, maddr)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		sm, err := storage.NewMiner(api, maddr, ds, sealer, sc, verif, prover, gsd, fc, j, as)
@@ -251,7 +256,9 @@ func StorageMiner(fc config.MinerFeeConfig) func(params StorageMinerParams) (*st
 
 		lc.Append(fx.Hook{
 			OnStart: func(context.Context) error {
-				go fps.Run(ctx)
+				if fps != nil {
+					go fps.Run(ctx)
+				}
 				return sm.Run(ctx)
 			},
 			OnStop: sm.Stop,
@@ -423,14 +430,23 @@ func SetupBlockProducer(lc fx.Lifecycle, ds dtypes.MetadataDS, api v1api.FullNod
 
 	m := lotusminer.NewMiner(api, epp, minerAddr, sf, j)
 
+	noMine := os.Getenv("YOUZHOU_WINNING_POST_DISABLE") == "true"
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			if noMine {
+				return nil
+			}
+
 			if err := m.Start(ctx); err != nil {
 				return err
 			}
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
+			if noMine {
+				return nil
+			}
+
 			return m.Stop(ctx)
 		},
 	})
@@ -706,11 +722,11 @@ var ManagerWorkPrefix = datastore.NewKey("/stmgr/calls")
 
 func LocalStorage(mctx helpers.MetricsCtx, lc fx.Lifecycle, ls stores.LocalStorage, si stores.SectorIndex, urls stores.URLs) (*stores.Local, error) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
-	return stores.NewLocal(ctx, ls, si, urls)
+	return stores.NewLocal(ctx, ls, si, urls, "miner", "")
 }
 
 func RemoteStorage(lstor *stores.Local, si stores.SectorIndex, sa sectorstorage.StorageAuth, sc sectorstorage.SealerConfig) *stores.Remote {
-	return stores.NewRemote(lstor, si, http.Header(sa), sc.ParallelFetchLimit, &stores.DefaultPartialFileHandler{})
+	return stores.NewRemote(lstor, si, http.Header(sa), sc.ParallelFetchLimit, &stores.DefaultPartialFileHandler{}, "")
 }
 
 func SectorStorage(mctx helpers.MetricsCtx, lc fx.Lifecycle, lstor *stores.Local, stor *stores.Remote, ls stores.LocalStorage, si stores.SectorIndex, sc sectorstorage.SealerConfig, ds dtypes.MetadataDS) (*sectorstorage.Manager, error) {

@@ -59,7 +59,16 @@ var storageAttachCmd = &cli.Command{
 			Name:  "allow-to",
 			Usage: "path groups allowed to pull data from this path (allow all if not specified)",
 		},
+		&cli.StringFlag{
+			Name:  "group",
+			Usage: "group id when use in sealing",
+		},
+		&cli.IntFlag{
+			Name:  "maxsealing",
+			Usage: "max parrallel sealing in this storage",
+		},
 	},
+
 	Action: func(cctx *cli.Context) error {
 		nodeApi, closer, err := lcli.GetWorkerAPI(cctx)
 		if err != nil {
@@ -100,14 +109,26 @@ var storageAttachCmd = &cli.Command{
 				}
 			}
 
+			groupID := cctx.String("group")
+			if groupID == "" {
+				return xerrors.Errorf("worker manage storage must specify group id")
+			}
+
+			MaxSealingSectors := cctx.Int("maxsealing")
+			if MaxSealingSectors < 1 {
+				return xerrors.Errorf("worker manage storage must specify maxsealing > 0")
+			}
+
 			cfg := &stores.LocalStorageMeta{
-				ID:         stores.ID(uuid.New().String()),
-				Weight:     cctx.Uint64("weight"),
-				CanSeal:    cctx.Bool("seal"),
-				CanStore:   cctx.Bool("store"),
-				MaxStorage: uint64(maxStor),
-				Groups:     cctx.StringSlice("groups"),
-				AllowTo:    cctx.StringSlice("allow-to"),
+				ID:                stores.ID(uuid.New().String()),
+				Weight:            cctx.Uint64("weight"),
+				CanSeal:           cctx.Bool("seal"),
+				CanStore:          cctx.Bool("store"),
+				MaxStorage:        uint64(maxStor),
+				GroupID:           groupID,
+				MaxSealingSectors: MaxSealingSectors,
+				Groups:            cctx.StringSlice("groups"),
+				AllowTo:           cctx.StringSlice("allow-to"),
 			}
 
 			if !(cfg.CanStore || cfg.CanSeal) {

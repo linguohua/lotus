@@ -23,7 +23,6 @@ require (
 	github.com/drand/drand v1.2.1
 	github.com/drand/kyber v1.1.4
 	github.com/dustin/go-humanize v1.0.0
-	github.com/elastic/go-sysinfo v1.7.0
 	github.com/elastic/gosigar v0.14.1
 	github.com/etclabscore/go-openrpc-reflect v0.0.36
 	github.com/fatih/color v1.13.0
