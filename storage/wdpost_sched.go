@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -46,7 +45,6 @@ type WindowPoStScheduler struct {
 	evtTypes [4]journal.EventType
 	journal  journal.Journal
 
-	preloadPaux bool
 	// failed abi.ChainEpoch // eps
 	// failLk sync.Mutex
 }
@@ -63,11 +61,6 @@ func NewWindowedPoStScheduler(api fullNodeFilteredAPI,
 	mi, err := api.StateMinerInfo(context.TODO(), actor, types.EmptyTSK)
 	if err != nil {
 		return nil, xerrors.Errorf("getting sector size: %w", err)
-	}
-
-	preloadPaux := false
-	if os.Getenv("FIL_PROOFS_USE_PAUX_PRELOAD") == "true" {
-		preloadPaux = true
 	}
 
 	return &WindowPoStScheduler{
@@ -87,8 +80,7 @@ func NewWindowedPoStScheduler(api fullNodeFilteredAPI,
 			evtTypeWdPoStRecoveries: j.RegisterEventType("wdpost", "recoveries_processed"),
 			evtTypeWdPoStFaults:     j.RegisterEventType("wdpost", "faults_processed"),
 		},
-		journal:     j,
-		preloadPaux: preloadPaux,
+		journal: j,
 	}, nil
 }
 
