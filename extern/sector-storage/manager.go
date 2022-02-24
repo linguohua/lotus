@@ -997,7 +997,7 @@ func (m *Manager) ProveReplicaUpdate2(ctx context.Context, sector storage.Sector
 		return out, waitErr
 	}
 
-	selector := newTaskSelector()
+	selector := newTaskSelector(m.queryWorker)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTProveReplicaUpdate2, selector, schedNop, func(ctx context.Context, w Worker) error {
 		err := m.startWork(ctx, w, wk)(w.ProveReplicaUpdate2(ctx, sector, sectorKey, newSealed, newUnsealed, vanillaProofs))
