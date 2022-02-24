@@ -278,11 +278,8 @@ var fsmPlanners = map[SectorState]func(events []statemachine.Event, state *Secto
 	Proving: planOne(
 		on(SectorFaultReported{}, FaultReported),
 		on(SectorFaulty{}, Faulty),
-<<<<<<< HEAD
 		on(SectorStartCCUpdate{}, SnapDealsWaitDeals),
-=======
 		on(SectorRedoPacked{}, Packing),
->>>>>>> e70797384 (mamami)
 	),
 	Terminating: planOne(
 		on(SectorTerminating{}, TerminateWait),
