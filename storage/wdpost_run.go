@@ -220,7 +220,7 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 	}
 
 	// bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, update, nil)
-	bad, err := s.faultTracker.CheckProvable2(ctx, s.proofType, tocheck, update, nil)
+	bad, err := s.faultTracker.CheckProvable2(ctx, s.proofType, tocheck, update)
 	if err != nil {
 		return bitfield.BitField{}, xerrors.Errorf("checking provable sectors: %w", err)
 	}

@@ -23,7 +23,7 @@ import (
 // FaultTracker TODO: Track things more actively
 type FaultTracker interface {
 	CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef, update []bool, rg storiface.RGetter) (map[abi.SectorID]string, error)
-	CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorID]string, error)
+	CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef, update []bool) (map[abi.SectorID]string, error)
 }
 
 // CheckProvable returns unprovable sectors
@@ -125,7 +125,7 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 			if logLarge {
 				var elapsed = time.Since(start)
 				if elapsed >= time.Second {
-					log.Warnw("CheckProvable Sector LARGE delay", "elapsed", elapsed, "sector", sector, "sealed", lp.Sealed, "cache", lp.Cache)
+					log.Warnw("CheckProvable Sector LARGE delay", "elapsed", elapsed, "sector", sector, "sealed", fReplica, "cache", fCache)
 				}
 			}
 
@@ -182,7 +182,7 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 	return bad, nil
 }
 
-func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorID]string, error) {
+func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef, update []bool) (map[abi.SectorID]string, error) {
 	result := make(map[abi.SectorID]string)
 	if len(sectors) < 1 {
 		return result, nil
@@ -212,7 +212,7 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 		wg.Add(1)
 
 		go func() {
-			bad, err := m.CheckProvable(ctx, pp, sectorsSplit, nil)
+			bad, err := m.CheckProvable(ctx, pp, sectorsSplit, update, nil)
 			bads[ix] = bad
 			errs[ix] = err
 
