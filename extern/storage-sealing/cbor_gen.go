@@ -143,7 +143,8 @@ func (t *SectorInfo) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{184, 32}); err != nil {
+
+	if _, err := w.Write([]byte{184, 34}); err != nil {
 		return err
 	}
 
@@ -839,6 +840,45 @@ func (t *SectorInfo) MarshalCBOR(w io.Writer) error {
 		if err := v.MarshalCBOR(w); err != nil {
 			return err
 		}
+	}
+
+	// t.SealGroupID (string) (string)
+	if len("SealGroupID") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"SealGroupID\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("SealGroupID"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("SealGroupID")); err != nil {
+		return err
+	}
+
+	if len(t.SealGroupID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.SealGroupID was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.SealGroupID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.SealGroupID)); err != nil {
+		return err
+	}
+
+	// t.HasFinalized (bool) (bool)
+	if len("HasFinalized") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"HasFinalized\" was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len("HasFinalized"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("HasFinalized")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.HasFinalized); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1559,6 +1599,36 @@ func (t *SectorInfo) UnmarshalCBOR(r io.Reader) error {
 				}
 
 				t.Log[i] = v
+			}
+
+			// t.SealGroupID (string) (string)
+		case "SealGroupID":
+
+			{
+				sval, err := cbg.ReadStringBuf(br, scratch)
+				if err != nil {
+					return err
+				}
+
+				t.SealGroupID = string(sval)
+			}
+			// t.HasFinalized (bool) (bool)
+		case "HasFinalized":
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.HasFinalized = false
+			case 21:
+				t.HasFinalized = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 			}
 
 		default:
