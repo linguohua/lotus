@@ -652,37 +652,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tHardDelay := build.Clock.Now()
 
-	// check if we have new base
-	var replaceBase bool = false
-	oldbase := *base
-	newBase, err := m.GetBestMiningCandidate(ctx)
-	if err == nil {
-		oblks := oldbase.TipSet.Blocks()
-		nblks := newBase.TipSet.Blocks()
-
-		oheight := oldbase.TipSet.Height()
-		onull := oldbase.NullRounds
-		nheight := newBase.TipSet.Height()
-		nnull := newBase.NullRounds
-		if len(oblks) != len(nblks) && oheight == nheight && onull == nnull {
-			log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
-			// replace with new base
-			base = newBase
-			replaceBase = true
-		}
-	} else {
-		log.Errorf("mineOne GetBestMiningCandidate error:%v", err)
-	}
-
-	if replaceBase {
-		log.Warnf("rebase, re-compute ticket")
-		ticket, err = m.computeTicket(ctx, &rbase, base, mbi)
-		if err != nil {
-			err = xerrors.Errorf("scratching ticket failed for rebase: %w", err)
-			return nil, err
-		}
-	}
-
 	tHardReplace := build.Clock.Now()
 
 	// get pending messages early,
@@ -717,17 +686,6 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		"tHardDealy ", tHardDelay.Sub(tProof),
 		"tHardReplace ", tHardReplace.Sub(tHardDelay),
 		"took", dur)
-
-	if len(m.winReportURL) > 0 {
-		wr := WinReport{}
-		wr.CID = b.Cid().String()
-		wr.Miner = b.Header.Miner.String()
-		wr.Height = uint64(b.Header.Height)
-		wr.Took = fmt.Sprintf("%s", dur)
-		wr.Parents = len(parentMiners)
-		wr.NewBase = replaceBase
-		go reportWin(&wr, m.winReportURL)
-	}
 
 	if dur > time.Second*time.Duration(build.BlockDelaySecs) {
 		log.Warnw("CAUTION: block production took longer than the block delay. Your computer may not be fast enough to keep up",
