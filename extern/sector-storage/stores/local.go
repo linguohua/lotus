@@ -331,8 +331,8 @@ func (st *Local) Redeclare(ctx context.Context) error {
 		}
 
 		err = st.index.StorageAttach(ctx, StorageInfo{
-			Groups:     meta.Groups,
-			AllowTo:    meta.AllowTo,
+			Groups:  meta.Groups,
+			AllowTo: meta.AllowTo,
 
 			GroupID:           meta.GroupID,
 			MaxSealingSectors: meta.MaxSealingSectors,
@@ -362,6 +362,11 @@ func (st *Local) declareSectors(ctx context.Context, p string, id ID, primary bo
 		if err != nil {
 			if os.IsNotExist(err) {
 				if err := os.MkdirAll(filepath.Join(p, t.String()), 0755); err != nil { // nolint
+					if t.IsForUpdate() {
+						// lingh: ignore update dir
+						continue
+					}
+
 					return xerrors.Errorf("openPath mkdir '%s': %w", filepath.Join(p, t.String()), err)
 				}
 
