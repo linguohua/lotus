@@ -20,7 +20,9 @@ import (
 
 func (sb *Sealer) GenerateWinningPoSt(ctx context.Context, minerID abi.ActorID, sectorInfo []proof.ExtendedSectorInfo, randomness abi.PoStRandomness) ([]proof.PoStProof, error) {
 	randomness[31] &= 0x3f
+
 	privsectors, skipped, done, err := sb.pubExtendedSectorToPriv(ctx, minerID, sectorInfo, nil, abi.RegisteredSealProof.RegisteredWinningPoStProof) // TODO: FAULTS?
+
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +83,15 @@ func (sb *Sealer) pubExtendedSectorToPriv(ctx context.Context, mid abi.ActorID, 
 			ID:        abi.SectorID{Miner: mid, Number: s.SectorNumber},
 			ProofType: s.SealProof,
 		}
+
+		// ensure sector has storage info
+		err := sb.sectors.DiscoverSectorStore(ctx, sid.ID)
+		if err != nil {
+			log.Errorw("pubExtendedSectorToPriv failed to DiscoverSectorStore, skipping", "sector", sid.ID, "error", err)
+			skipped = append(skipped, sid.ID)
+			continue
+		}
+
 		proveUpdate := s.SectorKey != nil
 		var cache string
 		var sealed string

@@ -108,7 +108,10 @@ func (evt SectorStartPacking) apply(*SectorInfo) {}
 
 func (evt SectorStartPacking) Ignore() {}
 
-type SectorPacked struct{ FillerPieces []abi.PieceInfo }
+type SectorPacked struct {
+	FillerPieces []abi.PieceInfo
+	GroupID      string
+}
 
 func (evt SectorPacked) apply(state *SectorInfo) {
 	for idx := range evt.FillerPieces {
@@ -117,6 +120,8 @@ func (evt SectorPacked) apply(state *SectorInfo) {
 			DealInfo: nil, // filler pieces don't have deals associated with them
 		})
 	}
+
+	state.SealGroupID = evt.GroupID
 }
 
 type SectorTicket struct {
@@ -284,7 +289,9 @@ func (evt SectorProving) apply(*SectorInfo) {}
 
 type SectorFinalized struct{}
 
-func (evt SectorFinalized) apply(*SectorInfo) {}
+func (evt SectorFinalized) apply(state *SectorInfo) {
+	state.HasFinalized = true
+}
 
 type SectorRetryFinalize struct{}
 
@@ -517,3 +524,33 @@ type SectorRemoveFailed struct{ error }
 
 func (evt SectorRemoveFailed) FormatError(xerrors.Printer) (next error) { return evt.error }
 func (evt SectorRemoveFailed) apply(*SectorInfo)                        {}
+
+type SectorRedoPacked struct {
+	FillerPieces []abi.PieceInfo
+	GroupID      string
+}
+
+func (evt SectorRedoPacked) apply(state *SectorInfo) {
+	state.SealGroupID = evt.GroupID
+}
+
+type SectorRedoPreCommit1 struct {
+	PreCommit1Out storage.PreCommit1Out
+}
+
+func (evt SectorRedoPreCommit1) apply(state *SectorInfo) {}
+
+type SectorRedoSealPreCommit1Failed struct{ error }
+
+func (evt SectorRedoSealPreCommit1Failed) FormatError(xerrors.Printer) (next error) { return evt.error }
+func (evt SectorRedoSealPreCommit1Failed) apply(si *SectorInfo)                     {}
+
+type SectorRedoSealPreCommit2Failed struct{ error }
+
+func (evt SectorRedoSealPreCommit2Failed) FormatError(xerrors.Printer) (next error) { return evt.error }
+func (evt SectorRedoSealPreCommit2Failed) apply(si *SectorInfo)                     {}
+
+type SectorRedoPreCommit2 struct {
+}
+
+func (evt SectorRedoPreCommit2) apply(state *SectorInfo) {}
