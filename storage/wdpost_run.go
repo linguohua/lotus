@@ -86,6 +86,7 @@ func (s *WindowPoStScheduler) startGeneratePoST(
 
 		posts, err := s.runGeneratePoST(ctx, ts, deadline)
 		completeGeneratePoST(posts, err)
+
 	}()
 
 	return abort
@@ -218,7 +219,8 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 		update = append(update, info.SectorKeyCID != nil)
 	}
 
-	bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, update, nil)
+	// bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, update, nil)
+	bad, err := s.faultTracker.CheckProvable2(ctx, s.proofType, tocheck, update)
 	if err != nil {
 		return bitfield.BitField{}, xerrors.Errorf("checking provable sectors: %w", err)
 	}
@@ -569,7 +571,10 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 		for retries := 0; ; retries++ {
 			skipCount := uint64(0)
 			var partitions []miner.PoStPartition
+
 			var xsinfos []proof7.ExtendedSectorInfo
+			tsStart := build.Clock.Now()
+
 			for partIdx, partition := range batch {
 				// TODO: Can do this in parallel
 				toProve, err := bitfield.SubtractBitField(partition.LiveSectors, partition.FaultySectors)
@@ -624,14 +629,15 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 				break
 			}
 
+			elapsed2 := time.Since(tsStart)
+
 			// Generate proof
 			log.Infow("running window post",
 				"chain-random", rand,
 				"deadline", di,
 				"height", ts.Height(),
-				"skipped", skipCount)
-
-			tsStart := build.Clock.Now()
+				"skipped", skipCount,
+				"check-elapsed", elapsed2)
 
 			mid, err := address.IDFromAddress(s.actor)
 			if err != nil {
@@ -645,10 +651,13 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, di dline.Info, t
 			}()
 			postOut, ps, err := s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), xsinfos, append(abi.PoStRandomness{}, rand...))
 			elapsed := time.Since(tsStart)
-			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed)
+
+			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed,
+				"check-elapsed", elapsed2, "deadline", di, "sectors", len(xsinfos))
 			if err != nil {
 				log.Errorf("error generating window post: %s", err)
 			}
+
 			if err == nil {
 
 				// If we proved nothing, something is very wrong.

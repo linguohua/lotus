@@ -100,13 +100,13 @@ func newTestMgr(ctx context.Context, t *testing.T, ds datastore.Datastore) (*Man
 
 	si := stores.NewIndex()
 
-	lstor, err := stores.NewLocal(ctx, st, si, nil)
+	lstor, err := stores.NewLocal(ctx, st, si, nil, "test", "")
 	require.NoError(t, err)
 
-	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si})
+	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, "", nil)
 	require.NoError(t, err)
 
-	stor := stores.NewRemote(lstor, si, nil, 6000, &stores.DefaultPartialFileHandler{})
+	stor := stores.NewRemote(lstor, si, nil, 6000, &stores.DefaultPartialFileHandler{}, "")
 
 	m := &Manager{
 		ls:         st,
@@ -146,7 +146,7 @@ func TestSimple(t *testing.T) {
 
 	err := m.AddWorker(ctx, newTestWorker(WorkerConfig{
 		TaskTypes: localTasks,
-	}, lstor, m))
+	}, lstor, m), "")
 	require.NoError(t, err)
 
 	sid := storage.SectorRef{
@@ -329,7 +329,7 @@ func TestRedoPC1(t *testing.T) {
 		TaskTypes: localTasks,
 	}, lstor, m)
 
-	err := m.AddWorker(ctx, tw)
+	err := m.AddWorker(ctx, tw, "")
 	require.NoError(t, err)
 
 	sid := storage.SectorRef{
@@ -383,7 +383,7 @@ func TestRestartManager(t *testing.T) {
 				TaskTypes: localTasks,
 			}, lstor, m)
 
-			err := m.AddWorker(ctx, tw)
+			err := m.AddWorker(ctx, tw, "")
 			require.NoError(t, err)
 
 			sid := storage.SectorRef{
@@ -428,7 +428,7 @@ func TestRestartManager(t *testing.T) {
 			defer cleanup2()
 
 			tw.ret = m // simulate jsonrpc auto-reconnect
-			err = m.AddWorker(ctx, tw)
+			err = m.AddWorker(ctx, tw, "")
 			require.NoError(t, err)
 
 			if returnBeforeCall {
@@ -484,9 +484,9 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds))
+	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	sid := storage.SectorRef{
@@ -520,9 +520,9 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds))
+	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err = m.AddWorker(ctx, w)
+	err = m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	<-apDone
@@ -556,9 +556,9 @@ func TestReenableWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds))
+	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	time.Sleep(time.Millisecond * 100)

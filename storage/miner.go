@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/filecoin-project/go-bitfield"
@@ -64,6 +65,10 @@ type Miner struct {
 	sealingEvtType journal.EventType
 
 	journal journal.Journal
+
+	sealingDisable bool
+
+	recoverMode bool
 }
 
 // SealingStateEvt is a journal event that records a sector state transition.
@@ -139,6 +144,13 @@ func NewMiner(api fullNodeFilteredAPI,
 	feeCfg config.MinerFeeConfig,
 	journal journal.Journal,
 	as *AddressSelector) (*Miner, error) {
+
+	sealingDisable := os.Getenv("YOUZHOU_SEALING_DISABLE") == "true"
+	recoverMode := os.Getenv("YOUZHOU_RECOVER_MODE") == "true"
+	if recoverMode {
+		log.Warn("Miner works in recover mode")
+	}
+
 	m := &Miner{
 		api:     api,
 		feeCfg:  feeCfg,
@@ -153,6 +165,9 @@ func NewMiner(api fullNodeFilteredAPI,
 		getSealConfig:  gsd,
 		journal:        journal,
 		sealingEvtType: journal.RegisterEventType("storage", "sealing_states"),
+
+		sealingDisable: sealingDisable,
+		recoverMode:    recoverMode,
 	}
 
 	return m, nil
@@ -196,8 +211,10 @@ func (m *Miner) Run(ctx context.Context) error {
 	// Instantiate the sealing FSM.
 	m.sealing = sealing.New(ctx, adaptedAPI, m.feeCfg, evtsAdapter, m.maddr, m.ds, m.sealer, m.sc, m.verif, m.prover, &pcp, cfg, m.handleSealingNotifications, as)
 
-	// Run the sealing FSM.
-	go m.sealing.Run(ctx) //nolint:errcheck // logged intside the function
+	if !m.sealingDisable {
+		// Run the sealing FSM.
+		go m.sealing.Run(ctx) //nolint:errcheck // logged intside the function
+	}
 
 	return nil
 }
