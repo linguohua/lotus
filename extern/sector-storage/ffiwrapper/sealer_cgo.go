@@ -907,6 +907,12 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		}
 	}
 
+	// lingh: remove 'unseal_path.txt' if exist
+	err = os.Remove(path.Join(paths.Sealed, "unseal_path.txt"))
+	if err != nil {
+		log.Warnf("FinalizeSector: Remove unseal_path.txt error:%v", err)
+	}
+
 	// ignore clear cache error
 	return nil
 }
