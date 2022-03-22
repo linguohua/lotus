@@ -284,9 +284,8 @@ func (sh *scheduler) loadEnv() {
 	}
 
 	if finTicketInterval < 0 {
-		p1TicketsPerInterval = 0
+		finTicketInterval = 0
 	}
-
 	if finTicketsPerInterval < 1 {
 		finTicketsPerInterval = 1
 	}
