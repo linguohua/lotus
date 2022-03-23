@@ -383,7 +383,8 @@ func (st *Local) declareSectors(ctx context.Context, p string, id ID, primary bo
 
 			sid, err := storiface.ParseSectorID(ent.Name())
 			if err != nil {
-				return xerrors.Errorf("parse sector id %s: %w", ent.Name(), err)
+				// return xerrors.Errorf("parse sector id %s: %w", ent.Name(), err)
+				continue
 			}
 
 			log.Debugf("Local.declareSectors declare sector id:%d", sid)
