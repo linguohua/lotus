@@ -108,7 +108,7 @@ func loadP1CountFromEnv() int {
 
 	stepsEnv := os.Getenv("FIL_PROOFS_NUMA_CPU_CORES")
 	if len(stepsEnv) < 1 {
-		log.Fatal("FIL_PROOFS_STEPS should be configured when FIL_PROOFS_STEP_STYLE=true")
+		log.Fatal("FIL_PROOFS_NUMA_CPU_CORES should be configured when FIL_PROOFS_STEP_STYLE=true")
 	}
 
 	// (0,0,1)(0,2,3)(0,4,5)(0,6,7)
