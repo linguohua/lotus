@@ -106,13 +106,14 @@ func loadP1CountFromEnv() int {
 		return 1
 	}
 
-	stepsEnv := os.Getenv("FIL_PROOFS_STEPS")
+	stepsEnv := os.Getenv("FIL_PROOFS_NUMA_CPU_CORES")
 	if len(stepsEnv) < 1 {
 		log.Fatal("FIL_PROOFS_STEPS should be configured when FIL_PROOFS_STEP_STYLE=true")
 	}
 
-	steps := strings.Split(stepsEnv, ",")
-	return len(steps)
+	// (0,0,1)(0,2,3)(0,4,5)(0,6,7)
+	steps := strings.Count(stepsEnv, "(")
+	return steps
 }
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
