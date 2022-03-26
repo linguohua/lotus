@@ -7,8 +7,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"math/bits"
@@ -611,49 +609,49 @@ func (sb *Sealer) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 		return storage.SectorCids{}, xerrors.Errorf("presealing sector %d (%s): %w", sector.ID.Number, paths.Unsealed, err)
 	}
 
-	ssize, err := sector.ProofType.SectorSize()
-	if err != nil {
-		return storage.SectorCids{}, xerrors.Errorf("get ssize: %w", err)
-	}
+	// ssize, err := sector.ProofType.SectorSize()
+	// if err != nil {
+	// 	return storage.SectorCids{}, xerrors.Errorf("get ssize: %w", err)
+	// }
 
-	p1odec := map[string]interface{}{}
-	if err := json.Unmarshal(phase1Out, &p1odec); err != nil {
-		return storage.SectorCids{}, xerrors.Errorf("unmarshaling pc1 output: %w", err)
-	}
+	// p1odec := map[string]interface{}{}
+	// if err := json.Unmarshal(phase1Out, &p1odec); err != nil {
+	// 	return storage.SectorCids{}, xerrors.Errorf("unmarshaling pc1 output: %w", err)
+	// }
 
-	var ticket abi.SealRandomness
-	ti, found := p1odec["_lotus_SealRandomness"]
+	// var ticket abi.SealRandomness
+	// ti, found := p1odec["_lotus_SealRandomness"]
 
-	if found {
-		ticket, err = base64.StdEncoding.DecodeString(ti.(string))
-		if err != nil {
-			return storage.SectorCids{}, xerrors.Errorf("decoding ticket: %w", err)
-		}
+	// if found {
+	// 	ticket, err = base64.StdEncoding.DecodeString(ti.(string))
+	// 	if err != nil {
+	// 		return storage.SectorCids{}, xerrors.Errorf("decoding ticket: %w", err)
+	// 	}
 
-		for i := 0; i < PC2CheckRounds; i++ {
-			var sd [32]byte
-			_, _ = rand.Read(sd[:])
+	// 	for i := 0; i < PC2CheckRounds; i++ {
+	// 		var sd [32]byte
+	// 		_, _ = rand.Read(sd[:])
 
-			_, err := ffi.SealCommitPhase1(
-				sector.ProofType,
-				sealedCID,
-				unsealedCID,
-				paths.Cache,
-				paths.Sealed,
-				sector.ID.Number,
-				sector.ID.Miner,
-				ticket,
-				sd[:],
-				[]abi.PieceInfo{{Size: abi.PaddedPieceSize(ssize), PieceCID: unsealedCID}},
-			)
-			if err != nil {
-				log.Warn("checking PreCommit failed: ", err)
-				log.Warnf("num:%d tkt:%v seed:%v sealedCID:%v, unsealedCID:%v", sector.ID.Number, ticket, sd[:], sealedCID, unsealedCID)
+	// 		_, err := ffi.SealCommitPhase1(
+	// 			sector.ProofType,
+	// 			sealedCID,
+	// 			unsealedCID,
+	// 			paths.Cache,
+	// 			paths.Sealed,
+	// 			sector.ID.Number,
+	// 			sector.ID.Miner,
+	// 			ticket,
+	// 			sd[:],
+	// 			[]abi.PieceInfo{{Size: abi.PaddedPieceSize(ssize), PieceCID: unsealedCID}},
+	// 		)
+	// 		if err != nil {
+	// 			log.Warn("checking PreCommit failed: ", err)
+	// 			log.Warnf("num:%d tkt:%v seed:%v sealedCID:%v, unsealedCID:%v", sector.ID.Number, ticket, sd[:], sealedCID, unsealedCID)
 
-				return storage.SectorCids{}, xerrors.Errorf("checking PreCommit failed: %w", err)
-			}
-		}
-	}
+	// 			return storage.SectorCids{}, xerrors.Errorf("checking PreCommit failed: %w", err)
+	// 		}
+	// 	}
+	// }
 
 	return storage.SectorCids{
 		Unsealed: unsealedCID,
