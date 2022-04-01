@@ -221,8 +221,6 @@ var runCmd = &cli.Command{
 			}
 		}
 
-		mamami()
-
 		// Connect to storage-miner
 		ctx := lcli.ReqContext(cctx)
 
