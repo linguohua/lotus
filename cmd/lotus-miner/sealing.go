@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	//"math"
 	"os"
@@ -14,10 +17,14 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"github.com/ipfs/go-datastore"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+	"github.com/filecoin-project/lotus/node/modules"
+	"github.com/filecoin-project/lotus/node/repo"
 
 	lcli "github.com/filecoin-project/lotus/cli"
 )
@@ -30,6 +37,7 @@ var sealingCmd = &cli.Command{
 		lcli.ListWorkersCmd,
 		sealingSchedDiagCmd,
 		sealingAbortCmd,
+		sealingNextSectorIDCmd,
 	},
 }
 
@@ -221,5 +229,70 @@ var sealingAbortCmd = &cli.Command{
 		fmt.Printf("aborting job %s, task %s, sector %d, running on host %s\n", job.ID.String(), job.Task.Short(), job.Sector.Number, job.Hostname)
 
 		return nodeApi.SealingAbort(ctx, job.ID)
+	},
+}
+
+var sealingNextSectorIDCmd = &cli.Command{
+	Name:      "nextid",
+	Usage:     "set next sector id to datastore, make sure miner is not running",
+	ArgsUsage: "[sector id]",
+	Action: func(cctx *cli.Context) error {
+		repoPath := cctx.String(FlagMinerRepo)
+		r, err := repo.NewFS(repoPath)
+		if err != nil {
+			return err
+		}
+
+		ok, err := r.Exists()
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return xerrors.Errorf("repo at '%s' is not initialized", cctx.String(FlagMinerRepo))
+		}
+
+		lr, err := r.Lock(repo.StorageMiner)
+		if err != nil {
+			return err
+		}
+		defer lr.Close() //nolint:errcheck
+
+		ctx := lcli.ReqContext(cctx)
+		mds, err := lr.Datastore(ctx, "/metadata")
+		if err != nil {
+			return err
+		}
+
+		buf2, err := mds.Get(ctx, datastore.NewKey(modules.StorageCounterDSPrefix))
+		if err == nil {
+			currentNextID, err := binary.ReadUvarint(bytes.NewReader(buf2))
+			if err == nil {
+				return xerrors.Errorf("read current next id from datastore failed:%v", err)
+			}
+
+			fmt.Printf("current next id:%d\n", currentNextID)
+		}
+
+		if cctx.Args().Len() < 1 {
+			return nil
+		}
+
+		if cctx.Args().Len() != 1 {
+			return xerrors.Errorf("expected 1 argument")
+		}
+
+		var nextIDStr = cctx.Args().First()
+		nextIDint, err := strconv.Atoi(nextIDStr)
+		if err != nil {
+			return err
+		}
+
+		var nextID = abi.SectorNumber(nextIDint)
+		fmt.Printf("set new next id:%d\n", nextID)
+
+		buf := make([]byte, binary.MaxVarintLen64)
+		size := binary.PutUvarint(buf, uint64(nextID))
+		return mds.Put(ctx, datastore.NewKey(modules.StorageCounterDSPrefix), buf[:size])
 	},
 }
