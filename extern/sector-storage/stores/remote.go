@@ -169,31 +169,33 @@ func (r *Remote) AcquireSector(ctx context.Context, s storage.SectorRef, existin
 	}
 
 	// get the local path, lock storage by sector
-	si, err := r.index.TryBindSector2SealStorage(ctx, existing, pathType, s.ID, groupID)
+	sis, err := r.index.TryBindSector2SealStorage(ctx, existing, pathType, s.ID, groupID)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
 
-	loclpath := si.URLs[0]
-	for _, fileType := range storiface.PathTypes {
-		dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(s.ID))
-		storiface.SetPathByType(&paths, fileType, dest)
+	if len(sis) == 1 {
+		si := &sis[0]
+		loclpath := si.URLs[0]
+		for _, fileType := range storiface.PathTypes {
+			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(s.ID))
+			storiface.SetPathByType(&paths, fileType, dest)
+			storiface.SetPathByType(&stores, fileType, string(si.ID))
+		}
+	} else {
+		sealS := &sis[1]
+		for j, fileType := range storiface.PathTypes {
+			si := &sis[j] // it will be ok
+			if si.ID == "" {
+				si = sealS
+			}
 
-		//storiface.SetPathByType(&stores, fileType, storageID)
+			loclpath := si.URLs[0]
+			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(s.ID))
+			storiface.SetPathByType(&paths, fileType, dest)
 
-		//if err := r.index.StorageDeclareSector(ctx, ID(storageID), s.ID, fileType, op == storiface.AcquireMove); err != nil {
-		//	log.Warnf("declaring sector %v in %s failed: %+v", s, storageID, err)
-		//	continue
-		//}
-
-		//if op == storiface.AcquireMove {
-		//	id := ID(storageID)
-		//	if err := r.deleteFromRemote(ctx, url, &id); err != nil {
-		//		log.Warnf("deleting sector %v from %s (delete %s): %+v", s, storageID, url, err)
-		//	}
-		//}
-
-		storiface.SetPathByType(&stores, fileType, string(si.ID))
+			storiface.SetPathByType(&stores, fileType, string(si.ID))
+		}
 	}
 
 	return paths, stores, nil

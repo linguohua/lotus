@@ -89,7 +89,7 @@ type SectorIndex interface { // part of storage-miner api
 
 	StorageList(ctx context.Context) (map[ID][]Decl, error)
 
-	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) (StorageInfo, error)
+	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) ([]StorageInfo, error)
 	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 }
 
@@ -131,10 +131,12 @@ func NewIndex() *Index {
 	}
 }
 
-func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.SectorFileType) (StorageInfo, error) {
+func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.SectorFileType) ([]StorageInfo, error) {
 	log.Debugf("allocStorageForFinalize: sector %s, ft:%d", sector, ft)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
-	for _, fileType := range storiface.PathTypes {
+	ss := make([]StorageInfo, len(storiface.PathTypes))
+	found := false
+	for j, fileType := range storiface.PathTypes {
 		if fileType&ft == 0 {
 			continue
 		}
@@ -149,12 +151,20 @@ func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.Sector
 						sector, s.info.ID, s.info.URLs, ft)
 
 					// already allocated
-					return *s.info, nil
+					ss[j] = *s.info
+					found = true
+					break
 				}
 			}
 		}
 	}
 
+	// already found
+	if found {
+		return ss, nil
+	}
+
+	// allocate for new sector to finalize to storage
 	var candidates []*storageEntry
 	for _, p := range i.stores {
 		// only bind to sealing storage
@@ -192,7 +202,7 @@ func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.Sector
 	}
 
 	if len(candidates) < 1 {
-		return StorageInfo{}, xerrors.Errorf("allocStorageForFinalize failed to found storage to bind %s",
+		return nil, xerrors.Errorf("allocStorageForFinalize failed to found storage to bind %s",
 			sector)
 	}
 
@@ -207,7 +217,7 @@ func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.Sector
 	// 	return StorageInfo{}, err
 	// }
 	log.Debugf("allocStorageForFinalize bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
-	return *candidate.info, nil
+	return []StorageInfo{*candidate.info}, nil
 }
 
 func candidateSelect(candidates []*storageEntry) *storageEntry {
@@ -233,7 +243,7 @@ func candidateSelect(candidates []*storageEntry) *storageEntry {
 }
 
 func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType,
-	sector abi.SectorID, groupID string) (StorageInfo, error) {
+	sector abi.SectorID, groupID string) ([]StorageInfo, error) {
 	log.Debugf("TryBindSector2SealStorage: %s, groupID:%s", sector, groupID)
 	// ft := storiface.FTUnsealed | storiface.FTSealed | storiface.FTCache
 	i.lk.Lock()
@@ -249,7 +259,7 @@ func (i *Index) TryBindSector2SealStorage(ctx context.Context, fileType storifac
 	return i.allocStorageForSealing(sector, groupID)
 }
 
-func (i *Index) allocStorageForSealing(sector abi.SectorID, groupID string) (StorageInfo, error) {
+func (i *Index) allocStorageForSealing(sector abi.SectorID, groupID string) ([]StorageInfo, error) {
 	var candidates []*storageEntry
 	for _, p := range i.stores {
 		// only bind to sealing storage
@@ -276,7 +286,7 @@ func (i *Index) allocStorageForSealing(sector abi.SectorID, groupID string) (Sto
 			if ok {
 				// log.Infof("TryBindSector2SealStorage bind ok, already bind: sector %s, storage ID:%s",
 				// 	sector, p.info.ID)
-				return *p.info, nil
+				return []StorageInfo{*p.info}, nil
 			}
 
 			// log.Infof("TryBindSector2SealStorage storage %s already bind to sector:%s",
@@ -300,7 +310,7 @@ func (i *Index) allocStorageForSealing(sector abi.SectorID, groupID string) (Sto
 	}
 
 	if len(candidates) < 1 {
-		return StorageInfo{}, xerrors.Errorf("TryBindSector2SealStorage failed to found storage to bind %s, groupID:%s",
+		return nil, xerrors.Errorf("TryBindSector2SealStorage failed to found storage to bind %s, groupID:%s",
 			sector, groupID)
 	}
 
@@ -316,7 +326,7 @@ func (i *Index) allocStorageForSealing(sector abi.SectorID, groupID string) (Sto
 	// 	return StorageInfo{}, err
 	// }
 	log.Debugf("TryBindSector2SealStorage bind ok: sector %s, storage ID:%s", sector, candidate.info.ID)
-	return *candidate.info, nil
+	return []StorageInfo{*candidate.info}, nil
 }
 
 func (i *Index) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {

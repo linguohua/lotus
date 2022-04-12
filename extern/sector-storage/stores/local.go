@@ -510,22 +510,33 @@ func (st *Local) AcquireSector(ctx context.Context, sid storage.SectorRef, exist
 	}
 
 	// get the local path, lock storage by sector
-	si, err := st.index.TryBindSector2SealStorage(ctx, existing, pathType, sid.ID, groupID)
+	sis, err := st.index.TryBindSector2SealStorage(ctx, existing, pathType, sid.ID, groupID)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
 
-	var localpath string
-	if len(si.URLs) > 1 {
-		localpath = si.URLs[rand.Int()%len(si.URLs)]
+	if len(sis) == 1 {
+		si := &sis[0]
+		loclpath := si.URLs[0]
+		for _, fileType := range storiface.PathTypes {
+			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(sid.ID))
+			storiface.SetPathByType(&paths, fileType, dest)
+			storiface.SetPathByType(&stores, fileType, string(si.ID))
+		}
 	} else {
-		localpath = si.URLs[0]
-	}
+		sealS := &sis[1]
+		for j, fileType := range storiface.PathTypes {
+			si := &sis[j] // it will be ok
+			if si.ID == "" {
+				si = sealS
+			}
 
-	for _, fileType := range storiface.PathTypes {
-		dest := filepath.Join(localpath, fileType.String(), storiface.SectorName(sid.ID))
-		storiface.SetPathByType(&paths, fileType, dest)
-		storiface.SetPathByType(&stores, fileType, string(si.ID))
+			loclpath := si.URLs[0]
+			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(sid.ID))
+			storiface.SetPathByType(&paths, fileType, dest)
+
+			storiface.SetPathByType(&stores, fileType, string(si.ID))
+		}
 	}
 
 	return paths, stores, nil

@@ -164,7 +164,7 @@ type StorageMiner interface {
 	StorageTryLock(ctx context.Context, sector abi.SectorID, read storiface.SectorFileType, write storiface.SectorFileType) (bool, error)                               //perm:admin
 	StorageList(ctx context.Context) (map[stores.ID][]stores.Decl, error)                                                                                               //perm:admin
 	StorageGetLocks(ctx context.Context) (storiface.SectorLocks, error)                                                                                                 //perm:admin
-	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) (stores.StorageInfo, error)
+	TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) ([]stores.StorageInfo, error)
 	UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error
 
 	StorageLocal(ctx context.Context) (map[stores.ID]string, error)       //perm:admin
@@ -268,7 +268,7 @@ type StorageMiner interface {
 	CreateBackup(ctx context.Context, fpath string) error //perm:admin
 
 	CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef, update []bool, expensive bool) (map[abi.SectorNumber]string, error) //perm:admin
-	CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorNumber]string, error) //perm:admin
+	CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storage.SectorRef) (map[abi.SectorNumber]string, error)                             //perm:admin
 
 	ComputeProof(ctx context.Context, ssi []builtin.ExtendedSectorInfo, rand abi.PoStRandomness, poStEpoch abi.ChainEpoch, nv abinetwork.Version) ([]builtin.PoStProof, error) //perm:read
 }

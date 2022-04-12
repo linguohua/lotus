@@ -833,7 +833,7 @@ type StorageMinerStruct struct {
 
 		StorageTryLock func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) (bool, error) `perm:"admin"`
 
-		TryBindSector2SealStorage func(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) `perm:"admin"`
+		TryBindSector2SealStorage func(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) ([] stores.StorageInfo, error) `perm:"admin"`
 
 		UnBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID) error `perm:"admin"`
 
@@ -4907,12 +4907,12 @@ func (s *StorageMinerStub) StorageTryLock(p0 context.Context, p1 abi.SectorID, p
 	return false, ErrNotSupported
 }
 
-func (s *StorageMinerStruct) TryBindSector2SealStorage(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) {
+func (s *StorageMinerStruct) TryBindSector2SealStorage(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) ([]stores.StorageInfo, error) {
 	return s.Internal.TryBindSector2SealStorage(p0, fileType, pathType, p1, p2)
 }
 
-func (s *StorageMinerStub) TryBindSector2SealStorage(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) (stores.StorageInfo, error) {
-	return *new(stores.StorageInfo), xerrors.New("method not supported")
+func (s *StorageMinerStub) TryBindSector2SealStorage(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) ([]stores.StorageInfo, error) {
+	return nil, xerrors.New("method not supported")
 }
 
 func (s *StorageMinerStruct) UnBindSector2SealStorage(p0 context.Context, p1 abi.SectorID) error {
