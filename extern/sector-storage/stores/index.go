@@ -119,6 +119,8 @@ type Index struct {
 
 	sectors map[Decl][]*declMeta
 	stores  map[ID]*storageEntry
+
+	sectorSizeMemo uint64
 }
 
 func NewIndex() *Index {
@@ -164,6 +166,7 @@ func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.Sector
 		return ss, nil
 	}
 
+	var spaceReq uint64 = i.sectorSizeMemo * 2
 	// allocate for new sector to finalize to storage
 	var candidates []*storageEntry
 	for _, p := range i.stores {
@@ -183,6 +186,11 @@ func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.Sector
 		if p.info.MaxSealingSectors > 0 && len(p.bindSectors) >= p.info.MaxSealingSectors {
 			log.Debugf("allocStorageForFinalize not allocating on %s,  sector count exceed MaxSealingSectors %d",
 				p.info.ID, p.info.MaxSealingSectors)
+			continue
+		}
+
+		if spaceReq > uint64(p.fsi.Available) {
+			log.Debugf("not allocating on %s, out of space (available: %d, need: %d)", p.info.ID, p.fsi.Available, spaceReq)
 			continue
 		}
 
@@ -657,6 +665,10 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 		//log.Infof("StorageFindSector, sector %v, out:%s", s, id)
 	}
 
+	if ssize > 0 {
+		i.sectorSizeMemo = uint64(ssize)
+	}
+
 	// if allowFetch {
 	// 	spaceReq, err := ft.SealSpaceUse(ssize)
 	// 	if err != nil {
@@ -746,6 +758,10 @@ func (i *Index) StorageBestAlloc(ctx context.Context, allocate storiface.SectorF
 	}
 	if err != nil {
 		return nil, xerrors.Errorf("estimating required space: %w", err)
+	}
+
+	if ssize > 0 {
+		i.sectorSizeMemo = uint64(ssize)
 	}
 
 	for _, p := range i.stores {
