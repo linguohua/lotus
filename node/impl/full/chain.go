@@ -73,7 +73,7 @@ type ChainModule struct {
 	// blockstores.
 	ExposedBlockstore dtypes.ExposedBlockstore
 
-	ChainRedisInst ChainRedis
+	ChainRedisInst *ChainRedis `optional:"true"`
 }
 
 var _ ChainModuleAPI = (*ChainModule)(nil)
@@ -97,13 +97,11 @@ type ChainAPI struct {
 }
 
 type ChainRedis struct {
-	fx.In
-
-	RedisInst *redis.Client `optional:"true"`
+	RedisInst *redis.Client
 }
 
-func NewChainRedis() ChainRedis {
-	cr := ChainRedis{}
+func NewChainRedis() *ChainRedis {
+	cr := &ChainRedis{}
 	redisAddr := os.Getenv("YOUZHOU_REDIS_ADDR")
 	if redisAddr != "" {
 		log.Warnf("USE Anchor URL:%s", redisAddr)
@@ -266,7 +264,7 @@ func (a *ChainAPI) ChainGetMessagesInTipset(ctx context.Context, tsk types.TipSe
 }
 
 func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
-	if tsk.IsEmpty() {
+	if tsk.IsEmpty() && m.ChainRedisInst != nil {
 		redisInst := m.ChainRedisInst.RedisInst
 		if redisInst != nil {
 			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
@@ -288,7 +286,7 @@ func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpo
 }
 
 func (m *ChainModule) ChainGetTipSetAfterHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
-	if tsk.IsEmpty() {
+	if tsk.IsEmpty() && m.ChainRedisInst != nil {
 		redisInst := m.ChainRedisInst.RedisInst
 		if redisInst != nil {
 			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
