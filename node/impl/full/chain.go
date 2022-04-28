@@ -266,13 +266,16 @@ func (a *ChainAPI) ChainGetMessagesInTipset(ctx context.Context, tsk types.TipSe
 }
 
 func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
-	redisInst := m.ChainRedisInst.RedisInst
-	if redisInst != nil {
-		tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
-		if err == nil {
-			tsk3, err := types.TipSetKeyFromBytes([]byte(tsk2))
+	if tsk.IsEmpty() {
+		redisInst := m.ChainRedisInst.RedisInst
+		if redisInst != nil {
+			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
 			if err == nil {
-				tsk = tsk3
+				tsk3, err := types.TipSetKeyFromBytes([]byte(tsk2))
+				if err == nil {
+					tsk = tsk3
+					log.Debug("ChainGetTipSetByHeight replace tsk from redis")
+				}
 			}
 		}
 	}
@@ -285,6 +288,20 @@ func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpo
 }
 
 func (m *ChainModule) ChainGetTipSetAfterHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
+	if tsk.IsEmpty() {
+		redisInst := m.ChainRedisInst.RedisInst
+		if redisInst != nil {
+			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
+			if err == nil {
+				tsk3, err := types.TipSetKeyFromBytes([]byte(tsk2))
+				if err == nil {
+					tsk = tsk3
+					log.Debug("ChainGetTipSetAfterHeight replace tsk from redis")
+				}
+			}
+		}
+	}
+
 	ts, err := m.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
