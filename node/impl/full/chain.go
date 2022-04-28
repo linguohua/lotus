@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
-	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +39,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+
+	"github.com/go-redis/redis/v8"
 )
 
 var log = logging.Logger("fullnode")
@@ -70,6 +72,8 @@ type ChainModule struct {
 	// expose externally. In the future, this will be segregated into two
 	// blockstores.
 	ExposedBlockstore dtypes.ExposedBlockstore
+
+	ChainRedisInst ChainRedis
 }
 
 var _ ChainModuleAPI = (*ChainModule)(nil)
@@ -90,6 +94,29 @@ type ChainAPI struct {
 
 	// BaseBlockstore is the underlying blockstore
 	BaseBlockstore dtypes.BaseBlockstore
+}
+
+type ChainRedis struct {
+	fx.In
+
+	RedisInst *redis.Client `optional:"true"`
+}
+
+func NewChainRedis() ChainRedis {
+	cr := ChainRedis{}
+	redisAddr := os.Getenv("YOUZHOU_REDIS_ADDR")
+	if redisAddr != "" {
+		log.Warnf("USE Anchor URL:%s", redisAddr)
+
+		rdb := redis.NewClient(&redis.Options{
+			Addr:     redisAddr,
+			Password: "", // no password set
+			DB:       0,  // use default DB
+		})
+		cr.RedisInst = rdb
+	}
+
+	return cr
 }
 
 func (m *ChainModule) ChainNotify(ctx context.Context) (<-chan []*api.HeadChange, error) {
@@ -239,17 +266,15 @@ func (a *ChainAPI) ChainGetMessagesInTipset(ctx context.Context, tsk types.TipSe
 }
 
 func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
-	cpuprofile := os.Getenv("YOUZHOU_LOTUS_CPU_PROFILE")
-	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
-		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
+	redisInst := m.ChainRedisInst.RedisInst
+	if redisInst != nil {
+		tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
+		if err == nil {
+			tsk3, err := types.TipSetKeyFromBytes([]byte(tsk2))
+			if err == nil {
+				tsk = tsk3
+			}
 		}
-		defer f.Close() // error handling omitted for example
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
 	}
 
 	ts, err := m.Chain.GetTipSetFromKey(ctx, tsk)
