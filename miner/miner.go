@@ -341,6 +341,10 @@ minerLoop:
 
 		b, err := m.mineOne(ctx, base)
 		if err != nil {
+			if err.Error() == "AABB" {
+				continue
+			}
+
 			log.Errorf("mining block failed: %+v", err)
 			if !m.niceSleep(time.Second) {
 				continue minerLoop
@@ -527,10 +531,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			}
 
 			// try to opportunistically pull actual power and plug it into the fake mbi
-			if pow, err := m.api.StateMinerPower(ctx, m.address, base.TipSet.Key()); err == nil && pow != nil {
+			if pow, err2 := m.api.StateMinerPower(ctx, m.address, base.TipSet.Key()); err2 == nil && pow != nil {
 				hasMinPower = pow.HasMinPower
 				mbi.MinerPower = pow.MinerPower.QualityAdjPower
 				mbi.NetworkPower = pow.TotalPower.QualityAdjPower
+			} else {
+				err = err2
 			}
 		}
 
@@ -563,9 +569,10 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		}
 	}()
 
-	mbi, err = m.api.MinerGetBaseInfo(ctx, m.address, round, base.TipSet.Key())
-	if err != nil {
-		err = xerrors.Errorf("failed to get mining base info: %w", err)
+	var err2 error
+	mbi, err2 = m.api.MinerGetBaseInfo(ctx, m.address, round, base.TipSet.Key())
+	if err2 != nil {
+		err = xerrors.Errorf("failed to get mining base info: %w", err2)
 		return nil, err
 	}
 	if mbi == nil {
@@ -590,16 +597,16 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		rbase = bvals[len(bvals)-1]
 	}
 
-	ticket, err := m.computeTicket(ctx, &rbase, base, mbi)
-	if err != nil {
-		err = xerrors.Errorf("scratching ticket failed: %w", err)
+	ticket, err2 := m.computeTicket(ctx, &rbase, base, mbi)
+	if err2 != nil {
+		err = xerrors.Errorf("scratching ticket failed: %w", err2)
 		return nil, err
 	}
 
 	// lingh: how to ensure exactly 5 winners a round?
-	winner, err = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
-	if err != nil {
-		err = xerrors.Errorf("failed to check if we win next round: %w", err)
+	winner, err2 = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
+	if err2 != nil {
+		err = xerrors.Errorf("failed to check if we win next round: %w", err2)
 		return nil, err
 	}
 
@@ -610,34 +617,34 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	tTicket := build.Clock.Now()
 
 	buf := new(bytes.Buffer)
-	if err := m.address.MarshalCBOR(buf); err != nil {
-		err = xerrors.Errorf("failed to marshal miner address: %w", err)
+	if err2 = m.address.MarshalCBOR(buf); err2 != nil {
+		err = xerrors.Errorf("failed to marshal miner address: %w", err2)
 		return nil, err
 	}
 
-	rand, err := lrand.DrawRandomness(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
-	if err != nil {
-		err = xerrors.Errorf("failed to get randomness for winning post: %w", err)
+	rand, err2 := lrand.DrawRandomness(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
+	if err2 != nil {
+		err = xerrors.Errorf("failed to get randomness for winning post: %w", err2)
 		return nil, err
 	}
 
 	prand := abi.PoStRandomness(rand)
 
 	tSeed := build.Clock.Now()
-	nv, err := m.api.StateNetworkVersion(ctx, base.TipSet.Key())
-	if err != nil {
+	nv, err2 := m.api.StateNetworkVersion(ctx, base.TipSet.Key())
+	if err2 != nil {
+		err = err2
 		return nil, err
 	}
 
 	// lingh: winning POST
-	postProof, err := m.epp.ComputeProof(ctx, mbi.Sectors, prand, round, nv)
-	if err != nil {
-		err = xerrors.Errorf("failed to compute winning post proof: %w", err)
+	postProof, err2 := m.epp.ComputeProof(ctx, mbi.Sectors, prand, round, nv)
+	if err2 != nil {
+		err = xerrors.Errorf("failed to compute winning post proof: %w", err2)
 		return nil, err
 	}
 
 	tProof := build.Clock.Now()
-
 	// delay more time to wait
 	if m.createBlockDeadline > 0 {
 		btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)), 0)
@@ -646,17 +653,43 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		diff := now.Sub(btime)
 
 		if diff < deadline {
-			m.niceSleep(deadline - diff)
+			if base.NullRounds == 0 {
+				m.niceSleep(deadline - diff)
+			} else {
+				const sleepStep = 2
+				// detect first parent block
+				for {
+					// found! return to upper to re-do mineOne again
+					newBase, err := m.GetBestMiningCandidate(ctx)
+					if err == nil {
+						oheight := base.TipSet.Height()
+						nheight := newBase.TipSet.Height()
+						if oheight != nheight {
+							log.Warnf("rebase, detect total new base %d != %d, need redo mineOne", oheight, nheight)
+							err = fmt.Errorf("AABB")
+							return nil, err
+						}
+					}
+
+					now = build.Clock.Now()
+					diff = now.Sub(btime)
+					if (diff + (time.Second * sleepStep)) >= deadline {
+						// timeout
+						break
+					}
+
+					m.niceSleep(time.Second * sleepStep)
+				}
+			}
 		}
 	}
 
 	tHardDelay := build.Clock.Now()
-
 	// check if we have new base
-	var replaceBase bool = false
 	oldbase := *base
-	newBase, err := m.GetBestMiningCandidate(ctx)
-	if err == nil {
+	var replaceBase bool = false
+	newBase, err2 := m.GetBestMiningCandidate(ctx)
+	if err2 == nil {
 		oblks := oldbase.TipSet.Blocks()
 		nblks := newBase.TipSet.Blocks()
 
@@ -669,34 +702,35 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			// replace with new base
 			base = newBase
 			replaceBase = true
+		} else if oheight != nheight && (oheight+onull) == (nheight+nnull) {
+			log.Errorf("rebase failed, base totally changed: %d != %d", oheight, nheight)
 		}
 	} else {
-		log.Errorf("mineOne GetBestMiningCandidate error:%v", err)
+		log.Errorf("mineOne GetBestMiningCandidate error:%v", err2)
 	}
 
 	if replaceBase {
 		log.Warnf("rebase, re-compute ticket")
-		ticket, err = m.computeTicket(ctx, &rbase, base, mbi)
-		if err != nil {
-			err = xerrors.Errorf("scratching ticket failed for rebase: %w", err)
-			return nil, err
+		ticket, err2 = m.computeTicket(ctx, &rbase, base, mbi)
+		if err2 != nil {
+			log.Errorf("scratching ticket failed for rebase: %w", err2)
 		}
 	}
 
 	tHardReplace := build.Clock.Now()
 
 	// get pending messages early,
-	msgs, err := m.api.MpoolSelect(context.TODO(), base.TipSet.Key(), ticket.Quality())
-	if err != nil {
-		err = xerrors.Errorf("failed to select messages for block: %w", err)
+	msgs, err2 := m.api.MpoolSelect(context.TODO(), base.TipSet.Key(), ticket.Quality())
+	if err2 != nil {
+		err = xerrors.Errorf("failed to select messages for block: %w", err2)
 		return nil, err
 	}
 
 	tPending := build.Clock.Now()
 
-	minedBlock, err = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs)
-	if err != nil {
-		err = xerrors.Errorf("failed to create block: %w", err)
+	minedBlock, err2 = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs)
+	if err2 != nil {
+		err = xerrors.Errorf("failed to create block: %w", err2)
 		return nil, err
 	}
 
