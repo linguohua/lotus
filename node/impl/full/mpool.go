@@ -47,22 +47,22 @@ type MpoolAPI struct {
 
 	PushLocks *dtypes.MpoolLocker
 
-	PayMethods *MsgPayMethods `optional:"true"`
+	MpoolAPIExt *MpoolAPIExt `optional:"true"`
 }
 
-type MsgPayMethods struct {
+type MpoolAPIExt struct {
 	UseMinerBalance bool
 }
 
-func NewMsgPayMethods() *MsgPayMethods {
-	pm := &MsgPayMethods{}
+func NewMpoolAPIExt() *MpoolAPIExt {
+	ext := &MpoolAPIExt{}
 	str := os.Getenv("YOUZHOU_CANCEL_PLEDGE")
 	if str == "true" {
 		log.Warnf("YOUZHOU_CANCEL_PLEDGE: %s", str)
-		pm.UseMinerBalance = true
+		ext.UseMinerBalance = true
 	}
 
-	return pm
+	return ext
 }
 
 func (a *MpoolAPI) MpoolGetConfig(context.Context) (*types.MpoolConfig, error) {
@@ -197,7 +197,7 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 	}
 
 	// credit goes to zhanfei-wu
-	if a.PayMethods.UseMinerBalance && (msg.Method == builtin.MethodsMiner.ProveCommitSector ||
+	if a.MpoolAPIExt.UseMinerBalance && (msg.Method == builtin.MethodsMiner.ProveCommitSector ||
 		msg.Method == builtin.MethodsMiner.PreCommitSector ||
 		msg.Method == builtin.MethodsMiner.ProveCommitAggregate ||
 		msg.Method == builtin.MethodsMiner.PreCommitSectorBatch) {

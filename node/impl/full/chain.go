@@ -73,7 +73,7 @@ type ChainModule struct {
 	// blockstores.
 	ExposedBlockstore dtypes.ExposedBlockstore
 
-	ChainRedisInst *ChainRedis `optional:"true"`
+	ChainModuleExt *ChainModuleExt `optional:"true"`
 }
 
 var _ ChainModuleAPI = (*ChainModule)(nil)
@@ -96,12 +96,12 @@ type ChainAPI struct {
 	BaseBlockstore dtypes.BaseBlockstore
 }
 
-type ChainRedis struct {
+type ChainModuleExt struct {
 	RedisInst *redis.Client
 }
 
-func NewChainRedis() *ChainRedis {
-	cr := &ChainRedis{}
+func NewChainModuleExt() *ChainModuleExt {
+	ext := &ChainModuleExt{}
 	redisAddr := os.Getenv("YOUZHOU_REDIS_ADDR")
 	if redisAddr != "" {
 		log.Warnf("USE Anchor URL:%s", redisAddr)
@@ -111,10 +111,10 @@ func NewChainRedis() *ChainRedis {
 			Password: "", // no password set
 			DB:       0,  // use default DB
 		})
-		cr.RedisInst = rdb
+		ext.RedisInst = rdb
 	}
 
-	return cr
+	return ext
 }
 
 func (m *ChainModule) ChainNotify(ctx context.Context) (<-chan []*api.HeadChange, error) {
@@ -264,8 +264,8 @@ func (a *ChainAPI) ChainGetMessagesInTipset(ctx context.Context, tsk types.TipSe
 }
 
 func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
-	if tsk.IsEmpty() && m.ChainRedisInst != nil {
-		redisInst := m.ChainRedisInst.RedisInst
+	if tsk.IsEmpty() && m.ChainModuleExt != nil {
+		redisInst := m.ChainModuleExt.RedisInst
 		if redisInst != nil {
 			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
 			if err == nil {
@@ -286,8 +286,8 @@ func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpo
 }
 
 func (m *ChainModule) ChainGetTipSetAfterHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
-	if tsk.IsEmpty() && m.ChainRedisInst != nil {
-		redisInst := m.ChainRedisInst.RedisInst
+	if tsk.IsEmpty() && m.ChainModuleExt != nil {
+		redisInst := m.ChainModuleExt.RedisInst
 		if redisInst != nil {
 			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
 			if err == nil {
