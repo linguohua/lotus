@@ -143,6 +143,16 @@ type sidsc struct {
 
 func (s *sidsc) Next() (abi.SectorNumber, error) {
 	i, err := s.sc.Next()
+	nextSectors := os.Getenv("YOUZHOU_NEXT_SECTORS")
+	if nextSectors != "" {
+		nextInSectors, err := strconv.Atoi(nextSectors)
+		if err == nil {
+			log.Infof("miner sectors pledge:%d",
+				i+uint64(nextInSectors))
+			return abi.SectorNumber(i + uint64(nextInSectors)), err
+		}
+	}
+
 	return abi.SectorNumber(i), err
 }
 
