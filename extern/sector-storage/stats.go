@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 )
 
@@ -18,27 +17,18 @@ func (m *Manager) WorkerStats(ctx context.Context) map[uuid.UUID]storiface.Worke
 	cb := func(ctx context.Context, id storiface.WorkerID, handle *workerHandle) {
 		handle.lk.Lock()
 
-		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		defer cancel()
-
-		tt, err := handle.workerRpc.TaskTypes(ctx)
-		var taskList []sealtasks.TaskType
-		if err != nil {
-			log.Warnw("getting worker task types in WorkerStats", "error", err)
-		} else {
-			for taskType := range tt {
-				taskList = append(taskList, taskType)
-			}
-		}
-
 		out[uuid.UUID(id)] = storiface.WorkerStats{
 			Info:       handle.info,
-			Tasks:      taskList,
 			Enabled:    handle.enabled,
-			MemUsedMin: handle.active.memUsedMin,
-			MemUsedMax: handle.active.memUsedMax,
-			GpuUsed:    handle.active.gpuUsed,
-			CpuUse:     handle.active.cpuUse,
+			Url:        handle.url,
+			UUID:       id.String(),
+			Paused:     handle.pauseStat(),
+			Tasks:      handle.acceptTaskTypes,
+			TaskCounts: handle.taskTypeCounters,
+			// MemUsedMin: handle.active.memUsedMin,
+			// MemUsedMax: handle.active.memUsedMax,
+			// GpuUsed:    handle.active.gpuUsed,
+			// CpuUse:     handle.active.cpuUse,
 		}
 		handle.lk.Unlock()
 	}
@@ -75,15 +65,23 @@ func (m *Manager) WorkerJobs() map[uuid.UUID][]storiface.WorkerJob {
 	for id, handle := range m.sched.workers {
 		handle.wndLk.Lock()
 		for wi, window := range handle.activeWindows {
-			for _, request := range window.todo {
-				out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
-					ID:      storiface.UndefCall,
-					Sector:  request.sector.ID,
-					Task:    request.taskType,
-					RunWait: wi + 2,
-					Start:   request.start,
-				})
-			}
+			// for _, request := range window.todo {
+			// 	out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
+			// 		ID:      storiface.UndefCall,
+			// 		Sector:  request.sector.ID,
+			// 		Task:    request.taskType,
+			// 		RunWait: wi + 1,
+			// 		Start:   request.start,
+			// 	})
+			// }
+			request := window.todo
+			out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
+				ID:      storiface.UndefCall,
+				Sector:  request.sector.ID,
+				Task:    request.taskType,
+				RunWait: wi + 1,
+				Start:   request.start,
+			})
 		}
 		handle.wndLk.Unlock()
 	}

@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
+
+	//"math"
 	"os"
 	"sort"
 	"strings"
@@ -13,13 +18,16 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"github.com/ipfs/go-datastore"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+	"github.com/filecoin-project/lotus/node/modules"
+	"github.com/filecoin-project/lotus/node/repo"
 
-	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 )
 
@@ -31,6 +39,7 @@ var sealingCmd = &cli.Command{
 		workersCmd(true),
 		sealingSchedDiagCmd,
 		sealingAbortCmd,
+		sealingNextSectorIDCmd,
 	},
 }
 
@@ -98,12 +107,12 @@ func workersCmd(sealing bool) *cli.Command {
 			})
 
 			for _, stat := range st {
-				gpuUse := "not "
-				gpuCol := color.FgBlue
-				if stat.GpuUsed > 0 {
-					gpuCol = color.FgGreen
-					gpuUse = ""
-				}
+				// gpuUse := "not "
+				// gpuCol := color.FgBlue
+				// if stat.GpuUsed > 0 {
+				// 	gpuCol = color.FgGreen
+				// 	gpuUse = ""
+				// }
 
 				var disabled string
 				if !stat.Enabled {
@@ -112,46 +121,46 @@ func workersCmd(sealing bool) *cli.Command {
 
 				fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
 
-				fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
-					barString(float64(stat.Info.Resources.CPUs), 0, float64(stat.CpuUse)), stat.CpuUse, stat.Info.Resources.CPUs)
+				// fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
+				// 	barString(float64(stat.Info.Resources.CPUs), 0, float64(stat.CpuUse)), stat.CpuUse, stat.Info.Resources.CPUs)
 
-				ramTotal := stat.Info.Resources.MemPhysical
-				ramTasks := stat.MemUsedMin
-				ramUsed := stat.Info.Resources.MemUsed
-				var ramReserved uint64 = 0
-				if ramUsed > ramTasks {
-					ramReserved = ramUsed - ramTasks
-				}
-				ramBar := barString(float64(ramTotal), float64(ramReserved), float64(ramTasks))
+				// ramTotal := stat.Info.Resources.MemPhysical
+				// ramTasks := stat.MemUsedMin
+				// ramUsed := stat.Info.Resources.MemUsed
+				// var ramReserved uint64 = 0
+				// if ramUsed > ramTasks {
+				// 	ramReserved = ramUsed - ramTasks
+				// }
+				// ramBar := barString(float64(ramTotal), float64(ramReserved), float64(ramTasks))
 
-				fmt.Printf("\tRAM:  [%s] %d%% %s/%s\n", ramBar,
-					(ramTasks+ramReserved)*100/stat.Info.Resources.MemPhysical,
-					types.SizeStr(types.NewInt(ramTasks+ramUsed)),
-					types.SizeStr(types.NewInt(stat.Info.Resources.MemPhysical)))
+				// fmt.Printf("\tRAM:  [%s] %d%% %s/%s\n", ramBar,
+				// 	(ramTasks+ramReserved)*100/stat.Info.Resources.MemPhysical,
+				// 	types.SizeStr(types.NewInt(ramTasks+ramUsed)),
+				// 	types.SizeStr(types.NewInt(stat.Info.Resources.MemPhysical)))
 
-				vmemTotal := stat.Info.Resources.MemPhysical + stat.Info.Resources.MemSwap
-				vmemTasks := stat.MemUsedMax
-				vmemUsed := stat.Info.Resources.MemUsed + stat.Info.Resources.MemSwapUsed
-				var vmemReserved uint64 = 0
-				if vmemUsed > vmemTasks {
-					vmemReserved = vmemUsed - vmemTasks
-				}
-				vmemBar := barString(float64(vmemTotal), float64(vmemReserved), float64(vmemTasks))
+				// vmemTotal := stat.Info.Resources.MemPhysical + stat.Info.Resources.MemSwap
+				// vmemTasks := stat.MemUsedMax
+				// vmemUsed := stat.Info.Resources.MemUsed + stat.Info.Resources.MemSwapUsed
+				// var vmemReserved uint64 = 0
+				// if vmemUsed > vmemTasks {
+				// 	vmemReserved = vmemUsed - vmemTasks
+				// }
+				// vmemBar := barString(float64(vmemTotal), float64(vmemReserved), float64(vmemTasks))
 
-				fmt.Printf("\tVMEM: [%s] %d%% %s/%s\n", vmemBar,
-					(vmemTasks+vmemReserved)*100/vmemTotal,
-					types.SizeStr(types.NewInt(vmemTasks+vmemReserved)),
-					types.SizeStr(types.NewInt(vmemTotal)))
+				// fmt.Printf("\tVMEM: [%s] %d%% %s/%s\n", vmemBar,
+				// 	(vmemTasks+vmemReserved)*100/vmemTotal,
+				// 	types.SizeStr(types.NewInt(vmemTasks+vmemReserved)),
+				// 	types.SizeStr(types.NewInt(vmemTotal)))
 
-				if len(stat.Info.Resources.GPUs) > 0 {
-					gpuBar := barString(float64(len(stat.Info.Resources.GPUs)), 0, stat.GpuUsed)
-					fmt.Printf("\tGPU:  [%s] %.f%% %.2f/%d gpu(s) in use\n", color.GreenString(gpuBar),
-						stat.GpuUsed*100/float64(len(stat.Info.Resources.GPUs)),
-						stat.GpuUsed, len(stat.Info.Resources.GPUs))
-				}
-				for _, gpu := range stat.Info.Resources.GPUs {
-					fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
-				}
+				// if len(stat.Info.Resources.GPUs) > 0 {
+				// 	gpuBar := barString(float64(len(stat.Info.Resources.GPUs)), 0, stat.GpuUsed)
+				// 	fmt.Printf("\tGPU:  [%s] %.f%% %.2f/%d gpu(s) in use\n", color.GreenString(gpuBar),
+				// 		stat.GpuUsed*100/float64(len(stat.Info.Resources.GPUs)),
+				// 		stat.GpuUsed, len(stat.Info.Resources.GPUs))
+				// }
+				// for _, gpu := range stat.Info.Resources.GPUs {
+				// 	fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
+				// }
 			}
 
 			return nil
@@ -347,5 +356,70 @@ var sealingAbortCmd = &cli.Command{
 		fmt.Printf("aborting job %s, task %s, sector %d, running on host %s\n", job.ID.String(), job.Task.Short(), job.Sector.Number, job.Hostname)
 
 		return nodeApi.SealingAbort(ctx, job.ID)
+	},
+}
+
+var sealingNextSectorIDCmd = &cli.Command{
+	Name:      "nextid",
+	Usage:     "set next sector id to datastore, make sure miner is not running",
+	ArgsUsage: "[sector id]",
+	Action: func(cctx *cli.Context) error {
+		repoPath := cctx.String(FlagMinerRepo)
+		r, err := repo.NewFS(repoPath)
+		if err != nil {
+			return err
+		}
+
+		ok, err := r.Exists()
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return xerrors.Errorf("repo at '%s' is not initialized", cctx.String(FlagMinerRepo))
+		}
+
+		lr, err := r.Lock(repo.StorageMiner)
+		if err != nil {
+			return err
+		}
+		defer lr.Close() //nolint:errcheck
+
+		ctx := lcli.ReqContext(cctx)
+		mds, err := lr.Datastore(ctx, "/metadata")
+		if err != nil {
+			return err
+		}
+
+		buf2, err := mds.Get(ctx, datastore.NewKey(modules.StorageCounterDSPrefix))
+		if err == nil {
+			currentNextID, err := binary.ReadUvarint(bytes.NewReader(buf2))
+			if err == nil {
+				return xerrors.Errorf("read current next id from datastore failed:%v", err)
+			}
+
+			fmt.Printf("current next id:%d\n", currentNextID)
+		}
+
+		if cctx.Args().Len() < 1 {
+			return nil
+		}
+
+		if cctx.Args().Len() != 1 {
+			return xerrors.Errorf("expected 1 argument")
+		}
+
+		var nextIDStr = cctx.Args().First()
+		nextIDint, err := strconv.Atoi(nextIDStr)
+		if err != nil {
+			return err
+		}
+
+		var nextID = abi.SectorNumber(nextIDint)
+		fmt.Printf("set new next id:%d\n", nextID)
+
+		buf := make([]byte, binary.MaxVarintLen64)
+		size := binary.PutUvarint(buf, uint64(nextID))
+		return mds.Put(ctx, datastore.NewKey(modules.StorageCounterDSPrefix), buf[:size])
 	},
 }

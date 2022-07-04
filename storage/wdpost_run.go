@@ -81,6 +81,7 @@ func (s *WindowPoStScheduler) startGeneratePoST(
 
 		posts, err := s.runGeneratePoST(ctx, ts, deadline)
 		completeGeneratePoST(posts, err)
+
 	}()
 
 	return abort
@@ -206,6 +207,7 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 
 	sectors := make(map[abi.SectorNumber]checkSector)
 	var tocheck []storage.SectorRef
+	var updates []bool
 	for _, info := range sectorInfos {
 		sectors[info.SectorNumber] = checkSector{
 			sealed: info.SealedCID,
@@ -218,15 +220,19 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 				Number: info.SectorNumber,
 			},
 		})
+		updates = append(updates, info.SectorKeyCID != nil)
 	}
 
-	bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, func(ctx context.Context, id abi.SectorID) (cid.Cid, bool, error) {
-		s, ok := sectors[id.Number]
-		if !ok {
-			return cid.Undef, false, xerrors.Errorf("sealed CID not found")
-		}
-		return s.sealed, s.update, nil
-	})
+	// TODO: 16merge
+	// bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, func(ctx context.Context, id abi.SectorID) (cid.Cid, bool, error) {
+	// 	s, ok := sectors[id.Number]
+	// 	if !ok {
+	// 		return cid.Undef, false, xerrors.Errorf("sealed CID not found")
+	// 	}
+	// 	return s.sealed, s.update, nil
+	// })
+	bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, updates, nil)
+
 	if err != nil {
 		return bitfield.BitField{}, xerrors.Errorf("checking provable sectors: %w", err)
 	}
@@ -590,7 +596,10 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 		for retries := 0; ; retries++ {
 			skipCount := uint64(0)
 			var partitions []miner.PoStPartition
+
 			var xsinfos []proof7.ExtendedSectorInfo
+			tsStart := build.Clock.Now()
+
 			for partIdx, partition := range batch {
 				// TODO: Can do this in parallel
 				toProve, err := bitfield.SubtractBitField(partition.LiveSectors, partition.FaultySectors)
@@ -645,14 +654,15 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 				break
 			}
 
+			elapsed2 := time.Since(tsStart)
+
 			// Generate proof
 			log.Infow("running window post",
 				"chain-random", rand,
 				"deadline", di,
 				"height", ts.Height(),
-				"skipped", skipCount)
-
-			tsStart := build.Clock.Now()
+				"skipped", skipCount,
+				"check-elapsed", elapsed2)
 
 			mid, err := address.IDFromAddress(s.actor)
 			if err != nil {
@@ -661,10 +671,12 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 
 			postOut, ps, err := s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), xsinfos, append(abi.PoStRandomness{}, rand...))
 			elapsed := time.Since(tsStart)
-			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed, "skip", len(ps), "err", err)
+			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed, "skip", len(ps), "err", err, "check-elapsed", elapsed2)
+
 			if err != nil {
 				log.Errorf("error generating window post: %s", err)
 			}
+
 			if err == nil {
 
 				// If we proved nothing, something is very wrong.

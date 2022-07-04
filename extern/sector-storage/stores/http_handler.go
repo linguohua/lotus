@@ -53,11 +53,11 @@ type FetchHandler struct {
 func (handler *FetchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) { // /remote/
 	mux := mux.NewRouter()
 
-	mux.HandleFunc("/remote/stat/{id}", handler.remoteStatFs).Methods("GET")
-	mux.HandleFunc("/remote/vanilla/single", handler.generateSingleVanillaProof).Methods("POST")
-	mux.HandleFunc("/remote/{type}/{id}/{spt}/allocated/{offset}/{size}", handler.remoteGetAllocated).Methods("GET")
-	mux.HandleFunc("/remote/{type}/{id}", handler.remoteGetSector).Methods("GET")
-	mux.HandleFunc("/remote/{type}/{id}", handler.remoteDeleteSector).Methods("DELETE")
+	//mux.HandleFunc("/remote/stat/{id}", handler.remoteStatFs).Methods("GET")
+	//mux.HandleFunc("/remote/vanilla/single", handler.generateSingleVanillaProof).Methods("POST")
+	//mux.HandleFunc("/remote/{type}/{id}/{spt}/allocated/{offset}/{size}", handler.remoteGetAllocated).Methods("GET")
+	//mux.HandleFunc("/remote/{type}/{id}", handler.remoteGetSector).Methods("GET")
+	//mux.HandleFunc("/remote/{type}/{id}", handler.remoteDeleteSector).Methods("DELETE")
 
 	mux.ServeHTTP(w, r)
 }

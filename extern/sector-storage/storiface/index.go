@@ -45,6 +45,9 @@ type StorageInfo struct {
 
 	Groups  []Group
 	AllowTo []Group
+
+	GroupID           string
+	MaxSealingSectors int
 }
 
 type HealthReport struct {
@@ -62,6 +65,9 @@ type SectorStorageInfo struct {
 	CanStore bool
 
 	Primary bool
+
+	GroupID           string
+	MaxSealingSectors int
 }
 
 type Decl struct {
