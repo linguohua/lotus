@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
+/*
 type ActiveResources struct {
 	memUsedMin uint64
 	memUsedMax uint64
@@ -170,20 +171,21 @@ func (a *ActiveResources) utilization(wr storiface.WorkerResources) float64 { //
 	}
 
 	return max
-}
+}*/
 
 func (wh *WorkerHandle) Utilization() float64 {
-	wh.lk.Lock()
-	u := wh.active.utilization(wh.Info.Resources)
-	u += wh.preparing.utilization(wh.Info.Resources)
-	wh.lk.Unlock()
-	wh.wndLk.Lock()
-	for _, window := range wh.activeWindows {
-		u += window.Allocated.utilization(wh.Info.Resources)
-	}
-	wh.wndLk.Unlock()
-
-	return u
+	//wh.lk.Lock()
+	//u := wh.active.utilization(wh.Info.Resources)
+	//u += wh.preparing.utilization(wh.Info.Resources)
+	//wh.lk.Unlock()
+	//wh.wndLk.Lock()
+	//for _, window := range wh.activeWindows {
+	//	u += window.Allocated.utilization(wh.Info.Resources)
+	//}
+	//wh.wndLk.Unlock()
+    //
+	//return u
+	return 0
 }
 
 var tasksCacheTimeout = 30 * time.Second

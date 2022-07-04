@@ -292,7 +292,7 @@ func TestSealAndVerify(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: cdir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -364,7 +364,7 @@ func TestSealPoStNoCommit(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: dir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -428,7 +428,7 @@ func TestSealAndVerify3(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: dir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -505,7 +505,7 @@ func TestSealAndVerifyAggregate(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: cdir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -746,7 +746,7 @@ func TestAddPiece512M(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: cdir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -790,7 +790,7 @@ func BenchmarkAddPiece512M(b *testing.B) {
 	sp := &basicfs.Provider{
 		Root: cdir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		b.Fatalf("%+v", err)
 	}
@@ -832,7 +832,7 @@ func TestAddPiece512MPadded(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: cdir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -902,7 +902,7 @@ func TestMulticoreSDR(t *testing.T) {
 	sp := &basicfs.Provider{
 		Root: dir,
 	}
-	sb, err := New(sp)
+	sb, err := New(sp, "", nil)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}

@@ -64,7 +64,7 @@ func (m *Sealing) handleSealPrecommit2Failed(ctx statemachine.Context, sector Se
 		return err
 	}
 
-	if sector.PreCommit2Fails > 3 {
+	if !m.recoverMode && sector.PreCommit2Fails > 3 {
 		return ctx.Send(SectorRetrySealPreCommit1{})
 	}
 
@@ -175,9 +175,9 @@ func (m *Sealing) handleComputeProofFailed(ctx statemachine.Context, sector Sect
 		return err
 	}
 
-	if sector.InvalidProofs > 1 {
-		return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("consecutive compute fails")})
-	}
+	// if sector.InvalidProofs > 1 {
+	// 	return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("consecutive compute fails")})
+	// }
 
 	return ctx.Send(SectorRetryComputeProof{})
 }
@@ -308,9 +308,9 @@ func (m *Sealing) handleCommitFailed(ctx statemachine.Context, sector SectorInfo
 				return err
 			}
 
-			if sector.InvalidProofs > 0 {
-				return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("consecutive invalid proofs")})
-			}
+			// if sector.InvalidProofs > 0 {
+			// 	return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("consecutive invalid proofs")})
+			// }
 
 			return ctx.Send(SectorRetryInvalidProof{})
 		case *ErrPrecommitOnChain:
