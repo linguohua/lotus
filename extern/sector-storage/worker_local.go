@@ -145,6 +145,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		},
 
 		acceptTasks: acceptTasks,
+		runningTasks: make(map[sealtasks.TaskType]int),
 		executor:    executor,
 		noSwap:      wcfg.NoSwap,
 		//envLookup:            envLookup,
