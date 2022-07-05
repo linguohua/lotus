@@ -106,7 +106,7 @@ func workersCmd(sealing bool) *cli.Command {
 				return st[i].id.String() < st[j].id.String()
 			})
 
-			for _, stat := range st {
+			//for _, stat := range st {
 				// gpuUse := "not "
 				// gpuCol := color.FgBlue
 				// if stat.GpuUsed > 0 {
@@ -114,12 +114,12 @@ func workersCmd(sealing bool) *cli.Command {
 				// 	gpuUse = ""
 				// }
 
-				var disabled string
-				if !stat.Enabled {
-					disabled = color.RedString(" (disabled)")
-				}
+				//var disabled string
+				//if !stat.Enabled {
+				//	disabled = color.RedString(" (disabled)")
+				//}
 
-				fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
+				//fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
 
 				// fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
 				// 	barString(float64(stat.Info.Resources.CPUs), 0, float64(stat.CpuUse)), stat.CpuUse, stat.Info.Resources.CPUs)
@@ -161,8 +161,26 @@ func workersCmd(sealing bool) *cli.Command {
 				// for _, gpu := range stat.Info.Resources.GPUs {
 				// 	fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
 				// }
-			}
+			//}
+			for _, stat := range st {
+				var disabled string
+				var paused string
+				if !stat.Enabled {
+					disabled = color.RedString(" (disabled)")
+				}
 
+				if len(stat.Paused) > 0 {
+					paused = color.RedString(" (paused:" + stat.Paused + ")")
+				}
+
+				fmt.Printf("Worker %s, host %s%s%s, group:%s, url:%s\n", stat.id,
+					color.MagentaString(stat.Info.Hostname), disabled, paused, stat.Info.GroupID, stat.Url)
+
+				fmt.Printf("Task type:\n")
+				for i, tt := range stat.TaskTypes {
+					fmt.Printf("%s: %d\n", tt, stat.TaskCounts[i])
+				}
+			}
 			return nil
 		},
 	}
