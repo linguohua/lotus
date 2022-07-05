@@ -235,11 +235,11 @@ var runCmd = &cli.Command{
 	Action: func(cctx *cli.Context) error {
 		log.Info("Starting lotus worker")
 
-		if !cctx.Bool("enable-gpu-proving") {
-			if err := os.Setenv("BELLMAN_NO_GPU", "true"); err != nil {
-				return xerrors.Errorf("could not set no-gpu env: %+v", err)
-			}
-		}
+		//if !cctx.Bool("enable-gpu-proving") {
+		//	if err := os.Setenv("BELLMAN_NO_GPU", "true"); err != nil {
+		//		return xerrors.Errorf("could not set no-gpu env: %+v", err)
+		//	}
+		//}
 
 		limit, _, err := ulimit.GetLimit()
 		switch {
@@ -418,11 +418,11 @@ var runCmd = &cli.Command{
 		if len(taskTypes) == 0 {
 			return xerrors.Errorf("no task types specified")
 		}
-		for _, taskType := range taskTypes {
-			if taskType.WorkerType() != workerType {
-				return xerrors.Errorf("expected all task types to be for %s worker, but task %s is for %s worker", workerType, taskType, taskType.WorkerType())
-			}
-		}
+		//for _, taskType := range taskTypes {
+		//	if taskType.WorkerType() != workerType {
+		//		return xerrors.Errorf("expected all task types to be for %s worker, but task %s is for %s worker", workerType, taskType, taskType.WorkerType())
+		//	}
+		//}
 
 		if !cctx.Bool("no-local-storage") {
 			return xerrors.Errorf("seal worker of role:%s must use 'no-local-storage' to start", role)
