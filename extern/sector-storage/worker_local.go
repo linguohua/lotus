@@ -244,12 +244,16 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		if os.Getenv("SECTOR_TYPE") == "32GB" {
 			stype = abi.RegisteredSealProof_StackedDrg32GiBV1
 		}
-		_, err = ffi.SealPreCommitPhase1(stype,
+		_, err2 := ffi.SealPreCommitPhase1(stype,
 			"hpalloc", "hpalloc", "hpalloc", sn, mid, ti, pi)
-		if err != nil && err.Error() != "ok" {
-			log.Fatalf("LocalWorker.New role is P1, allocate hugepages failed:%v", err)
+
+		if err2 != nil {
+			errStr := fmt.Sprintf("%s", err2.Error())
+			if !strings.Contains(errStr, "ok") {
+			    log.Fatalf("LocalWorker.New role is P1, allocate hugepages failed:%s", errStr)
+			}
 		} else {
-			log.Infof("LocalWorker.New role is P1, try allocate completed: ", err)
+			log.Info("LocalWorker.New role is P1, try allocate completed!")
 		}
 
 		// parse p1 count
