@@ -258,7 +258,7 @@ func StorageMiner(fc config.MinerFeeConfig) func(params StorageMinerParams) (*st
 	}
 }
 
-func WindowPostScheduler(fc config.MinerFeeConfig) func(params StorageMinerParams) (*storage.WindowPoStScheduler, error) {
+func WindowPostScheduler(fc config.MinerFeeConfig, pc config.ProvingConfig) func(params StorageMinerParams) (*storage.WindowPoStScheduler, error) {
 	return func(params StorageMinerParams) (*storage.WindowPoStScheduler, error) {
 		var (
 			mctx   = params.MetricsCtx
@@ -276,7 +276,7 @@ func WindowPostScheduler(fc config.MinerFeeConfig) func(params StorageMinerParam
 		var fps *storage.WindowPoStScheduler = nil
 		var err error
 		if os.Getenv("YOUZHOU_WINDOW_POST_DISABLE") != "true" {
-			fps, err = storage.NewWindowedPoStScheduler(api, fc, as, sealer, verif, sealer, j, maddr)
+			fps, err = storage.NewWindowedPoStScheduler(api, fc, pc, as, sealer, verif, sealer, j, maddr)
 			if err != nil {
 				return nil, err
 			}
