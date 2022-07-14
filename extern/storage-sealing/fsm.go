@@ -291,11 +291,11 @@ var fsmPlanners = map[SectorState]func(events []statemachine.Event, state *Secto
 		on(SectorFaultReported{}, FaultReported),
 		on(SectorFaulty{}, Faulty),
 		on(SectorMarkForUpdate{}, Available),
+		on(SectorRedoPacked{}, Packing),
 	),
 	Available: planOne(
 		on(SectorStartCCUpdate{}, SnapDealsWaitDeals),
 		on(SectorAbortUpgrade{}, Proving),
-		on(SectorRedoPacked{}, Packing),
 	),
 	Terminating: planOne(
 		on(SectorTerminating{}, TerminateWait),
