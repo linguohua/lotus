@@ -206,12 +206,21 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 				return nil
 			}
 
-			toCheck := map[string]int64{
-				fReplica:                       1,
-				filepath.Join(fCache, "p_aux"): 0,
+			var pAuxFileSize int64 = 0
+			switch ssize {
+			case 32 << 30:
+				pAuxFileSize = 64
+			case 64 << 30:
+				pAuxFileSize = 64
+			default:
 			}
 
-			addCachePathsForSectorSize(toCheck, fCache, ssize)
+			toCheck := map[string]int64{
+				fReplica:                       int64(ssize),
+				filepath.Join(fCache, "p_aux"): pAuxFileSize,
+			}
+
+			addCachePathsForSectorSize2(toCheck, fCache, ssize)
 
 			start := time.Now()
 			for p, sz := range toCheck {
@@ -223,9 +232,9 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 				}
 
 				if sz != 0 {
-					if st.Size() != int64(ssize)*sz {
-						log.Warnw("CheckProvable Sector FAULT: sector file is wrong size", "sector", sector, "sealed", fReplica, "cache", fCache, "file", p, "size", st.Size(), "expectSize", int64(ssize)*sz)
-						bad[sector.ID] = fmt.Sprintf("%s is wrong size (got %d, expect %d)", p, st.Size(), int64(ssize)*sz)
+					if st.Size() != sz {
+						log.Warnw("CheckProvable Sector FAULT: sector file is wrong size", "sector", sector, "sealed", fReplica, "cache", fCache, "file", p, "size", st.Size(), "expectSize", sz)
+						bad[sector.ID] = fmt.Sprintf("%s is wrong size (got %d, expect %d)", p, st.Size(), sz)
 						return nil
 					}
 				}
