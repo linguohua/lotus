@@ -30,45 +30,78 @@ type WorkerInfo struct {
 	// Default should be false (zero value, i.e. resources taken into account).
 	IgnoreResources bool
 	Resources       WorkerResources
+
+	GroupID string
 }
 
 type WorkerResources struct {
-	MemPhysical uint64
-	MemUsed     uint64
-	MemSwap     uint64
-	MemSwapUsed uint64
+	//MemPhysical uint64
+	//MemSwap     uint64
 
-	CPUs uint64 // Logical cores
-	GPUs []string
+	//MemReserved uint64 // Used by system / other processes
 
-	// if nil use the default resource table
-	Resources map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
+	//CPUs uint64 // Logical cores
+	//GPUs []string
+	P1  uint32
+	P2  uint32
+	C1  uint32
+	C2  uint32
+	AP  uint32
+	FIN uint32
 }
 
-func (wr WorkerResources) ResourceSpec(spt abi.RegisteredSealProof, tt sealtasks.TaskType) Resources {
-	res := ResourceTable[tt][spt]
+func (wr *WorkerResources) Windows() uint32 {
+	return wr.P1 + wr.P2 + wr.C1 + wr.C2 + wr.AP + wr.FIN
+}
 
-	// if the worker specifies custom resource table, prefer that
-	if wr.Resources != nil {
-		tr, ok := wr.Resources[tt]
-		if !ok {
-			return res
-		}
-
-		r, ok := tr[spt]
-		if ok {
-			return r
-		}
+func (wr *WorkerResources) ValidTaskType() ([]sealtasks.TaskType, []uint32) {
+	tt := make([]sealtasks.TaskType, 0, 6)
+	counts := make([]uint32, 0, 6)
+	if wr.P1 > 0 {
+		tt = append(tt, sealtasks.TTPreCommit1)
+		counts = append(counts, wr.P1)
 	}
 
-	// otherwise, use the default resource table
-	return res
+	if wr.P2 > 0 {
+		tt = append(tt, sealtasks.TTPreCommit2)
+		counts = append(counts, wr.P2)
+	}
+
+	if wr.C1 > 0 {
+		tt = append(tt, sealtasks.TTCommit1)
+		counts = append(counts, wr.C1)
+	}
+
+	if wr.C2 > 0 {
+		tt = append(tt, sealtasks.TTCommit2)
+		counts = append(counts, wr.C2)
+	}
+
+	if wr.AP > 0 {
+		tt = append(tt, sealtasks.TTAddPiece)
+		counts = append(counts, wr.AP)
+	}
+
+	if wr.FIN > 0 {
+		tt = append(tt, sealtasks.TTFinalize)
+		counts = append(counts, wr.FIN)
+	}
+
+	return tt, counts
 }
 
 type WorkerStats struct {
 	Info    WorkerInfo
 	Tasks   []sealtasks.TaskType
 	Enabled bool
+
+	TaskTypes  []sealtasks.TaskType
+	TaskCounts []uint32
+
+	Url  string
+	UUID string
+
+	Paused string
 
 	MemUsedMin uint64
 	MemUsedMax uint64

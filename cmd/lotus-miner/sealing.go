@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"math"
+	"strconv"
+
 	"os"
 	"sort"
 	"strings"
@@ -22,7 +27,7 @@ import (
 	"github.com/filecoin-project/go-padreader"
 	"github.com/filecoin-project/go-state-types/abi"
 
-	"github.com/filecoin-project/lotus/chain/types"
+
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/httpreader"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
@@ -38,6 +43,7 @@ var sealingCmd = &cli.Command{
 		sealingSchedDiagCmd,
 		sealingAbortCmd,
 		sealingDataCidCmd,
+		sealingNextSectorIDCmd,
 	},
 }
 
@@ -102,113 +108,81 @@ func workersCmd(sealing bool) *cli.Command {
 				        GPU: NVIDIA GeForce RTX 3090, not used
 			*/
 
-			for _, stat := range st {
-				// Worker uuid + name
+			//for _, stat := range st {
+				// gpuUse := "not "
+				// gpuCol := color.FgBlue
+				// if stat.GpuUsed > 0 {
+				// 	gpuCol = color.FgGreen
+				// 	gpuUse = ""
+				// }
 
+				//var disabled string
+				//if !stat.Enabled {
+				//	disabled = color.RedString(" (disabled)")
+				//}
+
+				//fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
+
+				// fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
+				// 	barString(float64(stat.Info.Resources.CPUs), 0, float64(stat.CpuUse)), stat.CpuUse, stat.Info.Resources.CPUs)
+
+				// ramTotal := stat.Info.Resources.MemPhysical
+				// ramTasks := stat.MemUsedMin
+				// ramUsed := stat.Info.Resources.MemUsed
+				// var ramReserved uint64 = 0
+				// if ramUsed > ramTasks {
+				// 	ramReserved = ramUsed - ramTasks
+				// }
+				// ramBar := barString(float64(ramTotal), float64(ramReserved), float64(ramTasks))
+
+				// fmt.Printf("\tRAM:  [%s] %d%% %s/%s\n", ramBar,
+				// 	(ramTasks+ramReserved)*100/stat.Info.Resources.MemPhysical,
+				// 	types.SizeStr(types.NewInt(ramTasks+ramUsed)),
+				// 	types.SizeStr(types.NewInt(stat.Info.Resources.MemPhysical)))
+
+				// vmemTotal := stat.Info.Resources.MemPhysical + stat.Info.Resources.MemSwap
+				// vmemTasks := stat.MemUsedMax
+				// vmemUsed := stat.Info.Resources.MemUsed + stat.Info.Resources.MemSwapUsed
+				// var vmemReserved uint64 = 0
+				// if vmemUsed > vmemTasks {
+				// 	vmemReserved = vmemUsed - vmemTasks
+				// }
+				// vmemBar := barString(float64(vmemTotal), float64(vmemReserved), float64(vmemTasks))
+
+				// fmt.Printf("\tVMEM: [%s] %d%% %s/%s\n", vmemBar,
+				// 	(vmemTasks+vmemReserved)*100/vmemTotal,
+				// 	types.SizeStr(types.NewInt(vmemTasks+vmemReserved)),
+				// 	types.SizeStr(types.NewInt(vmemTotal)))
+
+				// if len(stat.Info.Resources.GPUs) > 0 {
+				// 	gpuBar := barString(float64(len(stat.Info.Resources.GPUs)), 0, stat.GpuUsed)
+				// 	fmt.Printf("\tGPU:  [%s] %.f%% %.2f/%d gpu(s) in use\n", color.GreenString(gpuBar),
+				// 		stat.GpuUsed*100/float64(len(stat.Info.Resources.GPUs)),
+				// 		stat.GpuUsed, len(stat.Info.Resources.GPUs))
+				// }
+				// for _, gpu := range stat.Info.Resources.GPUs {
+				// 	fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
+				// }
+			//}
+			for _, stat := range st {
 				var disabled string
+				var paused string
 				if !stat.Enabled {
 					disabled = color.RedString(" (disabled)")
 				}
 
-				fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
-
-				// Task counts
-				tc := make([][]string, 0, len(stat.TaskCounts))
-
-				for st, c := range stat.TaskCounts {
-					if c == 0 {
-						continue
-					}
-
-					stt, err := sealtasks.SttFromString(st)
-					if err != nil {
-						return err
-					}
-
-					str := fmt.Sprint(c)
-					if max := stat.Info.Resources.ResourceSpec(stt.RegisteredSealProof, stt.TaskType).MaxConcurrent; max > 0 {
-						switch {
-						case c < max:
-							str = color.GreenString(str)
-						case c >= max:
-							str = color.YellowString(str)
-						}
-						str = fmt.Sprintf("%s/%d", str, max)
-					} else {
-						str = color.CyanString(str)
-					}
-					str = fmt.Sprintf("%s(%s)", color.BlueString(stt.Short()), str)
-
-					tc = append(tc, []string{string(stt.TaskType), str})
-				}
-				sort.Slice(tc, func(i, j int) bool {
-					return sealtasks.TaskType(tc[i][0]).Less(sealtasks.TaskType(tc[j][0]))
-				})
-				var taskStr string
-				for _, t := range tc {
-					taskStr = t[1] + " "
-				}
-				if taskStr != "" {
-					fmt.Printf("\tTASK: %s\n", taskStr)
+				if len(stat.Paused) > 0 {
+					paused = color.RedString(" (paused:" + stat.Paused + ")")
 				}
 
-				// CPU use
+				fmt.Printf("Worker %s, host %s%s%s, group:%s, url:%s\n", stat.id,
+					color.MagentaString(stat.Info.Hostname), disabled, paused, stat.Info.GroupID, stat.Url)
 
-				fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
-					lcli.BarString(float64(stat.Info.Resources.CPUs), 0, float64(stat.CpuUse)), stat.CpuUse, stat.Info.Resources.CPUs)
-
-				// RAM use
-
-				ramTotal := stat.Info.Resources.MemPhysical
-				ramTasks := stat.MemUsedMin
-				ramUsed := stat.Info.Resources.MemUsed
-				var ramReserved uint64 = 0
-				if ramUsed > ramTasks {
-					ramReserved = ramUsed - ramTasks
-				}
-				ramBar := lcli.BarString(float64(ramTotal), float64(ramReserved), float64(ramTasks))
-
-				fmt.Printf("\tRAM:  [%s] %d%% %s/%s\n", ramBar,
-					(ramTasks+ramReserved)*100/stat.Info.Resources.MemPhysical,
-					types.SizeStr(types.NewInt(ramTasks+ramUsed)),
-					types.SizeStr(types.NewInt(stat.Info.Resources.MemPhysical)))
-
-				// VMEM use (ram+swap)
-
-				vmemTotal := stat.Info.Resources.MemPhysical + stat.Info.Resources.MemSwap
-				vmemTasks := stat.MemUsedMax
-				vmemUsed := stat.Info.Resources.MemUsed + stat.Info.Resources.MemSwapUsed
-				var vmemReserved uint64 = 0
-				if vmemUsed > vmemTasks {
-					vmemReserved = vmemUsed - vmemTasks
-				}
-				vmemBar := lcli.BarString(float64(vmemTotal), float64(vmemReserved), float64(vmemTasks))
-
-				fmt.Printf("\tVMEM: [%s] %d%% %s/%s\n", vmemBar,
-					(vmemTasks+vmemReserved)*100/vmemTotal,
-					types.SizeStr(types.NewInt(vmemTasks+vmemReserved)),
-					types.SizeStr(types.NewInt(vmemTotal)))
-
-				// GPU use
-
-				if len(stat.Info.Resources.GPUs) > 0 {
-					gpuBar := lcli.BarString(float64(len(stat.Info.Resources.GPUs)), 0, stat.GpuUsed)
-					fmt.Printf("\tGPU:  [%s] %.f%% %.2f/%d gpu(s) in use\n", color.GreenString(gpuBar),
-						stat.GpuUsed*100/float64(len(stat.Info.Resources.GPUs)),
-						stat.GpuUsed, len(stat.Info.Resources.GPUs))
-				}
-
-				gpuUse := "not "
-				gpuCol := color.FgBlue
-				if stat.GpuUsed > 0 {
-					gpuCol = color.FgGreen
-					gpuUse = ""
-				}
-				for _, gpu := range stat.Info.Resources.GPUs {
-					fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
+				fmt.Printf("Task type:\n")
+				for i, tt := range stat.TaskTypes {
+					fmt.Printf("%s: %d\n", tt, stat.TaskCounts[i])
 				}
 			}
-
 			return nil
 		},
 	}
@@ -405,6 +379,71 @@ var sealingAbortCmd = &cli.Command{
 	},
 }
 
+var sealingNextSectorIDCmd = &cli.Command{
+	Name:      "nextid",
+	Usage:     "set next sector id to datastore, make sure miner is not running",
+	ArgsUsage: "[sector id]",
+	Action: func(cctx *cli.Context) error {
+		repoPath := cctx.String(FlagMinerRepo)
+		r, err := repo.NewFS(repoPath)
+		if err != nil {
+			return err
+		}
+
+		ok, err := r.Exists()
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return xerrors.Errorf("repo at '%s' is not initialized", cctx.String(FlagMinerRepo))
+		}
+
+		lr, err := r.Lock(repo.StorageMiner)
+		if err != nil {
+			return err
+		}
+		defer lr.Close() //nolint:errcheck
+
+		ctx := lcli.ReqContext(cctx)
+		mds, err := lr.Datastore(ctx, "/metadata")
+		if err != nil {
+			return err
+		}
+
+		buf2, err := mds.Get(ctx, datastore.NewKey(modules.StorageCounterDSPrefix))
+		if err == nil {
+			currentNextID, err := binary.ReadUvarint(bytes.NewReader(buf2))
+			if err == nil {
+				return xerrors.Errorf("read current next id from datastore failed:%v", err)
+			}
+
+			fmt.Printf("current next id:%d\n", currentNextID)
+		}
+
+		if cctx.Args().Len() < 1 {
+			return nil
+		}
+
+		if cctx.Args().Len() != 1 {
+			return xerrors.Errorf("expected 1 argument")
+		}
+
+		var nextIDStr = cctx.Args().First()
+		nextIDint, err := strconv.Atoi(nextIDStr)
+		if err != nil {
+			return err
+		}
+
+		var nextID = abi.SectorNumber(nextIDint)
+		fmt.Printf("set new next id:%d\n", nextID)
+
+		buf := make([]byte, binary.MaxVarintLen64)
+		size := binary.PutUvarint(buf, uint64(nextID))
+		return mds.Put(ctx, datastore.NewKey(modules.StorageCounterDSPrefix), buf[:size])
+	},
+}
+
 var sealingDataCidCmd = &cli.Command{
 	Name:      "data-cid",
 	Usage:     "Compute data CID using workers",
@@ -493,5 +532,5 @@ var sealingDataCidCmd = &cli.Command{
 
 		fmt.Println(pc.PieceCID, " ", pc.Size)
 		return nil
-	},
+	}
 }

@@ -105,12 +105,12 @@ func (ps *poStScheduler) Schedule(ctx context.Context, primary bool, spt abi.Reg
 	selected := candidates[0]
 	worker := ps.workers[selected.id]
 
-	return worker.active.withResources(selected.id, worker.Info, ps.postType.SealTask(spt), selected.res, &ps.lk, func() error {
-		ps.lk.Unlock()
-		defer ps.lk.Lock()
-
-		return work(ctx, worker.workerRpc)
-	})
+	// return worker.active.withResources(selected.id, worker.info, selected.res, &ps.lk, func() error {
+	// 	ps.lk.Unlock()
+	// 	defer ps.lk.Lock()
+	// 	return work(ctx, worker.workerRpc)
+	// })
+	return work(ctx, worker.workerRpc)
 }
 
 type candidateWorker struct {
@@ -121,6 +121,7 @@ type candidateWorker struct {
 func (ps *poStScheduler) readyWorkers(spt abi.RegisteredSealProof) (bool, []candidateWorker) {
 	var accepts []candidateWorker
 	//if the gpus of the worker are insufficient or it's disabled, it cannot be scheduled
+
 	for wid, wr := range ps.workers {
 		needRes := wr.Info.Resources.ResourceSpec(spt, ps.postType)
 
@@ -129,8 +130,8 @@ func (ps *poStScheduler) readyWorkers(spt abi.RegisteredSealProof) (bool, []cand
 		}
 
 		accepts = append(accepts, candidateWorker{
-			id:  wid,
-			res: needRes,
+			id: wid,
+			// res: needRes,
 		})
 	}
 

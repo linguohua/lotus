@@ -31,6 +31,7 @@ type Worker interface {
 	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error) //perm:admin
 	Paths(context.Context) ([]storiface.StoragePath, error)             //perm:admin
 	Info(context.Context) (storiface.WorkerInfo, error)                 //perm:admin
+	HasResourceForNewTask(ctx context.Context, tasktype sealtasks.TaskType) bool //perm:admin
 
 	// storiface.WorkerCalls
 	DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, pieceData storiface.Data) (storiface.CallID, error)                                                                                        //perm:admin

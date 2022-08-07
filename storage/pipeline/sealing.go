@@ -2,6 +2,11 @@ package sealing
 
 import (
 	"context"
+<<<<<<< HEAD:storage/pipeline/sealing.go
+=======
+	"errors"
+	"os"
+>>>>>>> 70180431f (mamami):extern/storage-sealing/sealing.go
 	"sync"
 	"time"
 
@@ -109,6 +114,8 @@ type Sealing struct {
 	commiter    *CommitBatcher
 
 	getConfig GetSealingConfigFunc
+
+	recoverMode bool
 }
 
 type openSector struct {
@@ -149,7 +156,17 @@ type pendingPiece struct {
 	accepted func(abi.SectorNumber, abi.UnpaddedPieceSize, error)
 }
 
+<<<<<<< HEAD:storage/pipeline/sealing.go
 func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events Events, maddr address.Address, ds datastore.Batching, sealer sealer.SectorManager, sc SectorIDCounter, verif storiface.Verifier, prov storiface.Prover, pcp PreCommitPolicy, gc GetSealingConfigFunc, notifee SectorStateNotifee, as AddrSel) *Sealing {
+=======
+func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events Events, maddr address.Address, ds datastore.Batching, sealer sectorstorage.SectorManager, sc SectorIDCounter, verif ffiwrapper.Verifier, prov ffiwrapper.Prover, pcp PreCommitPolicy, gc GetSealingConfigFunc, notifee SectorStateNotifee, as AddrSel) *Sealing {
+	recoverMode := false
+	if os.Getenv("YOUZHOU_RECOVER_MODE") == "true" {
+		log.Warn("Miner sealing in recover mode")
+		recoverMode = true
+	}
+
+>>>>>>> 70180431f (mamami):extern/storage-sealing/sealing.go
 	s := &Sealing{
 		Api:      api,
 		DealInfo: &CurrentDealInfoManager{api},
@@ -183,9 +200,12 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 			bySector: map[abi.SectorID]SectorState{},
 			byState:  map[SectorState]int64{},
 		},
+
+		recoverMode: recoverMode,
 	}
 	s.startupWait.Add(1)
 
+	// lingh:SectorInfo pass through all state handler
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
 
 	return s

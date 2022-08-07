@@ -39,6 +39,27 @@ func (m *Miner) ForceSectorState(ctx context.Context, id abi.SectorNumber, state
 	return m.sealing.ForceSectorState(ctx, id, state)
 }
 
+func (m *Miner) RecoverSector(ctx context.Context, sectorNumber abi.SectorNumber) (storiface.SectorRef, error) {
+	if m.sealingDisable {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is sealing disable")
+	}
+
+	if !m.recoverMode {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is not in recover mode")
+	}
+
+	info, err := m.SectorsStatus(ctx, sectorNumber, false)
+	if err != nil {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner getting recover sector info: %w", err)
+	}
+
+	if info.State != api.SectorState(sealing.Proving) {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner recover sector failed, sector state %s no Proving:", info.State)
+	}
+
+	return m.sealing.RecoverSector(ctx, sectorNumber)
+}
+
 func (m *Miner) RemoveSector(ctx context.Context, id abi.SectorNumber) error {
 	return m.sealing.Remove(ctx, id)
 }
@@ -148,6 +169,10 @@ func (m *Miner) SectorsStatus(ctx context.Context, sid abi.SectorNumber, showOnC
 
 		LastErr: info.LastErr,
 		Log:     log,
+
+		HasFinalized: info.HasFinalized,
+		SealGroupID:  info.SealGroupID,
+
 		// on chain info
 		SealProof:          info.SectorType,
 		Activation:         0,

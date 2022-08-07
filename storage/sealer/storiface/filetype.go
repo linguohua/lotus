@@ -15,7 +15,7 @@ const (
 	FTUpdate
 	FTUpdateCache
 
-	FileTypes = iota
+	FileTypes = 5
 )
 
 var PathTypes = []SectorFileType{FTUnsealed, FTSealed, FTCache, FTUpdate, FTUpdateCache}
@@ -45,6 +45,17 @@ var FsOverheadFinalized = map[SectorFileType]int{
 }
 
 type SectorFileType int
+
+func (t SectorFileType) IsForUpdate() bool {
+	switch t {
+	case FTUpdate:
+		return true
+	case FTUpdateCache:
+		return true
+	default:
+		return false
+	}
+}
 
 func (t SectorFileType) String() string {
 	switch t {

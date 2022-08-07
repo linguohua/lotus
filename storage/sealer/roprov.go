@@ -36,3 +36,7 @@ func (l *readonlyProvider) AcquireSector(ctx context.Context, id storiface.Secto
 
 	return p, cancel, err
 }
+
+func (l *readonlyProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
+	return l.stor.DiscoverSectorStore(ctx, id)
+}
