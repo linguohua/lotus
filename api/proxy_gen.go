@@ -662,7 +662,7 @@ type StorageMinerStruct struct {
 
 		ComputeDataCid func(p0 context.Context, p1 abi.UnpaddedPieceSize, p2 storiface.Data) (abi.PieceInfo, error) `perm:"admin"`
 
-		CheckProvableExt func(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef) (map[abi.SectorNumber]string, error) `perm:"admin"`
+		CheckProvableExt func(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storiface.SectorRef) (map[abi.SectorNumber]string, error) `perm:"admin"`
 
 		ComputeProof func(p0 context.Context, p1 []builtin.ExtendedSectorInfo, p2 abi.PoStRandomness, p3 abi.ChainEpoch, p4 abinetwork.Version) ([]builtin.PoStProof, error) `perm:"read"`
 
@@ -4008,14 +4008,14 @@ func (s *StorageMinerStub) ComputeDataCid(p0 context.Context, p1 abi.UnpaddedPie
 	return *new(abi.PieceInfo), ErrNotSupported
 }
 
-func (s *StorageMinerStruct) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef) (map[abi.SectorNumber]string, error) {
+func (s *StorageMinerStruct) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storiface.SectorRef) (map[abi.SectorNumber]string, error) {
 	if s.Internal.CheckProvableExt == nil {
 		return *new(map[abi.SectorNumber]string), ErrNotSupported
 	}
 	return s.Internal.CheckProvableExt(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storage.SectorRef) (map[abi.SectorNumber]string, error) {
+func (s *StorageMinerStub) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storiface.SectorRef) (map[abi.SectorNumber]string, error) {
 	return *new(map[abi.SectorNumber]string), ErrNotSupported
 }
 

@@ -107,8 +107,6 @@ type WorkerStats struct {
 	MemUsedMax uint64
 	GpuUsed    float64 // nolint
 	CpuUse     uint64  // nolint
-
-	TaskCounts map[string]int
 }
 
 const (
