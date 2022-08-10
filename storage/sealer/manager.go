@@ -19,7 +19,6 @@ import (
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-statestore"
-
 	"github.com/filecoin-project/lotus/storage/paths"
 	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
 	"github.com/filecoin-project/lotus/storage/sealer/fsutil"
@@ -565,11 +564,11 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storiface.SectorRef
 	groupID, err := findSectorGroup(ctx, m.index, sector.ProofType, sector.ID,
 		storiface.FTCache|storiface.FTSealed)
 	if err != nil {
-		return storage.SectorCids{}, err
+		return storiface.SectorCids{}, err
 	}
 
 	if groupID == "" {
-		return storage.SectorCids{}, xerrors.Errorf("SealPreCommit2 failed, no groupID found for sector: %s", sector.ID)
+		return storiface.SectorCids{}, xerrors.Errorf("SealPreCommit2 failed, no groupID found for sector: %s", sector.ID)
 	}
 
 	// lingh: not allow fetch
@@ -628,11 +627,11 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storiface.SectorRef, t
 	groupID, err := findSectorGroup(ctx, m.index, sector.ProofType, sector.ID,
 		storiface.FTCache|storiface.FTSealed)
 	if err != nil {
-		return storage.Commit1Out{}, err
+		return storiface.Commit1Out{}, err
 	}
 
 	if groupID == "" {
-		return storage.Commit1Out{}, xerrors.Errorf("SealCommit1 failed, no groupID found for sector: %s", sector.ID)
+		return storiface.Commit1Out{}, xerrors.Errorf("SealCommit1 failed, no groupID found for sector: %s", sector.ID)
 	}
 
 	selector := newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTCache|storiface.FTSealed, groupID)
@@ -731,7 +730,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storiface.SectorRef
 	//	if err != nil {
 	//		return xerrors.Errorf("finding sealed sector: %w", err)
 	//	}
-    //
+	//
 	//	for _, store := range sealedStores {
 	//		if store.CanSeal {
 	//			pathType = storiface.PathSealing
@@ -771,7 +770,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storiface.SectorRef
 	//		moveUnsealed = storiface.FTNone
 	//	}
 	//}
-    //
+	//
 	//// move stuff to long-term storage
 	//err = m.sched.Schedule(ctx, sector, sealtasks.TTFetch, fetchSel,
 	//	m.schedFetch(sector, storiface.FTCache|storiface.FTSealed|moveUnsealed, storiface.PathStorage, storiface.AcquireMove),

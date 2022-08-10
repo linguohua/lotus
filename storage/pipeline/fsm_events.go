@@ -544,7 +544,7 @@ func (evt SectorRedoPacked) apply(state *SectorInfo) {
 }
 
 type SectorRedoPreCommit1 struct {
-	PreCommit1Out storage.PreCommit1Out
+	PreCommit1Out storiface.PreCommit1Out
 }
 
 func (evt SectorRedoPreCommit1) apply(state *SectorInfo) {}

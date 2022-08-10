@@ -1305,8 +1305,7 @@ func (sm *StorageMinerAPI) CheckProvable(ctx context.Context, pp abi.RegisteredP
 		}
 	}
 
-	update := make([]bool, len(sectors))
-	bad, err := sm.StorageMgr.CheckProvable(ctx, pp, sectors, update, rg)
+	bad, err := sm.StorageMgr.CheckProvable(ctx, pp, sectors, rg)
 	if err != nil {
 		return nil, err
 	}
@@ -1319,7 +1318,7 @@ func (sm *StorageMinerAPI) CheckProvable(ctx context.Context, pp abi.RegisteredP
 	return out, nil
 }
 
-func (sm *StorageMinerAPI) CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []sto.SectorRef) (map[abi.SectorNumber]string, error) {
+func (sm *StorageMinerAPI) CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef) (map[abi.SectorNumber]string, error) {
 	bad, err := sm.StorageMgr.CheckProvableExt(ctx, pp, sectors)
 	if err != nil {
 		return nil, err

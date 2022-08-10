@@ -53,7 +53,7 @@ func (m *Miner) RecoverSector(ctx context.Context, sectorNumber abi.SectorNumber
 		return storiface.SectorRef{}, xerrors.Errorf("Miner getting recover sector info: %w", err)
 	}
 
-	if info.State != api.SectorState(sealing.Proving) {
+	if info.State != api.SectorState(pipeline.Proving) {
 		return storiface.SectorRef{}, xerrors.Errorf("Miner recover sector failed, sector state %s no Proving:", info.State)
 	}
 

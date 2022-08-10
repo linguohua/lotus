@@ -5,6 +5,7 @@ import (
 
 	"golang.org/x/xerrors"
 
+	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
@@ -42,7 +43,7 @@ func (m *Sealing) PledgeSector(ctx context.Context) (storiface.SectorRef, error)
 	})
 }
 
-func (m *Sealing) RecoverSector(ctx context.Context, sid abi.SectorNumber) (storage.SectorRef, error) {
+func (m *Sealing) RecoverSector(ctx context.Context, sid abi.SectorNumber) (storiface.SectorRef, error) {
 	m.startupWait.Wait()
 
 	m.inputLk.Lock()
@@ -50,7 +51,7 @@ func (m *Sealing) RecoverSector(ctx context.Context, sid abi.SectorNumber) (stor
 
 	spt, err := m.currentSealProof(ctx)
 	if err != nil {
-		return storage.SectorRef{}, xerrors.Errorf("getting seal proof type: %w", err)
+		return storiface.SectorRef{}, xerrors.Errorf("getting seal proof type: %w", err)
 	}
 
 	log.Infof("Recover CC sector %d", sid)

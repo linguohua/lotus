@@ -6,7 +6,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-storage/storage"
 
 	"github.com/filecoin-project/lotus/storage/paths"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
@@ -27,8 +26,7 @@ func newAllocSelector(index paths.SectorIndex, alloc storiface.SectorFileType, p
 	}
 }
 
-
-func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
+func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
 	supported := false
 	tasks := whnd.acceptTaskTypes
 	for _, t := range tasks {
@@ -39,7 +37,7 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 	}
 
 	if !supported {
-		return false, nil
+		return false, false, nil
 	}
 
 	// paths, err := whnd.workerRpc.Paths(ctx)
@@ -62,7 +60,7 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		return false, false, xerrors.Errorf("finding best alloc storage: %w", err)
 	}
 
-	workerGroupID := whnd.info.GroupID
+	workerGroupID := whnd.Info.GroupID
 	for _, info := range best {
 		// if _, ok := have[info.ID]; ok {
 		// 	return true, nil
@@ -70,11 +68,11 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		if info.GroupID == "" {
 			// can bind to any worker
 			//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
-			return true, nil
+			return true, true, nil
 		} else {
 			if info.GroupID == workerGroupID {
 				//log.Infof("found match worker and storage, group id:%s", workerGroupID)
-				return true, nil
+				return true, true, nil
 			}
 		}
 	}
@@ -93,14 +91,14 @@ func (s *allocSelector) GroupID() string {
 var _ WorkerSelector = &allocSelector{}
 
 type addPieceSelector struct {
-	index  stores.SectorIndex
+	index  paths.SectorIndex
 	alloc  storiface.SectorFileType
 	ptype  storiface.PathType
-	sector storage.SectorRef
+	sector storiface.SectorRef
 }
 
-func newAddPieceSelector(index stores.SectorIndex,
-	sector storage.SectorRef,
+func newAddPieceSelector(index paths.SectorIndex,
+	sector storiface.SectorRef,
 	alloc storiface.SectorFileType, ptype storiface.PathType) *addPieceSelector {
 
 	return &addPieceSelector{
@@ -111,12 +109,12 @@ func newAddPieceSelector(index stores.SectorIndex,
 	}
 }
 
-func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
-	return true, nil
+func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
+	return true, true, nil
 }
 
-func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *workerHandle) (bool, error) {
-	return a.utilization() < b.utilization(), nil
+func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *WorkerHandle) (bool, error) {
+	return a.Utilization() < b.Utilization(), nil
 }
 
 func (s *addPieceSelector) GroupID() string {

@@ -14,6 +14,7 @@ import (
 
 	ffi "github.com/filecoin-project/filecoin-ffi"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/proof"
 
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
@@ -22,7 +23,7 @@ var PostCheckTimeout = 160 * time.Second
 
 // FaultTracker TODO: Track things more actively
 type FaultTracker interface {
-	CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef, update []bool, rg storiface.RGetter) (map[abi.SectorID]string, error)
+	CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef, rg storiface.RGetter) (map[abi.SectorID]string, error)
 }
 
 // CheckProvable returns unprovable sectors
@@ -134,7 +135,7 @@ func (m *Manager) CheckProvableOffice(ctx context.Context, pp abi.RegisteredPoSt
 }
 
 // CheckProvable returns unprovable sectors
-func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef, update []bool, rg storiface.RGetter) (map[abi.SectorID]string, error) {
+func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef, rg storiface.RGetter) (map[abi.SectorID]string, error) {
 	var bad = make(map[abi.SectorID]string)
 
 	ssize, err := pp.SectorSize()
@@ -145,7 +146,7 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 	var logLarge = os.Getenv("FIL_PROOFS_LOG_CHECK_SECTOR") == "true"
 
 	// TODO: More better checks
-	for i, sector := range sectors {
+	for _, sector := range sectors {
 		err := func() error {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
@@ -159,44 +160,25 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 				return nil
 			}
 
-			if update[i] {
-				lockedUpdate, err := m.index.StorageTryLock(ctx, sector.ID, storiface.FTUpdate|storiface.FTUpdateCache, storiface.FTNone)
-				if err != nil {
-					return xerrors.Errorf("acquiring sector lock: %w", err)
-				}
-				if !lockedUpdate {
-					log.Warnw("CheckProvable Sector FAULT: can't acquire read lock on update replica", "sector", sector)
-					bad[sector.ID] = fmt.Sprint("can't acquire read lock")
-					return nil
-				}
-				lp, _, err := m.localStore.AcquireSector(ctx, sector, storiface.FTUpdate|storiface.FTUpdateCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
-				if err != nil {
-					log.Warnw("CheckProvable Sector FAULT: acquire sector update replica in checkProvable", "sector", sector, "error", err)
-					bad[sector.ID] = fmt.Sprintf("acquire sector failed: %s", err)
-					return nil
-				}
-				fReplica, fCache = lp.Update, lp.UpdateCache
-			} else {
-				locked, err := m.index.StorageTryLock(ctx, sector.ID, storiface.FTSealed|storiface.FTCache, storiface.FTNone)
-				if err != nil {
-					return xerrors.Errorf("acquiring sector lock: %w", err)
-				}
-
-				if !locked {
-					log.Warnw("CheckProvable Sector FAULT: can't acquire read lock", "sector", sector)
-					bad[sector.ID] = fmt.Sprint("can't acquire read lock")
-					return nil
-				}
-
-				lp, _, err := m.localStore.AcquireSector(ctx, sector, storiface.FTSealed|storiface.FTCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
-				if err != nil {
-					log.Warnw("CheckProvable Sector FAULT: acquire sector in checkProvable", "sector", sector, "error", err)
-					bad[sector.ID] = fmt.Sprintf("acquire sector failed: %s", err)
-					return nil
-				}
-				fReplica, fCache = lp.Sealed, lp.Cache
-
+			locked, err := m.index.StorageTryLock(ctx, sector.ID, storiface.FTSealed|storiface.FTCache, storiface.FTNone)
+			if err != nil {
+				return xerrors.Errorf("acquiring sector lock: %w", err)
 			}
+
+			if !locked {
+				log.Warnw("CheckProvable Sector FAULT: can't acquire read lock", "sector", sector)
+				bad[sector.ID] = fmt.Sprint("can't acquire read lock")
+				return nil
+			}
+
+			lp, _, err := m.localStore.AcquireSector(ctx, sector, storiface.FTSealed|storiface.FTCache, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+			if err != nil {
+				log.Warnw("CheckProvable Sector FAULT: acquire sector in checkProvable", "sector", sector, "error", err)
+				bad[sector.ID] = fmt.Sprintf("acquire sector failed: %s", err)
+				return nil
+			}
+
+			fReplica, fCache = lp.Sealed, lp.Cache
 
 			if fReplica == "" || fCache == "" {
 				log.Warnw("CheckProvable Sector FAULT: cache and/or sealed paths not found", "sector", sector, "sealed", fReplica, "cache", fCache)
@@ -298,7 +280,7 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 	return bad, nil
 }
 
-func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef, update []bool, rg storiface.RGetter) (map[abi.SectorID]string, error) {
+func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef, rg storiface.RGetter) (map[abi.SectorID]string, error) {
 	result := make(map[abi.SectorID]string)
 	if len(sectors) < 1 {
 		return result, nil
@@ -324,12 +306,11 @@ func (m *Manager) CheckProvable(ctx context.Context, pp abi.RegisteredPoStProof,
 		}
 
 		var sectorsSplit = sectors[begin:end]
-		update2 := update[begin:end]
 		var ix = index
 		wg.Add(1)
 
 		go func() {
-			bad, err := m.CheckProvable2(ctx, pp, sectorsSplit, update2, rg)
+			bad, err := m.CheckProvable2(ctx, pp, sectorsSplit, rg)
 			bads[ix] = bad
 			errs[ix] = err
 

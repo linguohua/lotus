@@ -15,7 +15,7 @@ const (
 	FTUpdate
 	FTUpdateCache
 
-	FileTypes = 5
+	FileTypes = 6
 )
 
 var PathTypes = []SectorFileType{FTUnsealed, FTSealed, FTCache, FTUpdate, FTUpdateCache}

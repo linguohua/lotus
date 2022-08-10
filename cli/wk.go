@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/fatih/color"
-	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"

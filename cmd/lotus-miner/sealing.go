@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"math"
 	"strconv"
 
 	"os"
@@ -20,6 +19,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"github.com/ipfs/go-datastore"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
@@ -27,9 +27,10 @@ import (
 	"github.com/filecoin-project/go-padreader"
 	"github.com/filecoin-project/go-state-types/abi"
 
-
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/httpreader"
+	"github.com/filecoin-project/lotus/node/modules"
+	"github.com/filecoin-project/lotus/node/repo"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
@@ -109,60 +110,60 @@ func workersCmd(sealing bool) *cli.Command {
 			*/
 
 			//for _, stat := range st {
-				// gpuUse := "not "
-				// gpuCol := color.FgBlue
-				// if stat.GpuUsed > 0 {
-				// 	gpuCol = color.FgGreen
-				// 	gpuUse = ""
-				// }
+			// gpuUse := "not "
+			// gpuCol := color.FgBlue
+			// if stat.GpuUsed > 0 {
+			// 	gpuCol = color.FgGreen
+			// 	gpuUse = ""
+			// }
 
-				//var disabled string
-				//if !stat.Enabled {
-				//	disabled = color.RedString(" (disabled)")
-				//}
+			//var disabled string
+			//if !stat.Enabled {
+			//	disabled = color.RedString(" (disabled)")
+			//}
 
-				//fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
+			//fmt.Printf("Worker %s, host %s%s\n", stat.id, color.MagentaString(stat.Info.Hostname), disabled)
 
-				// fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
-				// 	barString(float64(stat.Info.Resources.CPUs), 0, float64(stat.CpuUse)), stat.CpuUse, stat.Info.Resources.CPUs)
+			// fmt.Printf("\tCPU:  [%s] %d/%d core(s) in use\n",
+			// 	barString(float64(stat.Info.Resources.CPUs), 0, float64(stat.CpuUse)), stat.CpuUse, stat.Info.Resources.CPUs)
 
-				// ramTotal := stat.Info.Resources.MemPhysical
-				// ramTasks := stat.MemUsedMin
-				// ramUsed := stat.Info.Resources.MemUsed
-				// var ramReserved uint64 = 0
-				// if ramUsed > ramTasks {
-				// 	ramReserved = ramUsed - ramTasks
-				// }
-				// ramBar := barString(float64(ramTotal), float64(ramReserved), float64(ramTasks))
+			// ramTotal := stat.Info.Resources.MemPhysical
+			// ramTasks := stat.MemUsedMin
+			// ramUsed := stat.Info.Resources.MemUsed
+			// var ramReserved uint64 = 0
+			// if ramUsed > ramTasks {
+			// 	ramReserved = ramUsed - ramTasks
+			// }
+			// ramBar := barString(float64(ramTotal), float64(ramReserved), float64(ramTasks))
 
-				// fmt.Printf("\tRAM:  [%s] %d%% %s/%s\n", ramBar,
-				// 	(ramTasks+ramReserved)*100/stat.Info.Resources.MemPhysical,
-				// 	types.SizeStr(types.NewInt(ramTasks+ramUsed)),
-				// 	types.SizeStr(types.NewInt(stat.Info.Resources.MemPhysical)))
+			// fmt.Printf("\tRAM:  [%s] %d%% %s/%s\n", ramBar,
+			// 	(ramTasks+ramReserved)*100/stat.Info.Resources.MemPhysical,
+			// 	types.SizeStr(types.NewInt(ramTasks+ramUsed)),
+			// 	types.SizeStr(types.NewInt(stat.Info.Resources.MemPhysical)))
 
-				// vmemTotal := stat.Info.Resources.MemPhysical + stat.Info.Resources.MemSwap
-				// vmemTasks := stat.MemUsedMax
-				// vmemUsed := stat.Info.Resources.MemUsed + stat.Info.Resources.MemSwapUsed
-				// var vmemReserved uint64 = 0
-				// if vmemUsed > vmemTasks {
-				// 	vmemReserved = vmemUsed - vmemTasks
-				// }
-				// vmemBar := barString(float64(vmemTotal), float64(vmemReserved), float64(vmemTasks))
+			// vmemTotal := stat.Info.Resources.MemPhysical + stat.Info.Resources.MemSwap
+			// vmemTasks := stat.MemUsedMax
+			// vmemUsed := stat.Info.Resources.MemUsed + stat.Info.Resources.MemSwapUsed
+			// var vmemReserved uint64 = 0
+			// if vmemUsed > vmemTasks {
+			// 	vmemReserved = vmemUsed - vmemTasks
+			// }
+			// vmemBar := barString(float64(vmemTotal), float64(vmemReserved), float64(vmemTasks))
 
-				// fmt.Printf("\tVMEM: [%s] %d%% %s/%s\n", vmemBar,
-				// 	(vmemTasks+vmemReserved)*100/vmemTotal,
-				// 	types.SizeStr(types.NewInt(vmemTasks+vmemReserved)),
-				// 	types.SizeStr(types.NewInt(vmemTotal)))
+			// fmt.Printf("\tVMEM: [%s] %d%% %s/%s\n", vmemBar,
+			// 	(vmemTasks+vmemReserved)*100/vmemTotal,
+			// 	types.SizeStr(types.NewInt(vmemTasks+vmemReserved)),
+			// 	types.SizeStr(types.NewInt(vmemTotal)))
 
-				// if len(stat.Info.Resources.GPUs) > 0 {
-				// 	gpuBar := barString(float64(len(stat.Info.Resources.GPUs)), 0, stat.GpuUsed)
-				// 	fmt.Printf("\tGPU:  [%s] %.f%% %.2f/%d gpu(s) in use\n", color.GreenString(gpuBar),
-				// 		stat.GpuUsed*100/float64(len(stat.Info.Resources.GPUs)),
-				// 		stat.GpuUsed, len(stat.Info.Resources.GPUs))
-				// }
-				// for _, gpu := range stat.Info.Resources.GPUs {
-				// 	fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
-				// }
+			// if len(stat.Info.Resources.GPUs) > 0 {
+			// 	gpuBar := barString(float64(len(stat.Info.Resources.GPUs)), 0, stat.GpuUsed)
+			// 	fmt.Printf("\tGPU:  [%s] %.f%% %.2f/%d gpu(s) in use\n", color.GreenString(gpuBar),
+			// 		stat.GpuUsed*100/float64(len(stat.Info.Resources.GPUs)),
+			// 		stat.GpuUsed, len(stat.Info.Resources.GPUs))
+			// }
+			// for _, gpu := range stat.Info.Resources.GPUs {
+			// 	fmt.Printf("\tGPU: %s\n", color.New(gpuCol).Sprintf("%s, %sused", gpu, gpuUse))
+			// }
 			//}
 			for _, stat := range st {
 				var disabled string
@@ -532,5 +533,5 @@ var sealingDataCidCmd = &cli.Command{
 
 		fmt.Println(pc.PieceCID, " ", pc.Size)
 		return nil
-	}
+	},
 }

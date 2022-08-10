@@ -14,7 +14,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/elastic/go-sysinfo"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
@@ -73,10 +72,10 @@ type LocalWorker struct {
 
 	groupID string
 
-	ret        storiface.WorkerReturn
-	executor   ExecutorFunc
-	noSwap     bool
-	envLookup  EnvFunc
+	ret       storiface.WorkerReturn
+	executor  ExecutorFunc
+	noSwap    bool
+	envLookup EnvFunc
 
 	// see equivalent field on WorkerConfig.
 	ignoreResources bool
@@ -143,10 +142,10 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 			st: cst,
 		},
 
-		acceptTasks: acceptTasks,
+		acceptTasks:  acceptTasks,
 		runningTasks: make(map[sealtasks.TaskType]int),
-		executor:    executor,
-		noSwap:      wcfg.NoSwap,
+		executor:     executor,
+		noSwap:       wcfg.NoSwap,
 		//envLookup:            envLookup,
 		ignoreResources:      wcfg.IgnoreResourceFiltering,
 		challengeReadTimeout: wcfg.ChallengeReadTimeout,
@@ -249,7 +248,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		if err2 != nil {
 			errStr := fmt.Sprintf("%s", err2.Error())
 			if !strings.Contains(errStr, "ok") {
-			    log.Fatalf("LocalWorker.New role is P1, allocate hugepages failed:%s", errStr)
+				log.Fatalf("LocalWorker.New role is P1, allocate hugepages failed:%s", errStr)
 			}
 		} else {
 			log.Info("LocalWorker.New role is P1, try allocate completed!")

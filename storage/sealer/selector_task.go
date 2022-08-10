@@ -20,7 +20,7 @@ func newTaskSelector(queryWorker bool) *taskSelector {
 	}
 }
 
-func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
+func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
 	supported := false
 	tasks := whnd.acceptTaskTypes
 	for _, t := range tasks {
@@ -31,19 +31,19 @@ func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.
 	}
 
 	if !supported {
-		return false, nil
+		return false, false, nil
 	}
 
 	if s.queryWorker {
 		if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
-			return false, nil
+			return false, false, nil
 		}
 	}
 
-	return true, nil
+	return true, false, nil
 }
 
-func (s *taskSelector) Cmp(ctx context.Context, _ sealtasks.TaskType, a, b *workerHandle) (bool, error) {
+func (s *taskSelector) Cmp(ctx context.Context, _ sealtasks.TaskType, a, b *WorkerHandle) (bool, error) {
 	//atasks, err := a.TaskTypes(ctx)
 	//if err != nil {
 	//	return false, xerrors.Errorf("getting supported worker task types: %w", err)

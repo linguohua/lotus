@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
@@ -19,8 +18,8 @@ func (m *Manager) WorkerStats(ctx context.Context) map[uuid.UUID]storiface.Worke
 		handle.lk.Lock()
 
 		out[uuid.UUID(id)] = storiface.WorkerStats{
-			Info:       handle.info,
-			Enabled:    handle.enabled,
+			Info:       handle.Info,
+			Enabled:    handle.Enabled,
 			Url:        handle.url,
 			UUID:       id.String(),
 			Paused:     handle.pauseStat(),
@@ -32,9 +31,9 @@ func (m *Manager) WorkerStats(ctx context.Context) map[uuid.UUID]storiface.Worke
 			// CpuUse:     handle.active.cpuUse,
 		}
 
-		for tt, count := range handle.active.taskCounters {
-			out[uuid.UUID(id)].TaskCounts[tt.String()] = count
-		}
+		// for tt, count := range handle.active.taskCounters {
+		// 	out[uuid.UUID(id)].TaskCounts[tt.String()] = count
+		// }
 
 		handle.lk.Unlock()
 	}
@@ -80,11 +79,11 @@ func (m *Manager) WorkerJobs() map[uuid.UUID][]storiface.WorkerJob {
 			// 		Start:   request.start,
 			// 	})
 			// }
-			request := window.todo
+			request := window.Todo
 			out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
 				ID:      storiface.UndefCall,
-				Sector:  request.sector.ID,
-				Task:    request.taskType,
+				Sector:  request.Sector.ID,
+				Task:    request.TaskType,
 				RunWait: wi + 1,
 				Start:   request.start,
 			})

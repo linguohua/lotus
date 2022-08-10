@@ -47,7 +47,7 @@ func findSectorGroup(ctx context.Context, index paths.SectorIndex, spt abi.Regis
 	return "", nil
 }
 
-func newExistingSelector(queryWorker bool, index stores.SectorIndex, sector abi.SectorID, alloc storiface.SectorFileType, groupID string) *existingSelector {
+func newExistingSelector(queryWorker bool, index paths.SectorIndex, sector abi.SectorID, alloc storiface.SectorFileType, groupID string) *existingSelector {
 	if groupID == "" {
 		log.Warnf("newExistingSelector, sector:%s, group should not be empty", sector)
 	}
@@ -61,7 +61,7 @@ func newExistingSelector(queryWorker bool, index stores.SectorIndex, sector abi.
 	}
 }
 
-func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
+func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
 	//tasks, err := whnd.workerRpc.TaskTypes(ctx)
 	//if err != nil {
 	//	return false, xerrors.Errorf("getting supported worker task types: %w", err)
@@ -76,12 +76,12 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 	}
 
 	if !supported {
-		return false, nil
+		return false, false, nil
 	}
 
-	workerGroupID := whnd.info.GroupID
+	workerGroupID := whnd.Info.GroupID
 	if workerGroupID != s.groupID {
-		return false, nil
+		return false, false, nil
 	}
 
 	if s.queryWorker {
@@ -89,12 +89,12 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 			task == sealtasks.TTCommit2 {
 
 			if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
-				return false, nil
+				return false, false, nil
 			}
 		}
 	}
 
-	return true, nil
+	return true, true, nil
 }
 
 func (s *existingSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *WorkerHandle) (bool, error) {

@@ -660,7 +660,7 @@ var provingCheckProvableExtCmd = &cli.Command{
 				return err
 			}
 
-			var tocheck []storage.SectorRef
+			var tocheck []storiface.SectorRef
 			for _, info := range sectorInfos {
 				si := abi.SectorID{
 					Miner:  abi.ActorID(mid),
@@ -674,7 +674,7 @@ var provingCheckProvableExtCmd = &cli.Command{
 				}
 
 				sectors[info.SectorNumber] = struct{}{}
-				tocheck = append(tocheck, storage.SectorRef{
+				tocheck = append(tocheck, storiface.SectorRef{
 					ProofType: info.SealProof,
 					ID:        si,
 				})

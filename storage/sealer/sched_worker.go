@@ -47,7 +47,7 @@ func newWorkerHandle(ctx context.Context, w Worker, url string) (*WorkerHandle, 
 
 		//preparing: &activeResources{},
 		//active:  &activeResources{},
-		enabled: true,
+		Enabled: true,
 		paused:  make(map[sealtasks.TaskType]struct{}),
 		url:     url,
 
@@ -72,8 +72,8 @@ func (sh *Scheduler) runWorker(ctx context.Context, wid storiface.WorkerID, work
 		return nil
 	}
 
-	sh.workers[wid] = worker
-	info := worker.info
+	sh.Workers[wid] = worker
+	info := worker.Info
 	acceptTaskTypes := worker.acceptTaskTypes
 
 	if info.GroupID != "" && hasTaskType(acceptTaskTypes, sealtasks.TTPreCommit1) {
@@ -87,7 +87,7 @@ func (sh *Scheduler) runWorker(ctx context.Context, wid storiface.WorkerID, work
 
 	sh.workersLk.Unlock()
 
-	schedWindowsCount := worker.info.Resources.Windows()
+	schedWindowsCount := worker.Info.Resources.Windows()
 
 	sw := &schedWorker{
 		sched:  sh,
@@ -99,7 +99,7 @@ func (sh *Scheduler) runWorker(ctx context.Context, wid storiface.WorkerID, work
 		heartbeatTimer:   time.NewTicker(paths.HeartbeatInterval),
 		scheduledWindows: make(chan *SchedWindow, schedWindowsCount),
 
-		taskDone:         make(chan struct{}, 1),
+		taskDone: make(chan struct{}, 1),
 	}
 
 	log.Infof("schedWorker.runWorker, group id:%s, host name:%s", info.GroupID, info.Hostname)
@@ -132,55 +132,6 @@ func convertTaskTypes(tt string) []sealtasks.TaskType {
 	}
 }
 
-func (sh *scheduler) pauseWorker(ctx context.Context, uuid2 string, paused bool, tasktype string) error {
-	log.Infof("pauseWorker call with uuid:%s, paused: %v, tasktype:%s", uuid2, paused, tasktype)
-	wid, err := uuid.Parse(uuid2)
-	if err != nil {
-		return xerrors.Errorf("pauseWorker failed: parse uuid %s error %v", uuid2, err)
-	}
-
-	ttarray := convertTaskTypes(tasktype)
-	if len(ttarray) < 1 {
-		return xerrors.Errorf("pauseWorker failed: parse task type %s failed", tasktype)
-	}
-
-	log.Infof("pauseWorker call wait RLock")
-	sh.workersLk.RLock()
-	worker, exist := sh.workers[storiface.WorkerID(wid)]
-	sh.workersLk.RUnlock()
-
-	if !exist {
-		return xerrors.Errorf("pauseWorker failed:no worker with session id %s found in scheduler", uuid2)
-	}
-
-	log.Infof("pauseWorker call wait Lock")
-	sh.workersLk.Lock()
-	if paused {
-		for _, tt := range ttarray {
-			worker.paused[tt] = struct{}{}
-		}
-	} else {
-		for _, tt := range ttarray {
-			delete(worker.paused, tt)
-		}
-	}
-	sh.workersLk.Unlock()
-
-	if paused {
-		log.Debugf("scheduler worker with session id %s has been paused, it can not receive new task anymore", uuid2)
-	} else {
-		log.Debugf("scheduler worker with session id %s has been resume, it can receive new task now", uuid2)
-	}
-
-	// re-scheduler
-	if !paused {
-		sh.workerChange <- struct{}{}
-	}
-
-	log.Infof("pauseWorker call completed")
-	return nil
-}
-
 func (sw *WorkerHandle) pauseStat() string {
 	str := ""
 	for k := range sw.paused {
@@ -188,65 +139,6 @@ func (sw *WorkerHandle) pauseStat() string {
 	}
 
 	return str
-}
-
-func (sh *scheduler) removeWorker(ctx context.Context, uuid2 string) error {
-	log.Infof("removeWorker call with uuid:%s, removed: %v", uuid2)
-	wid, err := uuid.Parse(uuid2)
-	if err != nil {
-		return xerrors.Errorf("removeWorker failed: parse uuid %s error %v", uuid2, err)
-	}
-
-	log.Infof("removeWorker call wait RLock")
-	sh.workersLk.RLock()
-	worker, exist := sh.workers[storiface.WorkerID(wid)]
-	sh.workersLk.RUnlock()
-
-	if !exist {
-		return xerrors.Errorf("removeWorker failed:no worker with session id %s found in scheduler", uuid2)
-	}
-
-	log.Infof("removeWorker call wait Lock")
-	sh.workersLk.Lock()
-	worker.removed = true
-	url := worker.url
-	sh.workersLk.Unlock()
-
-	log.Infof("removeWorker %s call completed", url)
-	return nil
-}
-
-func (sh *scheduler) updateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error {
-	log.Infof("updateFinalizeTicketsParam with tickets:%d, interval: %d minutes", tickets, interval)
-
-	sh.workersLk.Lock()
-	sh.finTicketInterval = interval
-	sh.finTicketsPerInterval = tickets
-	if sh.finTicker != nil {
-		if interval == 0 {
-			interval = 60
-		}
-		sh.finTicker.Reset(time.Duration(interval) * time.Minute)
-	}
-	sh.workersLk.Unlock()
-
-	log.Infof("updateFinalizeTicketsParam call completed with tickets:%d, interval: %d minutes", tickets, interval)
-	return nil
-}
-
-func (sh *scheduler) updateP1TicketsParams(ctx context.Context, tickets uint, interval uint) error {
-	log.Infof("updateP1TicketsParams with tickets:%d, interval: %d", tickets, interval)
-
-	sh.workersLk.Lock()
-	sh.p1TicketInterval = interval
-	sh.p1TicketsPerInterval = tickets
-	if sh.p1Ticker != nil && interval > 0 {
-		sh.p1Ticker.Reset(time.Duration(interval))
-	}
-	sh.workersLk.Unlock()
-
-	log.Infof("updateP1TicketsParams call completed")
-	return nil
 }
 
 func (sw *schedWorker) handleWorker() {
@@ -345,7 +237,7 @@ func (sw *schedWorker) disable(ctx context.Context) error {
 	case sw.sched.workerDisable <- workerDisableReq{
 		//activeWindows: sw.worker.activeWindows,
 		wid:     sw.wid,
-		groupID: sw.worker.info.GroupID,
+		groupID: sw.worker.Info.GroupID,
 		done: func() {
 			close(done)
 		},
@@ -432,7 +324,7 @@ func (sw *schedWorker) fillWindowsByTasktype(taskType sealtasks.TaskType, i int)
 			acceptTaskType: taskType,
 			Worker:         sw.wid,
 			Done:           sw.scheduledWindows,
-			groupID:        sw.worker.info.GroupID,
+			groupID:        sw.worker.Info.GroupID,
 		}:
 		case <-sw.sched.closing:
 			return false
@@ -510,13 +402,13 @@ func (sw *schedWorker) workerCompactWindows() {
 	//			if !lower.Allocated.CanHandleRequest(todo.SealTask(), needRes, sw.wid, "compactWindows", worker.Info) {
 	//				continue
 	//			}
-    //
+	//
 	//			moved = append(moved, ti)
 	//			lower.Todo = append(lower.Todo, todo)
 	//			lower.Allocated.Add(todo.SealTask(), worker.Info.Resources, needRes)
 	//			window.Allocated.Free(todo.SealTask(), worker.Info.Resources, needRes)
 	//		}
-    //
+	//
 	//		if len(moved) > 0 {
 	//			newTodo := make([]*WorkerRequest, 0, len(window.Todo)-len(moved))
 	//			for i, t := range window.Todo {
@@ -524,17 +416,17 @@ func (sw *schedWorker) workerCompactWindows() {
 	//					moved = moved[1:]
 	//					continue
 	//				}
-    //
+	//
 	//				newTodo = append(newTodo, t)
 	//			}
 	//			window.Todo = newTodo
 	//		}
 	//	}
 	//}
-    //
+	//
 	//var compacted int
 	//var newWindows []*SchedWindow
-    //
+	//
 	//for _, window := range worker.activeWindows {
 	//	if len(window.Todo) == 0 {
 	//		compacted++
@@ -559,7 +451,7 @@ func (sw *schedWorker) processAssignedWindows() {
 		// process tasks within a window, preferring tasks at lower indexes
 		//for len(firstWindow.Todo) > 0 {
 		//	tidx := -1
-        //
+		//
 		//	worker.lk.Lock()
 		//	for t, todo := range firstWindow.Todo {
 		//		needRes := worker.Info.Resources.ResourceSpec(todo.Sector.ProofType, todo.TaskType)
@@ -581,15 +473,15 @@ func (sw *schedWorker) processAssignedWindows() {
 		//worker.lk.Unlock()
 
 		//	todo := firstWindow.Todo[tidx]
-        //
+		//
 		//	log.Debugf("assign worker sector %d", todo.Sector.ID.Number)
 		//	err := sw.startProcessingTask(todo)
-        //
+		//
 		//	if err != nil {
 		//		log.Errorf("startProcessingTask error: %+v", err)
 		//		go todo.respond(xerrors.Errorf("startProcessingTask error: %w", err))
 		//	}
-        //
+		//
 		//	// Note: we're not freeing window.allocated resources here very much on purpose
 		//	copy(firstWindow.Todo[tidx:], firstWindow.Todo[tidx+1:])
 		//	firstWindow.Todo[len(firstWindow.Todo)-1] = nil
@@ -599,8 +491,8 @@ func (sw *schedWorker) processAssignedWindows() {
 		// }
 
 		// todo := firstWindow.todo[tidx]
-		todo := firstWindow.todo
-		log.Debugf("assign worker sector %d", todo.sector.ID.Number)
+		todo := firstWindow.Todo
+		log.Debugf("assign worker sector %d", todo.Sector.ID.Number)
 		err := sw.startProcessingTask(sw.taskDone, firstWindow)
 
 		if err != nil {
@@ -622,7 +514,7 @@ func (sw *schedWorker) processAssignedWindows() {
 	}
 }
 
-func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *schedWindow) error {
+func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *SchedWindow) error {
 	w, sh := sw.worker, sw.sched
 
 	// needRes := ResourceTable[req.taskType][req.sector.ProofType]
@@ -633,11 +525,11 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 
 	go func() {
 		// first run the prepare step (e.g. fetching sector data from other worker)
-		req := window.todo
+		req := window.Todo
 		//log.Debugf("startProcessingTask call prepare %d", req.sector.ID.Number)
-		tw := sh.workTracker.worker(sw.wid, w.info, w.workerRpc)
+		tw := sh.workTracker.worker(sw.wid, w.Info, w.workerRpc)
 		tw.start()
-		err := req.prepare(req.ctx, tw)
+		err := req.prepare(req.Ctx, tw)
 		//sh.workersLk.Lock()
 
 		if err != nil {
@@ -646,7 +538,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 			// w.lk.Unlock()
 			// sh.workersLk.Unlock()
 			// release window
-			sw.releaseWindowOfTasktype(window.todo.taskType)
+			sw.releaseWindowOfTasktype(window.Todo.TaskType)
 
 			select {
 			case taskDone <- struct{}{}:
@@ -669,9 +561,9 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 
 		dowork := func() error {
 			// Do the work!
-			tw := sh.workTracker.worker(sw.wid, w.info, w.workerRpc)
+			tw := sh.workTracker.worker(sw.wid, w.Info, w.workerRpc)
 			tw.start()
-			err = req.work(req.ctx, tw)
+			err = req.work(req.Ctx, tw)
 
 			select {
 			case req.ret <- workerResponse{err: err}:
@@ -681,7 +573,7 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 				log.Warnf("scheduler closed while sending response")
 			}
 
-			sw.releaseWindowOfTasktype(window.todo.taskType)
+			sw.releaseWindowOfTasktype(window.Todo.TaskType)
 			select {
 			// notify request window
 			case taskDone <- struct{}{}:
@@ -701,43 +593,4 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, window *sched
 	}()
 
 	return nil
-}
-
-func (sh *scheduler) workerCleanup(wid storiface.WorkerID, w *WorkerHandle) {
-	select {
-	case <-w.closingMgr:
-	default:
-		close(w.closingMgr)
-	}
-
-	sh.workersLk.Unlock()
-	select {
-	case <-w.closedMgr:
-	case <-time.After(time.Second):
-		log.Errorf("timeout closing worker manager goroutine %d", wid)
-	}
-	sh.workersLk.Lock()
-
-	if !w.cleanupStarted {
-		w.cleanupStarted = true
-
-		groupID := w.info.GroupID
-		if groupID != "" {
-			openWindowsG := sh.getOpenWindowsGroup(groupID)
-			if openWindowsG != nil {
-				openWindowsG.removeByWorkerID(wid)
-			}
-		} else {
-			openWindows := sh.openWindowsC2
-			newWindows := make([]*schedWindowRequest, 0, len(openWindows))
-			for _, window := range openWindows {
-				if window.worker != wid {
-					newWindows = append(newWindows, window)
-				}
-			}
-			sh.openWindowsC2 = newWindows
-		}
-
-		log.Debugf("worker %s dropped", wid)
-	}
 }

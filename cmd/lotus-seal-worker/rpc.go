@@ -11,16 +11,16 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/build"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
-	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+	"github.com/filecoin-project/lotus/storage/paths"
+	"github.com/filecoin-project/lotus/storage/sealer"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 type worker struct {
-	*sectorstorage.LocalWorker
+	*sealer.LocalWorker
 
-	localStore *stores.Local
-	ls         stores.LocalStorage
+	localStore *paths.Local
+	ls         paths.LocalStorage
 
 	disabled int64
 	groupID  string
@@ -40,8 +40,8 @@ func (w *worker) StorageAddLocal(ctx context.Context, path string) error {
 		return xerrors.Errorf("opening local path: %w", err)
 	}
 
-	if err := w.ls.SetStorage(func(sc *stores.StorageConfig) {
-		sc.StoragePaths = append(sc.StoragePaths, stores.LocalPath{Path: path})
+	if err := w.ls.SetStorage(func(sc *paths.StorageConfig) {
+		sc.StoragePaths = append(sc.StoragePaths, paths.LocalPath{Path: path})
 	}); err != nil {
 		return xerrors.Errorf("get storage config: %w", err)
 	}

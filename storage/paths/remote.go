@@ -13,14 +13,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hashicorp/go-multierror"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/filecoin-project/lotus/storage/sealer/fsutil"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
-	"github.com/filecoin-project/lotus/storage/sealer/tarutil"
 )
 
 var FetchTempSubdir = "fetching"
@@ -193,7 +191,6 @@ func (r *Remote) AcquireSector(ctx context.Context, s storiface.SectorRef, exist
 		//return paths, stores, xerrors.Errorf("-lin- this version only supply remote.AcquireSector with sealing type:%s", pathType)
 		groupID = "" // use empty groupID to alloc store type storage
 	}
-
 
 	// get the local path, lock storage by sector
 	sis, err := r.index.TryBindSector2SealStorage(ctx, existing, pathType, s.ID, groupID)

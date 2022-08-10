@@ -323,10 +323,10 @@ var runCmd = &cli.Command{
 			workerType = sealtasks.WorkerWinningPoSt
 			taskTypes = append(taskTypes, sealtasks.TTGenerateWinningPoSt)
 		}
-        
+
 		if workerType == "" {
 			// taskTypes = append(taskTypes, sealtasks.TTFetch, sealtasks.TTCommit1, sealtasks.TTProveReplicaUpdate1, sealtasks.TTFinalize, sealtasks.TTFinalizeReplicaUpdate)
-        
+
 			if !cctx.Bool("no-default") {
 				workerType = sealtasks.WorkerSealing
 			}
@@ -526,7 +526,7 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("could not get api info: %w", err)
 		}
 
-		remote := paths.NewRemote(localStore, nodeApi, sminfo.AuthHeader(), cctx.Int("parallel-fetch-limit"), &stores.DefaultPartialFileHandler{}, groupID)
+		remote := paths.NewRemote(localStore, nodeApi, sminfo.AuthHeader(), cctx.Int("parallel-fetch-limit"), &paths.DefaultPartialFileHandler{}, groupID)
 
 		fh := &paths.FetchHandler{Local: localStore, PfHandler: &paths.DefaultPartialFileHandler{}}
 		remoteHandler := func(w http.ResponseWriter, r *http.Request) {
@@ -542,7 +542,7 @@ var runCmd = &cli.Command{
 		// Create / expose the worker
 		log.Infof("worker group id %s", groupID)
 
-		ext := &sectorstorage.LocalWorkerExtParams{}
+		ext := &sealer.LocalWorkerExtParams{}
 		ext.GroupID = groupID
 		ext.PieceTemplateDir = os.Getenv("PIECE_TEMPLATE_DIR")
 		ext.PieceTemplateSize = 68719476736

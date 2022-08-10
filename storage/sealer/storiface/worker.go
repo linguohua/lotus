@@ -35,13 +35,16 @@ type WorkerInfo struct {
 }
 
 type WorkerResources struct {
-	//MemPhysical uint64
-	//MemSwap     uint64
+	MemPhysical uint64
+	MemUsed     uint64
+	MemSwap     uint64
+	MemSwapUsed uint64
 
-	//MemReserved uint64 // Used by system / other processes
+	CPUs uint64 // Logical cores
+	GPUs []string
+	// if nil use the default resource table
+	Resources map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 
-	//CPUs uint64 // Logical cores
-	//GPUs []string
 	P1  uint32
 	P2  uint32
 	C1  uint32
@@ -88,6 +91,26 @@ func (wr *WorkerResources) ValidTaskType() ([]sealtasks.TaskType, []uint32) {
 	}
 
 	return tt, counts
+}
+
+func (wr WorkerResources) ResourceSpec(spt abi.RegisteredSealProof, tt sealtasks.TaskType) Resources {
+	res := ResourceTable[tt][spt]
+
+	// if the worker specifies custom resource table, prefer that
+	if wr.Resources != nil {
+		tr, ok := wr.Resources[tt]
+		if !ok {
+			return res
+		}
+
+		r, ok := tr[spt]
+		if ok {
+			return r
+		}
+	}
+
+	// otherwise, use the default resource table
+	return res
 }
 
 type WorkerStats struct {

@@ -122,12 +122,12 @@ func (ps *poStScheduler) readyWorkers(spt abi.RegisteredSealProof) (bool, []cand
 	var accepts []candidateWorker
 	//if the gpus of the worker are insufficient or it's disabled, it cannot be scheduled
 
-	for wid, wr := range ps.workers {
-		needRes := wr.Info.Resources.ResourceSpec(spt, ps.postType)
+	for wid, _ := range ps.workers {
+		// needRes := wr.Info.Resources.ResourceSpec(spt, ps.postType)
 
-		if !wr.active.CanHandleRequest(ps.postType.SealTask(spt), needRes, wid, "post-readyWorkers", wr.Info) {
-			continue
-		}
+		// if !wr.active.CanHandleRequest(ps.postType.SealTask(spt), needRes, wid, "post-readyWorkers", wr.Info) {
+		// 	continue
+		// }
 
 		accepts = append(accepts, candidateWorker{
 			id: wid,
