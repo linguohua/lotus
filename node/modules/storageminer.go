@@ -269,6 +269,8 @@ func WindowPostScheduler(fc config.MinerFeeConfig, pc config.ProvingConfig) func
 
 		ctx := helpers.LifecycleCtx(mctx, lc)
 
+		var fps *wdpost.WindowPoStScheduler = nil
+		var err error
 		if os.Getenv("YOUZHOU_WINDOW_POST_DISABLE") != "true" {
 			fps, err = wdpost.NewWindowedPoStScheduler(api, fc, pc, as, sealer, verif, sealer, j, maddr)
 			if err != nil {
