@@ -269,15 +269,19 @@ func WindowPostScheduler(fc config.MinerFeeConfig, pc config.ProvingConfig) func
 
 		ctx := helpers.LifecycleCtx(mctx, lc)
 
-		fps, err := wdpost.NewWindowedPoStScheduler(api, fc, pc, as, sealer, verif, sealer, j, maddr)
-
-		if err != nil {
-			return nil, err
+		if os.Getenv("YOUZHOU_WINDOW_POST_DISABLE") != "true" {
+			fps, err = wdpost.NewWindowedPoStScheduler(api, fc, pc, as, sealer, verif, sealer, j, maddr)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		lc.Append(fx.Hook{
 			OnStart: func(context.Context) error {
-				go fps.Run(ctx)
+				if fps != nil {
+					go fps.Run(ctx)
+				}
+
 				return nil
 			},
 		})
@@ -451,8 +455,14 @@ func SetupBlockProducer(lc fx.Lifecycle, ds dtypes.MetadataDS, api v1api.FullNod
 
 	m := lotusminer.NewMiner(api, epp, minerAddr, sf, j)
 
+	noMine := os.Getenv("YOUZHOU_WINNING_POST_DISABLE") == "true"
+
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			if noMine {
+				return nil
+			}
+
 			if err := m.Start(ctx); err != nil {
 				return err
 			}
