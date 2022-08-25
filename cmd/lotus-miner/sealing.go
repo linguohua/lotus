@@ -431,11 +431,13 @@ var sealingNextSectorIDCmd = &cli.Command{
 			currentNextID, err := binary.ReadUvarint(bytes.NewReader(buf2))
 			if err != nil {
 				return xerrors.Errorf("binary read current next id failed:%v", err)
+			} else {
+				fmt.Printf("current next id:%d\n", currentNextID)
 			}
-
-			fmt.Printf("current next id:%d\n", currentNextID)
 		} else {
-			return xerrors.Errorf("read current next id from datastore failed:%v", err)
+			if  err != redis.ErrNil {
+				return xerrors.Errorf("read current next id from datastore failed:%v", err)
+			}
 		}
 
 		var nextID = abi.SectorNumber(nextIDint)
