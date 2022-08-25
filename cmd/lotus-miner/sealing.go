@@ -435,9 +435,7 @@ var sealingNextSectorIDCmd = &cli.Command{
 				fmt.Printf("current next id:%d\n", currentNextID)
 			}
 		} else {
-			if  err != redis.ErrNil {
-				return xerrors.Errorf("read current next id from datastore failed:%v", err)
-			}
+			fmt.Errorf("read current next id from datastore failed:%v", err)
 		}
 
 		var nextID = abi.SectorNumber(nextIDint)
