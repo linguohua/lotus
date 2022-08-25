@@ -385,6 +385,20 @@ var sealingNextSectorIDCmd = &cli.Command{
 	Usage:     "set next sector id to datastore, make sure miner is not running",
 	ArgsUsage: "[sector id]",
 	Action: func(cctx *cli.Context) error {
+		if cctx.Args().Len() < 1 {
+			return nil
+		}
+
+		if cctx.Args().Len() != 1 {
+			return xerrors.Errorf("expected 1 argument")
+		}
+
+		var nextIDStr = cctx.Args().First()
+		nextIDint, err := strconv.Atoi(nextIDStr)
+		if err != nil {
+			return err
+		}
+
 		repoPath := cctx.String(FlagMinerRepo)
 		r, err := repo.NewFS(repoPath)
 		if err != nil {
@@ -415,25 +429,13 @@ var sealingNextSectorIDCmd = &cli.Command{
 		buf2, err := mds.Get(ctx, datastore.NewKey(modules.StorageCounterDSPrefix))
 		if err == nil {
 			currentNextID, err := binary.ReadUvarint(bytes.NewReader(buf2))
-			if err == nil {
-				return xerrors.Errorf("read current next id from datastore failed:%v", err)
+			if err != nil {
+				return xerrors.Errorf("binary read current next id failed:%v", err)
 			}
 
 			fmt.Printf("current next id:%d\n", currentNextID)
-		}
-
-		if cctx.Args().Len() < 1 {
-			return nil
-		}
-
-		if cctx.Args().Len() != 1 {
-			return xerrors.Errorf("expected 1 argument")
-		}
-
-		var nextIDStr = cctx.Args().First()
-		nextIDint, err := strconv.Atoi(nextIDStr)
-		if err != nil {
-			return err
+		} else {
+			return xerrors.Errorf("read current next id from datastore failed:%v", err)
 		}
 
 		var nextID = abi.SectorNumber(nextIDint)
