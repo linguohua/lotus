@@ -212,3 +212,11 @@ func (mr *MockSectorIndexMockRecorder) StorageTryLock(arg0, arg1, arg2, arg3 int
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StorageTryLock", reflect.TypeOf((*MockSectorIndex)(nil).StorageTryLock), arg0, arg1, arg2, arg3)
 }
+
+func (mr *MockSectorIndexMockRecorder) TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) ([]storiface.StorageInfo, error) {
+	return nil, nil
+}
+
+func (mr *MockSectorIndexMockRecorder)  UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
+	return nil
+}

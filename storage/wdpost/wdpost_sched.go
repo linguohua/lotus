@@ -109,6 +109,7 @@ func NewWindowedPoStScheduler(api NodeAPI,
 		proofType:                       mi.WindowPoStProofType,
 		partitionSectors:                mi.WindowPoStPartitionSectors,
 		disablePreChecks:                pcfg.DisableWDPoStPreChecks,
+
 		maxPartitionsPerPostMessage:     pcfg.MaxPartitionsPerPoStMessage,
 		maxPartitionsPerRecoveryMessage: pcfg.MaxPartitionsPerRecoveryMessage,
 		actor:                           actor,

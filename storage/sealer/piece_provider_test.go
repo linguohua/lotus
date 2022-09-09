@@ -208,9 +208,9 @@ func newPieceProviderTestHarness(t *testing.T, mgrConfig Config, sectorProofType
 	// create index, storage, local store & remote store.
 	index := paths.NewIndex(nil)
 	storage := newTestStorage(t)
-	localStore, err := paths.NewLocal(ctx, storage, index, []string{"http://" + nl.Addr().String() + "/remote"})
+	localStore, err := paths.NewLocal(ctx, storage, index, []string{"http://" + nl.Addr().String() + "/remote"}, "", "")
 	require.NoError(t, err)
-	remoteStore := paths.NewRemote(localStore, index, nil, 6000, &paths.DefaultPartialFileHandler{})
+	remoteStore := paths.NewRemote(localStore, index, nil, 6000, &paths.DefaultPartialFileHandler{}, "")
 
 	// data stores for state tracking.
 	dstore := ds_sync.MutexWrap(datastore.NewMapDatastore())
@@ -260,7 +260,8 @@ func (p *pieceProviderTestHarness) addRemoteWorker(t *testing.T, tasks []sealtas
 	nl, err := net.Listen("tcp", address)
 	require.NoError(t, err)
 
-	localStore, err := paths.NewLocal(p.ctx, newTestStorage(t), p.index, []string{"http://" + nl.Addr().String() + "/remote"})
+	localStore, err := paths.NewLocal(p.ctx, newTestStorage(t), p.index, []string{"http://" + nl.Addr().String() + "/remote"}, "", "")
+
 	require.NoError(t, err)
 
 	fh := &paths.FetchHandler{
@@ -280,20 +281,20 @@ func (p *pieceProviderTestHarness) addRemoteWorker(t *testing.T, tasks []sealtas
 	}()
 
 	remote := paths.NewRemote(localStore, p.index, nil, 1000,
-		&paths.DefaultPartialFileHandler{})
+		&paths.DefaultPartialFileHandler{}, "")
 
 	dstore := ds_sync.MutexWrap(datastore.NewMapDatastore())
 	csts := statestore.New(namespace.Wrap(dstore, datastore.NewKey("/stmgr/calls")))
 
 	worker := newLocalWorker(nil, WorkerConfig{
 		TaskTypes: tasks,
-	}, os.LookupEnv, remote, localStore, p.index, p.mgr, csts)
+	}, os.LookupEnv, remote, localStore, p.index, p.mgr, csts, nil)
 
 	p.servers = append(p.servers, svc)
 	p.localStores = append(p.localStores, localStore)
 
 	// register self with manager
-	require.NoError(t, p.mgr.AddWorker(p.ctx, worker))
+	require.NoError(t, p.mgr.AddWorker(p.ctx, worker, ""))
 }
 
 func (p *pieceProviderTestHarness) removeAllUnsealedSectorFiles(t *testing.T) {

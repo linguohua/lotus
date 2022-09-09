@@ -85,6 +85,9 @@ type StorageInfo struct {
 	// - "update-cache"
 	// Any other value will generate a warning and be ignored.
 	DenyTypes []string
+
+	GroupID           string
+	MaxSealingSectors int
 }
 
 type HealthReport struct {
@@ -105,6 +108,9 @@ type SectorStorageInfo struct {
 
 	AllowTypes []string
 	DenyTypes  []string
+
+	GroupID           string
+	MaxSealingSectors int
 }
 
 type Decl struct {

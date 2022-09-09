@@ -3,6 +3,7 @@ package full
 import (
 	"context"
 	"encoding/json"
+	"os"
 
 	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/messagepool"
@@ -46,6 +48,23 @@ type MpoolAPI struct {
 	MessageSigner *messagesigner.MessageSigner
 
 	PushLocks *dtypes.MpoolLocker
+
+	MpoolAPIExt *MpoolAPIExt `optional:"true"`
+}
+
+type MpoolAPIExt struct {
+	UseMinerBalance bool
+}
+
+func NewMpoolAPIExt() *MpoolAPIExt {
+	ext := &MpoolAPIExt{}
+	str := os.Getenv("YOUZHOU_CANCEL_PLEDGE")
+	if str == "true" {
+		log.Warnf("YOUZHOU_CANCEL_PLEDGE: %s", str)
+		ext.UseMinerBalance = true
+	}
+
+	return ext
 }
 
 func (a *MpoolAPI) MpoolGetConfig(context.Context) (*types.MpoolConfig, error) {
@@ -179,9 +198,18 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 		return nil, xerrors.Errorf("mpool push: getting origin balance: %w", err)
 	}
 
+	// credit goes to zhanfei-wu
+	if a.MpoolAPIExt.UseMinerBalance && (msg.Method == builtin.MethodsMiner.ProveCommitSector ||
+		msg.Method == builtin.MethodsMiner.PreCommitSector ||
+		msg.Method == builtin.MethodsMiner.ProveCommitAggregate ||
+		msg.Method == builtin.MethodsMiner.PreCommitSectorBatch) {
+		log.Infof("make msg value ,cid:(%s),value:%s == 0", msg.Cid().Hash(), msg.Value)
+		msg.Value = types.NewInt(0)
+	}
+
 	requiredFunds := big.Add(msg.Value, msg.RequiredFunds())
-	if b.LessThan(requiredFunds) {
-		return nil, xerrors.Errorf("mpool push: not enough funds: %s < %s", b, requiredFunds)
+	if b.LessThan(msg.Value) {
+		return nil, xerrors.Errorf("mpool push: not enough funds: %s < %s", b, msg.Value)
 	}
 
 	// Sign and push the message

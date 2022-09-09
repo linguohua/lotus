@@ -15,7 +15,7 @@ const (
 	FTUpdate
 	FTUpdateCache
 
-	FileTypes = iota
+	FileTypes = 6
 )
 
 var PathTypes = []SectorFileType{FTUnsealed, FTSealed, FTCache, FTUpdate, FTUpdateCache}
@@ -67,6 +67,16 @@ func TypeFromString(s string) (SectorFileType, error) {
 		return FTUpdateCache, nil
 	default:
 		return 0, xerrors.Errorf("unknown sector file type '%s'", s)
+}
+
+func (t SectorFileType) IsForUpdate() bool {
+	switch t {
+	case FTUpdate:
+		return true
+	case FTUpdateCache:
+		return true
+	default:
+		return false
 	}
 }
 
