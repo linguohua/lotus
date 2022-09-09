@@ -12,10 +12,10 @@ import (
 )
 
 type existingSelector struct {
-	index      paths.SectorIndex
-	sector     abi.SectorID
-	fileType   storiface.SectorFileType
-	allowFetch bool
+	index    paths.SectorIndex
+	sector   abi.SectorID
+	fileType storiface.SectorFileType
+	//allowFetch bool
 
 	groupID     string
 	queryWorker bool
@@ -55,10 +55,10 @@ func newExistingSelector(queryWorker bool, index paths.SectorIndex, sector abi.S
 	}
 
 	return &existingSelector{
-		index:      index,
-		sector:     sector,
-		fileType:   alloc,
-		allowFetch: allowFetch,
+		index:    index,
+		sector:   sector,
+		fileType: alloc,
+		//allowFetch: allowFetch,
 		groupID:     groupID,
 		queryWorker: queryWorker,
 	}

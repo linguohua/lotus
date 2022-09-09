@@ -67,6 +67,7 @@ func TypeFromString(s string) (SectorFileType, error) {
 		return FTUpdateCache, nil
 	default:
 		return 0, xerrors.Errorf("unknown sector file type '%s'", s)
+	}
 }
 
 func (t SectorFileType) IsForUpdate() bool {

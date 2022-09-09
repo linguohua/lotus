@@ -220,3 +220,11 @@ func (mr *MockSectorIndexMockRecorder) TryBindSector2SealStorage(ctx context.Con
 func (mr *MockSectorIndexMockRecorder)  UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
 	return nil
 }
+
+func (m* MockSectorIndex) TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, sector abi.SectorID, groupID string) ([]storiface.StorageInfo, error) {
+	return nil,nil
+}
+
+func (m* MockSectorIndex) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
+	return nil
+}

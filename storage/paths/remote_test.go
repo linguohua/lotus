@@ -772,7 +772,7 @@ func TestCheckIsUnsealed(t *testing.T) {
 				tc.indexFnc(index, tc.serverUrl)
 			}
 
-			remoteStore := paths.NewRemote(lstore, index, nil, 6000, pfhandler)
+			remoteStore := paths.NewRemote(lstore, index, nil, 6000, pfhandler, "")
 
 			isUnsealed, err := remoteStore.CheckIsUnsealed(ctx, sectorRef, offset, size)
 

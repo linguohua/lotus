@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -288,7 +287,7 @@ func (p *pieceProviderTestHarness) addRemoteWorker(t *testing.T, tasks []sealtas
 
 	worker := newLocalWorker(nil, WorkerConfig{
 		TaskTypes: tasks,
-	}, os.LookupEnv, remote, localStore, p.index, p.mgr, csts, nil)
+	}, remote, localStore, p.index, p.mgr, csts, nil)
 
 	p.servers = append(p.servers, svc)
 	p.localStores = append(p.localStores, localStore)

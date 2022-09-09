@@ -208,8 +208,8 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 	}
 
 	requiredFunds := big.Add(msg.Value, msg.RequiredFunds())
-	if b.LessThan(msg.Value) {
-		return nil, xerrors.Errorf("mpool push: not enough funds: %s < %s", b, msg.Value)
+	if b.LessThan(requiredFunds) {
+		return nil, xerrors.Errorf("mpool push: not enough funds: %s < %s, msg.Value:%s", b, requiredFunds, msg.Value)
 	}
 
 	// Sign and push the message

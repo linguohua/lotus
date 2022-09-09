@@ -672,21 +672,22 @@ func (sh *Scheduler) Info(ctx context.Context) (interface{}, error) {
 }
 
 func (sh *Scheduler) removeRequest(rmrequest *rmRequest) {
+	// TODO: remove request
 
-	if sh.SchedQueue.Len() < 0 {
-		rmrequest.res <- xerrors.New("No requests in the scheduler")
-		return
-	}
+	// if sh.SchedQueue.Len() < 0 {
+	// 	rmrequest.res <- xerrors.New("No requests in the scheduler")
+	// 	return
+	// }
 
-	queue := sh.SchedQueue
-	for i, r := range *queue {
-		if r.SchedId == rmrequest.id {
-			queue.Remove(i)
-			rmrequest.res <- nil
-			go r.respond(xerrors.Errorf("scheduling request removed"))
-			return
-		}
-	}
+	// queue := sh.SchedQueue
+	// for i, r := range *queue {
+	// 	if r.SchedId == rmrequest.id {
+	// 		queue.Remove(i)
+	// 		rmrequest.res <- nil
+	// 		go r.respond(xerrors.Errorf("scheduling request removed"))
+	// 		return
+	// 	}
+	// }
 	rmrequest.res <- xerrors.New("No request with provided details found")
 }
 

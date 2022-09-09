@@ -3404,3 +3404,7 @@ func (mr *MockFullNodeMockRecorder) WalletVerify(arg0, arg1, arg2, arg3 interfac
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WalletVerify", reflect.TypeOf((*MockFullNode)(nil).WalletVerify), arg0, arg1, arg2, arg3)
 }
+
+func (m *MockFullNode) AnchorBlocksCountByHeight(context.Context, abi.ChainEpoch) (int, error) {
+	return 0, nil
+}
