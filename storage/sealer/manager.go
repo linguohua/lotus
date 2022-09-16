@@ -178,44 +178,44 @@ func New(ctx context.Context, lstor *paths.Local, stor paths.Store, ls paths.Loc
 
 	go m.sched.runSched()
 
-	localTasks := []sealtasks.TaskType{
-		sealtasks.TTCommit1, sealtasks.TTProveReplicaUpdate1, sealtasks.TTFinalize, sealtasks.TTFetch, sealtasks.TTFinalizeReplicaUpdate,
-	}
-	if sc.AllowAddPiece {
-		localTasks = append(localTasks, sealtasks.TTAddPiece, sealtasks.TTDataCid)
-	}
-	if sc.AllowPreCommit1 {
-		localTasks = append(localTasks, sealtasks.TTPreCommit1)
-	}
-	if sc.AllowPreCommit2 {
-		localTasks = append(localTasks, sealtasks.TTPreCommit2)
-	}
-	if sc.AllowCommit {
-		localTasks = append(localTasks, sealtasks.TTCommit2)
-	}
-	if sc.AllowUnseal {
-		localTasks = append(localTasks, sealtasks.TTUnseal)
-	}
-	if sc.AllowReplicaUpdate {
-		localTasks = append(localTasks, sealtasks.TTReplicaUpdate)
-	}
-	if sc.AllowProveReplicaUpdate2 {
-		localTasks = append(localTasks, sealtasks.TTProveReplicaUpdate2)
-	}
-	if sc.AllowRegenSectorKey {
-		localTasks = append(localTasks, sealtasks.TTRegenSectorKey)
-	}
+	// localTasks := []sealtasks.TaskType{
+	// 	sealtasks.TTCommit1, sealtasks.TTProveReplicaUpdate1, sealtasks.TTFinalize, sealtasks.TTFetch, sealtasks.TTFinalizeReplicaUpdate,
+	// }
+	// if sc.AllowAddPiece {
+	// 	localTasks = append(localTasks, sealtasks.TTAddPiece, sealtasks.TTDataCid)
+	// }
+	// if sc.AllowPreCommit1 {
+	// 	localTasks = append(localTasks, sealtasks.TTPreCommit1)
+	// }
+	// if sc.AllowPreCommit2 {
+	// 	localTasks = append(localTasks, sealtasks.TTPreCommit2)
+	// }
+	// if sc.AllowCommit {
+	// 	localTasks = append(localTasks, sealtasks.TTCommit2)
+	// }
+	// if sc.AllowUnseal {
+	// 	localTasks = append(localTasks, sealtasks.TTUnseal)
+	// }
+	// if sc.AllowReplicaUpdate {
+	// 	localTasks = append(localTasks, sealtasks.TTReplicaUpdate)
+	// }
+	// if sc.AllowProveReplicaUpdate2 {
+	// 	localTasks = append(localTasks, sealtasks.TTProveReplicaUpdate2)
+	// }
+	// if sc.AllowRegenSectorKey {
+	// 	localTasks = append(localTasks, sealtasks.TTRegenSectorKey)
+	// }
 
-	wcfg := WorkerConfig{
-		IgnoreResourceFiltering: sc.ResourceFiltering == ResourceFilteringDisabled,
-		TaskTypes:               localTasks,
-		Name:                    sc.LocalWorkerName,
-	}
-	worker := NewLocalWorker(wcfg, stor, lstor, si, m, wss)
-	err = m.AddWorker(ctx, worker)
-	if err != nil {
-		return nil, xerrors.Errorf("adding local worker: %w", err)
-	}
+	// wcfg := WorkerConfig{
+	// 	IgnoreResourceFiltering: sc.ResourceFiltering == ResourceFilteringDisabled,
+	// 	TaskTypes:               localTasks,
+	// 	Name:                    sc.LocalWorkerName,
+	// }
+	// worker := NewLocalWorker(wcfg, stor, lstor, si, m, wss)
+	// err = m.AddWorker(ctx, worker)
+	// if err != nil {
+	// 	return nil, xerrors.Errorf("adding local worker: %w", err)
+	// }
 
 	return m, nil
 }
