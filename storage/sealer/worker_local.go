@@ -113,13 +113,9 @@ type LocalWorker struct {
 }
 
 func loadP1CountFromEnv() int {
-	if os.Getenv("FIL_PROOFS_STEP_STYLE") != "true" {
-		return 1
-	}
-
 	stepsEnv := os.Getenv("FIL_PROOFS_NUMA_CPU_CORES")
 	if len(stepsEnv) < 1 {
-		log.Fatal("FIL_PROOFS_NUMA_CPU_CORES should be configured when FIL_PROOFS_STEP_STYLE=true")
+		log.Fatal("FIL_PROOFS_NUMA_CPU_CORES must should be configured")
 	}
 
 	// (0,0,1)(0,2,3)(0,4,5)(0,6,7)
