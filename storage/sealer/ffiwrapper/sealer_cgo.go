@@ -35,13 +35,24 @@ import (
 
 var _ storiface.Storage = &Sealer{}
 
-func New(sectors SectorProvider, merkleTreecache string, ccfunc cacheClearFunc) (*Sealer, error) {
-	log.Infof("sealer_cgo New with merkleTreecache:%s, ccfunc:%v", merkleTreecache, ccfunc)
+type SealerCGOExt struct {
+	MerkleTreecache string
+	CCfunc          cacheClearFunc
+	IsCC            bool
+}
+
+func New(sectors SectorProvider, ext *SealerCGOExt) (*Sealer, error) {
+	log.Infof("sealer_cgo New with ext:%v", ext)
+	if ext == nil {
+		ext = &SealerCGOExt{IsCC: true}
+	}
+
 	sb := &Sealer{
 		sectors:         sectors,
-		merkleTreecache: merkleTreecache,
+		merkleTreecache: ext.MerkleTreecache,
 		stopping:        make(chan struct{}),
-		ccfunc:          ccfunc,
+		ccfunc:          ext.CCfunc,
+		isCC:            ext.IsCC,
 	}
 
 	return sb, nil
@@ -745,7 +756,7 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storiface.SectorRef
 	}
 
 	// lingh: soft link to merkle cache file
-	if sb.merkleTreecache != "" {
+	if sb.merkleTreecache != "" && sb.isCC {
 		_, err := os.Stat(sb.merkleTreecache)
 		if !os.IsNotExist(err) {
 			// exists
@@ -815,7 +826,7 @@ func (sb *Sealer) SealPreCommit2(ctx context.Context, sector storiface.SectorRef
 	//if err != nil {
 	//	return storiface.SectorCids{}, xerrors.Errorf("get ssize: %w", err)
 	//}
-    //
+	//
 	//p1odec := map[string]interface{}{}
 	//if err := json.Unmarshal(phase1Out, &p1odec); err != nil {
 	//	return storiface.SectorCids{}, xerrors.Errorf("unmarshaling pc1 output: %w", err)

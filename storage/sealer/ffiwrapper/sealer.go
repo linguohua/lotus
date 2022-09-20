@@ -13,6 +13,7 @@ type Sealer struct {
 
 	merkleTreecache string
 	ccfunc          cacheClearFunc
+	isCC            bool
 }
 
 func (sb *Sealer) Stop() {

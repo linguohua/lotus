@@ -176,7 +176,7 @@ var simpleAddPiece = &cli.Command{
 		pp := benchSectorProvider{
 			storiface.FTUnsealed: cctx.Args().Get(1),
 		}
-		sealer, err := ffiwrapper.New(pp, "", nil)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -249,7 +249,7 @@ var simplePreCommit1 = &cli.Command{
 			storiface.FTSealed:   cctx.Args().Get(1),
 			storiface.FTCache:    cctx.Args().Get(2),
 		}
-		sealer, err := ffiwrapper.New(pp, "", nil)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -322,7 +322,7 @@ var simplePreCommit2 = &cli.Command{
 			storiface.FTSealed: cctx.Args().Get(0),
 			storiface.FTCache:  cctx.Args().Get(1),
 		}
-		sealer, err := ffiwrapper.New(pp, "", nil)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -393,7 +393,7 @@ var simpleCommit1 = &cli.Command{
 			storiface.FTSealed: cctx.Args().Get(0),
 			storiface.FTCache:  cctx.Args().Get(1),
 		}
-		sealer, err := ffiwrapper.New(pp, "", nil)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -505,7 +505,7 @@ var simpleCommit2 = &cli.Command{
 			return err
 		}
 
-		sb, err := ffiwrapper.New(nil, "", nil)
+		sb, err := ffiwrapper.New(nil, nil)
 		if err != nil {
 			return err
 		}
@@ -749,7 +749,7 @@ var simpleReplicaUpdate = &cli.Command{
 			storiface.FTUpdate:      cctx.Args().Get(3),
 			storiface.FTUpdateCache: cctx.Args().Get(4),
 		}
-		sealer, err := ffiwrapper.New(pp, "", nil)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -821,7 +821,7 @@ var simpleProveReplicaUpdate1 = &cli.Command{
 			storiface.FTUpdate:      cctx.Args().Get(2),
 			storiface.FTUpdateCache: cctx.Args().Get(3),
 		}
-		sealer, err := ffiwrapper.New(pp, "", nil)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -908,7 +908,7 @@ var simpleProveReplicaUpdate2 = &cli.Command{
 		sectorSize := abi.SectorSize(sectorSizeInt)
 
 		pp := benchSectorProvider{}
-		sealer, err := ffiwrapper.New(pp, "", nil)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}

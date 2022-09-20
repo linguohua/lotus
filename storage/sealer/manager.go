@@ -143,7 +143,7 @@ type WorkerStateStore *statestore.StateStore
 type ManagerStateStore *statestore.StateStore
 
 func New(ctx context.Context, lstor *paths.Local, stor paths.Store, ls paths.LocalStorage, si paths.SectorIndex, sc Config, wss WorkerStateStore, mss ManagerStateStore) (*Manager, error) {
-	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, "", nil)
+	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, nil)
 	if err != nil {
 		return nil, err
 	}

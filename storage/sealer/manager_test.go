@@ -105,14 +105,13 @@ func newTestMgr(ctx context.Context, t *testing.T, ds datastore.Datastore) (*Man
 	lstor, err := paths.NewLocal(ctx, st, si, nil, "test", "")
 	require.NoError(t, err)
 
-	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, "", nil)
+	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, nil)
 	require.NoError(t, err)
 
 	stor := paths.NewRemote(lstor, si, nil, 6000, &paths.DefaultPartialFileHandler{}, "")
 
 	sh, err := newScheduler("")
 	require.NoError(t, err)
-
 
 	m := &Manager{
 		ls:         st,

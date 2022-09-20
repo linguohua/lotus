@@ -72,6 +72,7 @@ type LocalWorker struct {
 	pieceTemplateSize abi.SectorSize
 	pieceTemplateDir  string
 	merkleTreecache   string
+	isCC              bool
 
 	groupID string
 
@@ -115,7 +116,7 @@ type LocalWorker struct {
 func loadP1CountFromEnv() int {
 	stepsEnv := os.Getenv("FIL_PROOFS_NUMA_CPU_CORES")
 	if len(stepsEnv) < 1 {
-		log.Fatal("FIL_PROOFS_NUMA_CPU_CORES must should be configured")
+		log.Fatal("FIL_PROOFS_NUMA_CPU_CORES must be configured")
 	}
 
 	// (0,0,1)(0,2,3)(0,4,5)(0,6,7)
@@ -160,6 +161,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		}, 16),
 
 		c2Count: 1,
+		isCC:    true,
 	}
 
 	if w.name == "" {
@@ -180,6 +182,10 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 		w.pieceTemplateSize = ext.PieceTemplateSize
 		w.merkleTreecache = ext.MerkleTreecache
 		w.c2Count = ext.C2Count
+
+		if os.Getenv("FIL_PROOFS_IS_CC") == "false" {
+			w.isCC = false
+		}
 	}
 
 	// reset c2 count
@@ -338,7 +344,11 @@ func (l *LocalWorker) ffiExec() (storiface.Storage, error) {
 		l.clearLocalCache(cache, size)
 	}
 
-	return ffiwrapper.New(&localWorkerPathProvider{w: l}, l.merkleTreecache, ccfunc)
+	return ffiwrapper.New(&localWorkerPathProvider{w: l}, &ffiwrapper.SealerCGOExt{
+		CCfunc:          ccfunc,
+		IsCC:            l.isCC,
+		MerkleTreecache: l.merkleTreecache,
+	})
 }
 
 func (l *LocalWorker) clearLocalCache(cache string, size uint64) {
@@ -540,10 +550,10 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storiface.SectorRef, 
 	}
 
 	size, _ := sector.ProofType.SectorSize()
-	hasTemplate := l.hasPieceTemplate()
+	useTemplate := l.usePieceTemplate()
 
-	log.Debugf("AddPiece size: %d, hasTemplate: %v, pieceTemplateSize: %d", size, hasTemplate, l.pieceTemplateSize)
-	if hasTemplate && size <= l.pieceTemplateSize {
+	log.Debugf("AddPiece size: %d, useTemplate: %v, pieceTemplateSize: %d", size, useTemplate, l.pieceTemplateSize)
+	if useTemplate && size <= l.pieceTemplateSize {
 		return l.asyncCall(ctx, sector, AddPiece, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 			return l.loadPieceTemplate(ctx, sector)
 		})
@@ -554,7 +564,11 @@ func (l *LocalWorker) AddPiece(ctx context.Context, sector storiface.SectorRef, 
 	})
 }
 
-func (l *LocalWorker) hasPieceTemplate() bool {
+func (l *LocalWorker) usePieceTemplate() bool {
+	if !l.isCC {
+		return false
+	}
+
 	if l.pieceTemplateDir == "" {
 		return false
 	}
