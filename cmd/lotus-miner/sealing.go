@@ -449,7 +449,7 @@ var sealingNextSectorIDCmd = &cli.Command{
 				fmt.Printf("current next id:%d\n", currentNextID)
 			}
 		} else {
-			fmt.Errorf("read current next id from datastore failed:%v", err)
+			fmt.Printf("read current next id from datastore failed:%v", err)
 		}
 
 		var nextID = abi.SectorNumber(nextIDint)
