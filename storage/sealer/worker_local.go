@@ -185,6 +185,7 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig,
 
 		if os.Getenv("FIL_PROOFS_IS_CC") == "false" {
 			w.isCC = false
+			log.Warn("worker configured to work for real data only!")
 		}
 	}
 
