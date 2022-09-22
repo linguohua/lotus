@@ -88,10 +88,12 @@ func (evt SectorAddPiece) apply(state *SectorInfo) {
 
 type SectorPieceAdded struct {
 	NewPieces []Piece
+	GroupID   string
 }
 
 func (evt SectorPieceAdded) apply(state *SectorInfo) {
 	state.Pieces = append(state.Pieces, evt.NewPieces...)
+	state.SealGroupID = evt.GroupID
 }
 
 type SectorAddPieceFailed struct{ error }
