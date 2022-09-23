@@ -284,9 +284,10 @@ func (a *AssignerCommon) schedOneAddPiece(sh *Scheduler, schReq *WorkerRequest) 
 			openWindowsGroup = sh.getOpenWindowsGroup(groupID)
 			openWindowsTT, _ = openWindowsGroup.openWindows[schReq.TaskType]
 		} else {
-			log.Debugf("schedOneAddPiece sector %d, taskType:%s, no group configured for selector",
+			log.Errorf("schedOneAddPiece sector %d, taskType:%s, no group configured for selector",
 				schReq.Sector.ID.Number,
 				taskType)
+			return false
 		}
 
 		done, remainWindows := a.trySchedReq(sh, schReq, groupID, openWindowsTT)

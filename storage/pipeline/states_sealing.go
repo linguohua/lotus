@@ -92,10 +92,10 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 
 		fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), existingPieceSizes, fillerSizes...)
 		if err != nil {
-			log.Errorf("filling up the sector %d (%v): %w", sector.SectorNumber, fillerSizes, err)
+			log.Errorf("filling up the sector %v (%v): %s", sector.SectorNumber, fillerSizes, err)
 			err = failedCooldown(ctx, sector)
 			if err != nil {
-				log.Errorf("handlePacking failed,sector %d (%v): %w",
+				log.Errorf("handlePacking failed,sector %v (%v): %s",
 					sector.SectorNumber, fillerSizes, err)
 				return err
 			}
@@ -126,7 +126,7 @@ func (m *Sealing) padSector(ctx context.Context, sectorID storiface.SectorRef, e
 			if i := strings.Index(errStr, "ugly:"); i >= 0 {
 				groupID = errStr[i+5:]
 			} else {
-				return nil, groupID, xerrors.Errorf("add piece: %w", err)
+				return nil, groupID, xerrors.Errorf("add piece: %v", err)
 			}
 		}
 
