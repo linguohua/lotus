@@ -246,21 +246,37 @@ func (a *AssignerCommon) schedOneAddPiece(sh *Scheduler, schReq *WorkerRequest) 
 	taskType := schReq.TaskType
 	selector, ok := schReq.Sel.(*addPieceSelector)
 
-	if !ok {
-		log.Error("schedOneAddPiece failed, selector not addPieceSelector")
-		return false
-	}
+	if ok {
+		best := selector.findBestStorages()
+		if len(best) < 1 {
+			log.Debugf("schedOneAddPiece sector %d, taskType:%s, no available storage group found",
+				schReq.Sector.ID.Number,
+				taskType)
+			return false
+		}
 
-	best := selector.findBestStorages()
-	if len(best) < 1 {
-		log.Debugf("schedOneAddPiece sector %d, taskType:%s, no available storage group found",
-			schReq.Sector.ID.Number,
-			taskType)
-		return false
-	}
+		for _, store := range best {
+			groupID := store.GroupID
+			var openWindowsGroup *schedWindowRequestsGroup
+			var openWindowsTT []*SchedWindowRequest
 
-	for _, store := range best {
-		groupID := store.GroupID
+			if groupID != "" {
+				openWindowsGroup = sh.getOpenWindowsGroup(groupID)
+				openWindowsTT, _ = openWindowsGroup.openWindows[schReq.TaskType]
+			} else {
+				continue
+			}
+
+			done, remainWindows := a.trySchedReq(sh, schReq, groupID, openWindowsTT)
+			if done {
+				openWindowsGroup.openWindows[schReq.TaskType] = remainWindows
+				return true
+			}
+		}
+
+		return false
+	} else {
+		groupID := selector.GroupID()
 		var openWindowsGroup *schedWindowRequestsGroup
 		var openWindowsTT []*SchedWindowRequest
 
@@ -268,7 +284,9 @@ func (a *AssignerCommon) schedOneAddPiece(sh *Scheduler, schReq *WorkerRequest) 
 			openWindowsGroup = sh.getOpenWindowsGroup(groupID)
 			openWindowsTT, _ = openWindowsGroup.openWindows[schReq.TaskType]
 		} else {
-			continue
+			log.Debugf("schedOneAddPiece sector %d, taskType:%s, no group configured for selector",
+				schReq.Sector.ID.Number,
+				taskType)
 		}
 
 		done, remainWindows := a.trySchedReq(sh, schReq, groupID, openWindowsTT)

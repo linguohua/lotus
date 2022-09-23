@@ -474,10 +474,12 @@ func (m *Manager) AddPiece(ctx context.Context, sector storiface.SectorRef, exis
 	var err error
 
 	if len(existingPieces) == 0 {
+		log.Debugf("Manager.AddPiece try to use exist new addpiece selector, sector: %s", sector.ID)
 		// new
 		selector = newAddPieceSelector(m.index, sector,
 			storiface.FTUnsealed, storiface.PathSealing)
 	} else {
+		log.Debugf("Manager.AddPiece try to use exist selector, sector: %s", sector.ID)
 		// use existing
 		groupID, err := findSectorGroup(ctx, m.index, sector.ProofType, sector.ID, storiface.FTUnsealed)
 		if err != nil {
