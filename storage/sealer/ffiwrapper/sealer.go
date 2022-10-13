@@ -6,9 +6,14 @@ import (
 
 var log = logging.Logger("ffiwrapper")
 
+type cacheClearFunc func(cache string, size uint64)
 type Sealer struct {
 	sectors  SectorProvider
 	stopping chan struct{}
+
+	merkleTreecache string
+	ccfunc          cacheClearFunc
+	isCC            bool
 }
 
 func (sb *Sealer) Stop() {

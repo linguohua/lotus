@@ -3,6 +3,7 @@ package sealing
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -223,9 +224,14 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 				p.Unpadded(),
 				nullreader.NewNullReader(p.Unpadded()))
 			if err != nil {
-				err = xerrors.Errorf("writing padding piece: %w", err)
-				deal.accepted(sector.SectorNumber, offset, err)
-				return ctx.Send(SectorAddPieceFailed{err})
+				errStr := err.Error()
+				if i := strings.Index(errStr, "ugly:"); i >= 0 {
+					// TODO: log
+				} else {
+					err = xerrors.Errorf("writing padding piece: %w", err)
+					deal.accepted(sector.SectorNumber, offset, err)
+					return ctx.Send(SectorAddPieceFailed{err})
+				}
 			}
 			if !ppi.PieceCID.Equals(expectCid) {
 				err = xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
@@ -239,29 +245,37 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 			})
 		}
 
+		groupID := ""
 		ppi, err := m.sealer.AddPiece(sealer.WithPriority(ctx.Context(), DealSectorPriority),
 			m.minerSector(sector.SectorType, sector.SectorNumber),
 			pieceSizes,
 			deal.size,
 			deal.data)
 		if err != nil {
-			err = xerrors.Errorf("writing piece: %w", err)
-			deal.accepted(sector.SectorNumber, offset, err)
-			return ctx.Send(SectorAddPieceFailed{err})
+			errStr := err.Error()
+			if i := strings.Index(errStr, "ugly:"); i >= 0 {
+				groupID = errStr[i+5:]
+			} else {
+				err = xerrors.Errorf("writing piece: %w", err)
+				deal.accepted(sector.SectorNumber, offset, err)
+				return ctx.Send(SectorAddPieceFailed{err})
+			}
 		}
+
 		if !ppi.PieceCID.Equals(deal.deal.DealProposal.PieceCID) {
 			err = xerrors.Errorf("got unexpected piece CID: expected:%s, got:%s", deal.deal.DealProposal.PieceCID, ppi.PieceCID)
 			deal.accepted(sector.SectorNumber, offset, err)
 			return ctx.Send(SectorAddPieceFailed{err})
 		}
 
-		log.Infow("deal added to a sector", "deal", deal.deal.DealID, "sector", sector.SectorNumber, "piece", ppi.PieceCID)
+		log.Infow("deal added to a sector", "deal", deal.deal.DealID, "sector", sector.SectorNumber, "piece", ppi.PieceCID, "group", groupID)
 
 		deal.accepted(sector.SectorNumber, offset, nil)
 
 		offset += deal.size
 		pieceSizes = append(pieceSizes, deal.size)
 
+		res.GroupID = groupID
 		res.NewPieces = append(res.NewPieces, api.SectorPiece{
 			Piece:    ppi,
 			DealInfo: &deal.deal,

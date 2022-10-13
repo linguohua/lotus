@@ -2,6 +2,7 @@ package sealing
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -128,6 +129,7 @@ type Sealing struct {
 	legacySc *storedcounter.StoredCounter
 
 	getConfig dtypes.GetSealingConfigFunc
+	recoverMode bool
 }
 
 type openSector struct {
@@ -169,6 +171,11 @@ type pendingPiece struct {
 }
 
 func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events Events, maddr address.Address, ds datastore.Batching, sealer sealer.SectorManager, verif storiface.Verifier, prov storiface.Prover, pcp PreCommitPolicy, gc dtypes.GetSealingConfigFunc, journal journal.Journal, addrSel AddressSelector) *Sealing {
+	recoverMode := false
+	if os.Getenv("YOUZHOU_RECOVER_MODE") == "true" {
+		log.Warn("Miner sealing in recover mode")
+		recoverMode = true
+	}
 	s := &Sealing{
 		Api:      api,
 		DealInfo: &CurrentDealInfoManager{api},
@@ -207,6 +214,8 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 			bySector: map[abi.SectorID]SectorState{},
 			byState:  map[SectorState]int64{},
 		},
+
+		recoverMode: recoverMode,
 	}
 
 	s.notifee = func(before, after SectorInfo) {
@@ -223,6 +232,7 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 
 	s.startupWait.Add(1)
 
+	// lingh:SectorInfo pass through all state handler
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
 
 	return s
