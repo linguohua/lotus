@@ -4681,7 +4681,6 @@ func (s *StorageMinerStub) PledgeSector(p0 context.Context) (abi.SectorID, error
 	return *new(abi.SectorID), ErrNotSupported
 }
 
-<<<<<<< HEAD
 func (s *StorageMinerStruct) RecoverFault(p0 context.Context, p1 []abi.SectorNumber) ([]cid.Cid, error) {
 	if s.Internal.RecoverFault == nil {
 		return *new([]cid.Cid), ErrNotSupported
