@@ -109,7 +109,6 @@ var sectorsRecoverCmd = &cli.Command{
 			return xerrors.Errorf("could not parse sector number: %w", err)
 		}
 
-		// lingh: pledge beginning
 		id, err := nodeApi.RecoverSector(ctx, abi.SectorNumber(sid))
 		if err != nil {
 			return err
