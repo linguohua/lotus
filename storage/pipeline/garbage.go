@@ -6,6 +6,7 @@ import (
 	"golang.org/x/xerrors"
 
 	abi "github.com/filecoin-project/go-state-types/abi"
+	api "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
@@ -48,6 +49,23 @@ func (m *Sealing) RecoverSector(ctx context.Context, sid abi.SectorNumber) (stor
 
 	m.inputLk.Lock()
 	defer m.inputLk.Unlock()
+
+	if m.sealingDisable {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is sealing disable")
+	}
+
+	if !m.recoverMode {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is not in recover mode")
+	}
+
+	info, err := m.SectorsStatus(ctx, sid, false)
+	if err != nil {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner getting recover sector info: %w", err)
+	}
+
+	if info.State != api.SectorState(Proving) {
+		return storiface.SectorRef{}, xerrors.Errorf("Miner recover sector failed, sector state %s no Proving:", info.State)
+	}
 
 	spt, err := m.currentSealProof(ctx)
 	if err != nil {

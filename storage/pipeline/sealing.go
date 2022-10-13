@@ -128,8 +128,9 @@ type Sealing struct {
 	sclk     sync.Mutex
 	legacySc *storedcounter.StoredCounter
 
-	getConfig dtypes.GetSealingConfigFunc
-	recoverMode bool
+	getConfig      dtypes.GetSealingConfigFunc
+	recoverMode    bool
+	sealingDisable bool
 }
 
 type openSector struct {
@@ -176,6 +177,7 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 		log.Warn("Miner sealing in recover mode")
 		recoverMode = true
 	}
+	sealingDisable := os.Getenv("YOUZHOU_SEALING_DISABLE") == "true"
 	s := &Sealing{
 		Api:      api,
 		DealInfo: &CurrentDealInfoManager{api},
@@ -215,7 +217,8 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 			byState:  map[SectorState]int64{},
 		},
 
-		recoverMode: recoverMode,
+		recoverMode:    recoverMode,
+		sealingDisable: sealingDisable,
 	}
 
 	s.notifee = func(before, after SectorInfo) {
@@ -239,6 +242,10 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 }
 
 func (m *Sealing) Run(ctx context.Context) {
+	if m.sealingDisable {
+		return
+	}
+
 	if err := m.restartSectors(ctx); err != nil {
 		log.Errorf("failed load sector states: %+v", err)
 	}

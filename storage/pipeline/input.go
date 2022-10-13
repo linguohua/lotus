@@ -833,6 +833,9 @@ func (m *Sealing) SectorsStatus(ctx context.Context, sid abi.SectorNumber, showO
 		InitialPledge:      big.Zero(),
 		OnTime:             0,
 		Early:              0,
+
+		HasFinalized: info.HasFinalized,
+		SealGroupID:  info.SealGroupID,
 	}
 
 	return sInfo, nil
