@@ -757,6 +757,8 @@ var provingCheckProvableExtCmd = &cli.Command{
 		}
 
 		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		defer closer()
+
 		sapi, scloser, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
@@ -766,7 +768,7 @@ var provingCheckProvableExtCmd = &cli.Command{
 		ctx := lcli.ReqContext(cctx)
 
 		addr, err := sapi.ActorAddress(ctx)
-		
+
 		mid, err := address.IDFromAddress(addr)
 		if err != nil {
 			return err
@@ -843,5 +845,5 @@ var provingCheckProvableExtCmd = &cli.Command{
 		}
 
 		return tw.Flush()
-	}
+	},
 }

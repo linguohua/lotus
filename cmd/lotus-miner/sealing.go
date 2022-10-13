@@ -29,8 +29,8 @@ import (
 
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/httpreader"
-	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/repo"
+	pipeline "github.com/filecoin-project/lotus/storage/pipeline"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
@@ -440,7 +440,7 @@ var sealingNextSectorIDCmd = &cli.Command{
 			return err
 		}
 
-		buf2, err := mds.Get(ctx, datastore.NewKey(modules.StorageCounterDSPrefix))
+		buf2, err := mds.Get(ctx, datastore.NewKey(pipeline.StorageCounterDSPrefix))
 		if err == nil {
 			currentNextID, err := binary.ReadUvarint(bytes.NewReader(buf2))
 			if err != nil {
@@ -457,7 +457,7 @@ var sealingNextSectorIDCmd = &cli.Command{
 
 		buf := make([]byte, binary.MaxVarintLen64)
 		size := binary.PutUvarint(buf, uint64(nextID))
-		return mds.Put(ctx, datastore.NewKey(modules.StorageCounterDSPrefix), buf[:size])
+		return mds.Put(ctx, datastore.NewKey(pipeline.StorageCounterDSPrefix), buf[:size])
 	},
 }
 
