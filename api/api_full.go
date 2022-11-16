@@ -79,6 +79,8 @@ type FullNode interface {
 	ChainGetBlock(context.Context, cid.Cid) (*types.BlockHeader, error) //perm:read
 	// ChainGetTipSet returns the tipset specified by the given TipSetKey.
 	ChainGetTipSet(context.Context, types.TipSetKey) (*types.TipSet, error) //perm:read
+	// get anchor node blocks count
+	AnchorBlocksCountByHeight(context.Context, abi.ChainEpoch) (int, error)
 
 	// ChainGetBlockMessages returns messages stored in the specified block.
 	//
