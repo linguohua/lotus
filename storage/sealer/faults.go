@@ -145,6 +145,14 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 	}
 
 	var logLarge = os.Getenv("FIL_PROOFS_LOG_CHECK_SECTOR") == "true"
+	var sizeExcludePaths = os.Getenv("FIL_PROOFS_SIZE_CHECK_EXCLUDE")
+	var regx *regexp.Regexp = nil
+	if sizeExcludePaths != "" {
+		regx, err = regexp.Compile(sizeExcludePaths)
+		if err != nil {
+			log.Errorf("FIL_PROOFS_SIZE_CHECK_EXCLUDE not compile to valid regex: %s, %v", sizeExcludePaths, err)
+		}
+	}
 
 	// TODO: More better checks
 	for _, sector := range sectors {
@@ -201,7 +209,14 @@ func (m *Manager) CheckProvable2(ctx context.Context, pp abi.RegisteredPoStProof
 				filepath.Join(fCache, "p_aux"): pAuxFileSize,
 			}
 
-			addCachePathsForSectorSize2(toCheck, fCache, ssize)
+			skipCacheSizeCheck := false
+			if regx != nil && regx.Match([]byte(lp.Cache)) {
+				skipCacheSizeCheck = true
+			}
+
+			if !skipCacheSizeCheck {
+				addCachePathsForSectorSize2(toCheck, lp.Cache, ssize)
+			}
 
 			start := time.Now()
 			for p, sz := range toCheck {
