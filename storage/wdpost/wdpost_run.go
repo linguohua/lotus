@@ -303,6 +303,13 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 		}
 	}()
 
+	partitionCounts := make([]int, len(partitionBatches))
+	for i, pb := range partitionBatches {
+		partitionCounts[i] = len(pb)
+	}
+
+	log.Infow("runPoStCycle start", "deadline", di.Index, "partition batches", partitionCounts)
+
 	// Generate proofs in batches
 	posts := make([]miner.SubmitWindowedPoStParams, 0, len(partitionBatches))
 	for batchIdx, batch := range partitionBatches {
@@ -349,10 +356,12 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 					return nil, xerrors.Errorf("copy toProve: %w", err)
 				}
 				if !s.disablePreChecks {
+					log.Infow("runPoStCycle check sectors begin", "deadline", di.Index, "batch idx", batchIdx, "part idx", partIdx)
 					good, err = s.checkSectors(ctx, toProve, ts.Key())
 					if err != nil {
 						return nil, xerrors.Errorf("checking sectors to skip: %w", err)
 					}
+					log.Infow("runPoStCycle check sectors end", "deadline", di.Index, "batch idx", batchIdx, "part idx", partIdx)
 				}
 
 				good, err = bitfield.SubtractBitField(good, postSkipped)
@@ -378,6 +387,7 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 				}
 
 				if len(ssi) == 0 {
+					log.Warnw("runPoStCycle no sectors need to prove", "deadline", di.Index, "batch idx", batchIdx, "part idx", partIdx)
 					continue
 				}
 
