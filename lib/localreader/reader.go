@@ -7,8 +7,11 @@ import (
 
 	"github.com/filecoin-project/go-padreader"
 	"github.com/filecoin-project/go-state-types/abi"
+	logging "github.com/ipfs/go-log/v2"
 	carv2 "github.com/ipld/go-car/v2"
 )
+
+var log = logging.Logger("rpcenc")
 
 type CarReader struct {
 	URL          string
@@ -17,10 +20,12 @@ type CarReader struct {
 	carReader    *carv2.Reader
 }
 
-func (h *CarReader) Close() error {
-	h.URL = ""
-	if h.carReader != nil {
-		return h.carReader.Close()
+func (r *CarReader) Close() error {
+	u := r.URL
+	r.URL = ""
+	if r.carReader != nil {
+		log.Infof("CarReader Close call, path:%s, padded size:%d", u, r.PaddedSize)
+		return r.carReader.Close()
 	}
 	return nil
 }
