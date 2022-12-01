@@ -12,7 +12,7 @@ import (
 
 type CarReader struct {
 	URL          string
-	PaddSize     uint64
+	PaddedSize   uint64
 	paddedReader io.Reader
 	carReader    *carv2.Reader
 }
@@ -26,8 +26,12 @@ func (h *CarReader) Close() error {
 }
 
 func (r *CarReader) Read(out []byte) (int, error) {
-	if r.carReader == nil {
-		cr, rr, err := openCarfile(r.URL, r.PaddSize)
+	if r.paddedReader == nil {
+		if r.carReader != nil {
+			r.carReader.Close()
+		}
+
+		cr, rr, err := openCarfile(r.URL, r.PaddedSize)
 		if err != nil {
 			return 0, err
 		}
@@ -40,11 +44,11 @@ func (r *CarReader) Read(out []byte) (int, error) {
 }
 
 func NewWithPaddedReader(filepath string, paddedSize uint64, paddedReader io.Reader) *CarReader {
-	return &CarReader{URL: filepath, paddedReader: paddedReader, PaddSize: paddedSize}
+	return &CarReader{URL: filepath, paddedReader: paddedReader, PaddedSize: paddedSize}
 }
 
 func NewWithPath(filepath string, paddedSize uint64) (*CarReader, error) {
-	return &CarReader{URL: filepath, PaddSize: paddedSize}, nil
+	return &CarReader{URL: filepath, PaddedSize: paddedSize}, nil
 }
 
 func openCarfile(filepath string, paddedSize uint64) (*carv2.Reader, io.Reader, error) {

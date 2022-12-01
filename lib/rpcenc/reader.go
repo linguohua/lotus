@@ -115,7 +115,7 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 		}
 
 		if r, ok := r.(*localreader.CarReader); ok {
-			return reflect.ValueOf(ReaderStream{Type: LocalCarReader, Info: fmt.Sprintf("%s;%d", r.URL, r.PaddSize)}), nil
+			return reflect.ValueOf(ReaderStream{Type: LocalCarReader, Info: fmt.Sprintf("%s;%d", r.URL, r.PaddedSize)}), nil
 		}
 
 		reqID := uuid.New()
