@@ -115,6 +115,7 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 		}
 
 		if r, ok := r.(*localreader.CarReader); ok {
+			log.Infof("encode local carfile reader with path:%s, padded size:%d", r.URL, r.PaddedSize)
 			return reflect.ValueOf(ReaderStream{Type: LocalCarReader, Info: fmt.Sprintf("%s;%d", r.URL, r.PaddedSize)}), nil
 		}
 
