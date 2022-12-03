@@ -619,6 +619,10 @@ func (st *Local) AcquireSector(ctx context.Context, sid storiface.SectorRef, exi
 				si = sealS
 			}
 
+			if len(si.URLs) == 0 {
+				continue
+			}
+
 			loclpath := si.URLs[0]
 			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(sid.ID))
 			storiface.SetPathByType(&paths, fileType, dest)
