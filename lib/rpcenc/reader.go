@@ -105,12 +105,15 @@ var client = func() *http.Client {
 func ReaderParamEncoder(addr string) jsonrpc.Option {
 	// Client side parameter encoder. Runs on the rpc client side. io.Reader -> ReaderStream{}
 	return jsonrpc.WithParamEncoder(new(io.Reader), func(value reflect.Value) (reflect.Value, error) {
+		fmt.Printf("ReaderParamEncoder encoder call\n")
 		r := value.Interface().(io.Reader)
 
 		if r, ok := r.(*nullreader.NullReader); ok {
+			fmt.Printf("ReaderParamEncoder encoder NullReader\n")
 			return reflect.ValueOf(ReaderStream{Type: Null, Info: fmt.Sprint(r.N)}), nil
 		}
 		if r, ok := r.(*httpreader.HttpReader); ok && r.URL != "" {
+			fmt.Printf("ReaderParamEncoder encoder HttpReader\n")
 			return reflect.ValueOf(ReaderStream{Type: HTTP, Info: r.URL}), nil
 		}
 
@@ -119,6 +122,7 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 			return reflect.ValueOf(ReaderStream{Type: LocalCarReader, Info: fmt.Sprintf("%s;%d", r.URL, r.PaddedSize)}), nil
 		}
 
+		fmt.Printf("ReaderParamEncoder encoder generic io.Reader, use push endpoint\n")
 		reqID := uuid.New()
 		u, err := url.Parse(addr)
 		if err != nil {
