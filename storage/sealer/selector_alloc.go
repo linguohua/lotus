@@ -27,23 +27,28 @@ func newAllocSelector(index paths.SectorIndex, alloc storiface.SectorFileType, p
 }
 
 func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
-	tasks, err := whnd.TaskTypes(ctx)
-	if err != nil {
-		return false, false, xerrors.Errorf("getting supported worker task types: %w", err)
+	supported := false
+	tasks := whnd.acceptTaskTypes
+	for _, t := range tasks {
+		if t == task {
+			supported = true
+			break
+		}
 	}
-	if _, supported := tasks[task]; !supported {
+
+	if !supported {
 		return false, false, nil
 	}
 
-	paths, err := whnd.workerRpc.Paths(ctx)
-	if err != nil {
-		return false, false, xerrors.Errorf("getting worker paths: %w", err)
-	}
+	// paths, err := whnd.workerRpc.Paths(ctx)
+	// if err != nil {
+	// 	return false, xerrors.Errorf("getting worker paths: %w", err)
+	// }
 
-	have := map[storiface.ID]struct{}{}
-	for _, path := range paths {
-		have[path.ID] = struct{}{}
-	}
+	// have := map[storiface.ID]struct{}{}
+	// for _, path := range paths {
+	// 	have[path.ID] = struct{}{}
+	// }
 
 	ssize, err := spt.SectorSize()
 	if err != nil {
@@ -55,24 +60,84 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		return false, false, xerrors.Errorf("finding best alloc storage: %w", err)
 	}
 
-	requested := s.alloc
-
+	workerGroupID := whnd.Info.GroupID
 	for _, info := range best {
-		if _, ok := have[info.ID]; ok {
-			requested = requested.SubAllowed(info.AllowTypes, info.DenyTypes)
-
-			// got all paths
-			if requested == storiface.FTNone {
-				break
+		// if _, ok := have[info.ID]; ok {
+		// 	return true, nil
+		// }
+		if info.GroupID == "" {
+			// can bind to any worker
+			//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
+			return true, true, nil
+		} else {
+			if info.GroupID == workerGroupID {
+				//log.Infof("found match worker and storage, group id:%s", workerGroupID)
+				return true, true, nil
 			}
 		}
 	}
 
-	return requested == storiface.FTNone, false, nil
+	return false, false, nil
 }
 
 func (s *allocSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *WorkerHandle) (bool, error) {
 	return a.Utilization() < b.Utilization(), nil
 }
 
+func (s *allocSelector) GroupID() string {
+	return ""
+}
+
 var _ WorkerSelector = &allocSelector{}
+
+type addPieceSelector struct {
+	index  paths.SectorIndex
+	alloc  storiface.SectorFileType
+	ptype  storiface.PathType
+	sector storiface.SectorRef
+}
+
+func newAddPieceSelector(index paths.SectorIndex,
+	sector storiface.SectorRef,
+	alloc storiface.SectorFileType, ptype storiface.PathType) *addPieceSelector {
+
+	return &addPieceSelector{
+		index:  index,
+		alloc:  alloc,
+		ptype:  ptype,
+		sector: sector,
+	}
+}
+
+func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
+	return true, true, nil
+}
+
+func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *WorkerHandle) (bool, error) {
+	return a.Utilization() < b.Utilization(), nil
+}
+
+func (s *addPieceSelector) GroupID() string {
+	return ""
+}
+
+func (s *addPieceSelector) findBestStorages() []storiface.StorageInfo {
+	spt := s.sector.ProofType
+	ssize, err := spt.SectorSize()
+	if err != nil {
+		log.Errorf("addPieceSelector: sector:%v, getting sector size: %v", s.sector.ID, err)
+		return nil
+	}
+
+	// try to find best group
+	ctx := context.TODO()
+	best, err := s.index.StorageBestAlloc(ctx, s.alloc, ssize, s.ptype)
+	if err != nil {
+		log.Errorf("addPieceSelector: sector:%v, finding best alloc storage: %v", s.sector.ID, err)
+		return nil
+	}
+
+	return best
+}
+
+var _ WorkerSelector = &addPieceSelector{}

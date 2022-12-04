@@ -206,6 +206,32 @@ func (sm *StorageMinerAPI) waitSectorStarted(ctx context.Context, si abi.SectorI
 	}
 }
 
+func (sm *StorageMinerAPI) RecoverSector(ctx context.Context, sectorNumber abi.SectorNumber) (abi.SectorID, error) {
+	sid, err := sm.Miner.RecoverSector(ctx, sectorNumber)
+	if err != nil {
+		return abi.SectorID{}, err
+	}
+
+	// wait for the sector to enter the Packing state
+	// TODO: instead of polling implement some pubsub-type thing in storagefsm
+	for {
+		info, err := sm.Miner.SectorsStatus(ctx, sectorNumber, false)
+		if err != nil {
+			return abi.SectorID{}, xerrors.Errorf("getting recover sector info failed: %w", err)
+		}
+
+		if info.State != api.SectorState(sealing.Proving) {
+			return sid.ID, nil
+		}
+
+		select {
+		case <-time.After(10 * time.Millisecond):
+		case <-ctx.Done():
+			return abi.SectorID{}, ctx.Err()
+		}
+	}
+}
+
 func (sm *StorageMinerAPI) SectorsStatus(ctx context.Context, sid abi.SectorNumber, showOnChainInfo bool) (api.SectorInfo, error) {
 	sInfo, err := sm.Miner.SectorsStatus(ctx, sid, false)
 	if err != nil {
@@ -486,9 +512,37 @@ func (sm *StorageMinerAPI) WorkerConnect(ctx context.Context, url string) error 
 		return xerrors.Errorf("connecting remote storage failed: %w", err)
 	}
 
-	log.Infof("Connected to a remote worker at %s", url)
+	sessID, _ := w.Session(ctx)
 
-	return sm.StorageMgr.AddWorker(ctx, w)
+	log.Infof("Connected to a remote worker at url:%s, session-id:%s", url, sessID)
+
+	return sm.StorageMgr.AddWorker(ctx, w, url)
+}
+
+func (sm *StorageMinerAPI) WorkerPause(ctx context.Context, uuid string, tasktype string) error {
+	log.Infof("WorkerPause:%s", uuid)
+
+	return sm.StorageMgr.PauseWorker(ctx, uuid, tasktype)
+}
+
+func (sm *StorageMinerAPI) WorkerResume(ctx context.Context, uuid string, tasktype string) error {
+	log.Infof("WorkerResume:%s", uuid)
+
+	return sm.StorageMgr.ResumeWorker(ctx, uuid, tasktype)
+}
+
+func (sm *StorageMinerAPI) WorkerRemove(ctx context.Context, uuid string) error {
+	log.Infof("WorkerResume:%s", uuid)
+
+	return sm.StorageMgr.RemoveWorker(ctx, uuid)
+}
+
+func (sm *StorageMinerAPI) UpdateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return sm.StorageMgr.UpdateFinalizeTicketsParams(ctx, tickets, interval)
+}
+
+func (sm *StorageMinerAPI) UpdateP1TicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return sm.StorageMgr.UpdateP1TicketsParams(ctx, tickets, interval)
 }
 
 func (sm *StorageMinerAPI) SealingSchedDiag(ctx context.Context, doSched bool) (interface{}, error) {
@@ -1312,6 +1366,20 @@ func (sm *StorageMinerAPI) CheckProvable(ctx context.Context, pp abi.RegisteredP
 	}
 
 	bad, err := sm.StorageMgr.CheckProvable(ctx, pp, sectors, rg)
+	if err != nil {
+		return nil, err
+	}
+
+	var out = make(map[abi.SectorNumber]string)
+	for sid, err := range bad {
+		out[sid.Number] = err
+	}
+
+	return out, nil
+}
+
+func (sm *StorageMinerAPI) CheckProvableExt(ctx context.Context, pp abi.RegisteredPoStProof, sectors []storiface.SectorRef) (map[abi.SectorNumber]string, error) {
+	bad, err := sm.StorageMgr.CheckProvableExt(ctx, pp, sectors)
 	if err != nil {
 		return nil, err
 	}

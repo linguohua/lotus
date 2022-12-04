@@ -102,13 +102,13 @@ func newTestMgr(ctx context.Context, t *testing.T, ds datastore.Datastore) (*Man
 
 	si := paths.NewIndex(nil)
 
-	lstor, err := paths.NewLocal(ctx, st, si, nil)
+	lstor, err := paths.NewLocal(ctx, st, si, nil, "test", "")
 	require.NoError(t, err)
 
-	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si})
+	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si}, nil)
 	require.NoError(t, err)
 
-	stor := paths.NewRemote(lstor, si, nil, 6000, &paths.DefaultPartialFileHandler{})
+	stor := paths.NewRemote(lstor, si, nil, 6000, &paths.DefaultPartialFileHandler{}, "")
 
 	sh, err := newScheduler("")
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestSimple(t *testing.T) {
 
 	err := m.AddWorker(ctx, newTestWorker(WorkerConfig{
 		TaskTypes: localTasks,
-	}, lstor, m))
+	}, lstor, m), "")
 	require.NoError(t, err)
 
 	sid := storiface.SectorRef{
@@ -211,8 +211,8 @@ func TestSnapDeals(t *testing.T) {
 	}
 	wds := datastore.NewMapDatastore()
 
-	w := NewLocalWorker(WorkerConfig{TaskTypes: localTasks}, stor, lstor, idx, m, statestore.New(wds))
-	err := m.AddWorker(ctx, w)
+	w := NewLocalWorker(WorkerConfig{TaskTypes: localTasks}, stor, lstor, idx, m, statestore.New(wds), nil)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	proofType := abi.RegisteredSealProof_StackedDrg2KiBV1
@@ -340,8 +340,8 @@ func TestSnarkPackV2(t *testing.T) {
 	}
 	wds := datastore.NewMapDatastore()
 
-	w := NewLocalWorker(WorkerConfig{TaskTypes: localTasks}, stor, lstor, idx, m, statestore.New(wds))
-	err := m.AddWorker(ctx, w)
+	w := NewLocalWorker(WorkerConfig{TaskTypes: localTasks}, stor, lstor, idx, m, statestore.New(wds), nil)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	proofType := abi.RegisteredSealProof_StackedDrg2KiBV1
@@ -483,7 +483,7 @@ func TestRedoPC1(t *testing.T) {
 		TaskTypes: localTasks,
 	}, lstor, m)
 
-	err := m.AddWorker(ctx, tw)
+	err := m.AddWorker(ctx, tw, "")
 	require.NoError(t, err)
 
 	sid := storiface.SectorRef{
@@ -538,7 +538,7 @@ func TestRestartManager(t *testing.T) {
 				TaskTypes: localTasks,
 			}, lstor, m)
 
-			err := m.AddWorker(ctx, tw)
+			err := m.AddWorker(ctx, tw, "")
 			require.NoError(t, err)
 
 			sid := storiface.SectorRef{
@@ -583,7 +583,7 @@ func TestRestartManager(t *testing.T) {
 			defer cleanup2()
 
 			tw.ret = m // simulate jsonrpc auto-reconnect
-			err = m.AddWorker(ctx, tw)
+			err = m.AddWorker(ctx, tw, "")
 			require.NoError(t, err)
 
 			if returnBeforeCall {
@@ -639,9 +639,9 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds))
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	sid := storiface.SectorRef{
@@ -676,9 +676,9 @@ func TestRestartWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds))
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err = m.AddWorker(ctx, w)
+	err = m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	<-apDone
@@ -712,9 +712,9 @@ func TestReenableWorker(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, os.LookupEnv, stor, lstor, idx, m, statestore.New(wds))
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	time.Sleep(time.Millisecond * 100)
@@ -785,11 +785,9 @@ func TestResUse(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, func(s string) (string, bool) {
-		return "", false
-	}, stor, lstor, idx, m, statestore.New(wds))
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	sid := storiface.SectorRef{
@@ -843,15 +841,9 @@ func TestResOverride(t *testing.T) {
 		return &testExec{apch: arch}, nil
 	}, WorkerConfig{
 		TaskTypes: localTasks,
-	}, func(s string) (string, bool) {
-		if s == "AP_2K_MAX_MEMORY" {
-			return "99999", true
-		}
+	}, stor, lstor, idx, m, statestore.New(wds), nil)
 
-		return "", false
-	}, stor, lstor, idx, m, statestore.New(wds))
-
-	err := m.AddWorker(ctx, w)
+	err := m.AddWorker(ctx, w, "")
 	require.NoError(t, err)
 
 	sid := storiface.SectorRef{
