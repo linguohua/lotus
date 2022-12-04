@@ -76,8 +76,8 @@ type Index struct {
 	alerting   *alerting.Alerting
 	pathAlerts map[storiface.ID]alerting.AlertType
 
-	sectors map[storiface.Decl][]*declMeta
-	stores  map[storiface.ID]*storageEntry
+	sectors        map[storiface.Decl][]*declMeta
+	stores         map[storiface.ID]*storageEntry
 	sectorSizeMemo uint64
 }
 
@@ -105,7 +105,7 @@ func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.Sector
 			continue
 		}
 
-		d := storiface.Decl{sector, fileType}
+		d := storiface.Decl{SectorID: sector, SectorFileType: fileType}
 		dd, exist := i.sectors[d]
 		if exist {
 			for _, d := range dd {
@@ -718,7 +718,7 @@ func (i *Index) StorageFindSector(ctx context.Context, s abi.SectorID, ft storif
 			continue
 		}
 
-		storages, exist := i.sectors[storiface.Decl{s, pathType}]
+		storages, exist := i.sectors[storiface.Decl{SectorID: s, SectorFileType: pathType}]
 		if exist {
 			//log.Infof("StorageFindSector, sector %v, pathType:%d, storage:%v", s, pathType, storages)
 
