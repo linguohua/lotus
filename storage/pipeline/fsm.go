@@ -19,6 +19,7 @@ import (
 	"github.com/filecoin-project/lotus/api"
 )
 
+// lingh: call by go-statemachine/group.go s.hnd.Plan
 func (m *Sealing) Plan(events []statemachine.Event, user interface{}) (interface{}, uint64, error) {
 	next, processed, err := m.plan(events, user.(*SectorInfo))
 	if err != nil || next == nil {
@@ -69,7 +70,10 @@ var fsmPlanners = map[SectorState]func(events []statemachine.Event, state *Secto
 		apply(SectorAddPiece{}),
 		on(SectorAddPieceFailed{}, AddPieceFailed),
 	),
-	Packing: planOne(on(SectorPacked{}, GetTicket)),
+	Packing: planOne(
+		on(SectorPacked{}, GetTicket),
+		on(SectorRedoPacked{}, GetTicket),
+	),
 	GetTicket: planOne(
 		on(SectorTicket{}, PreCommit1),
 		on(SectorCommitFailed{}, CommitFailed),
@@ -85,6 +89,7 @@ var fsmPlanners = map[SectorState]func(events []statemachine.Event, state *Secto
 		on(SectorPreCommit2{}, PreCommitting),
 		on(SectorSealPreCommit2Failed{}, SealPreCommit2Failed),
 		on(SectorSealPreCommit1Failed{}, SealPreCommit1Failed),
+		on(SectorRedoPreCommit2{}, FinalizeSector),
 	),
 	PreCommitting: planOne(
 		on(SectorPreCommitBatch{}, SubmitPreCommitBatch),
@@ -303,6 +308,7 @@ var fsmPlanners = map[SectorState]func(events []statemachine.Event, state *Secto
 		on(SectorFaultReported{}, FaultReported),
 		on(SectorFaulty{}, Faulty),
 		on(SectorMarkForUpdate{}, Available),
+		on(SectorRedoPacked{}, Packing),
 	),
 	Available: planOne(
 		on(SectorStartCCUpdate{}, SnapDealsWaitDeals),

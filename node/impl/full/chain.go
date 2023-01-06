@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +38,8 @@ import (
 	"github.com/filecoin-project/lotus/lib/oldpath"
 	"github.com/filecoin-project/lotus/lib/oldpath/oldresolver"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+
+	"github.com/go-redis/redis/v8"
 )
 
 var log = logging.Logger("fullnode")
@@ -67,6 +71,8 @@ type ChainModule struct {
 	// expose externally. In the future, this will be segregated into two
 	// blockstores.
 	ExposedBlockstore dtypes.ExposedBlockstore
+
+	ChainModuleExt *ChainModuleExt `optional:"true"`
 }
 
 var _ ChainModuleAPI = (*ChainModule)(nil)
@@ -87,6 +93,27 @@ type ChainAPI struct {
 
 	// BaseBlockstore is the underlying blockstore
 	BaseBlockstore dtypes.BaseBlockstore
+}
+
+type ChainModuleExt struct {
+	RedisInst *redis.Client
+}
+
+func NewChainModuleExt() *ChainModuleExt {
+	ext := &ChainModuleExt{}
+	redisAddr := os.Getenv("YOUZHOU_REDIS_ADDR")
+	if redisAddr != "" {
+		log.Warnf("USE Anchor URL:%s", redisAddr)
+
+		rdb := redis.NewClient(&redis.Options{
+			Addr:     redisAddr,
+			Password: "", // no password set
+			DB:       0,  // use default DB
+		})
+		ext.RedisInst = rdb
+	}
+
+	return ext
 }
 
 func (m *ChainModule) ChainNotify(ctx context.Context) (<-chan []*api.HeadChange, error) {
@@ -236,6 +263,20 @@ func (a *ChainAPI) ChainGetMessagesInTipset(ctx context.Context, tsk types.TipSe
 }
 
 func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
+	if tsk.IsEmpty() && m.ChainModuleExt != nil {
+		redisInst := m.ChainModuleExt.RedisInst
+		if redisInst != nil {
+			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
+			if err == nil {
+				tsk3, err := types.TipSetKeyFromBytes([]byte(tsk2))
+				if err == nil {
+					tsk = tsk3
+					log.Debug("ChainGetTipSetByHeight replace tsk from redis")
+				}
+			}
+		}
+	}
+
 	ts, err := m.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
@@ -244,6 +285,20 @@ func (m *ChainModule) ChainGetTipSetByHeight(ctx context.Context, h abi.ChainEpo
 }
 
 func (m *ChainModule) ChainGetTipSetAfterHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error) {
+	if tsk.IsEmpty() && m.ChainModuleExt != nil {
+		redisInst := m.ChainModuleExt.RedisInst
+		if redisInst != nil {
+			tsk2, err := redisInst.HGet(ctx, "chhtsk", fmt.Sprintf("%d", int64(h))).Result()
+			if err == nil {
+				tsk3, err := types.TipSetKeyFromBytes([]byte(tsk2))
+				if err == nil {
+					tsk = tsk3
+					log.Debug("ChainGetTipSetAfterHeight replace tsk from redis")
+				}
+			}
+		}
+	}
+
 	ts, err := m.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)

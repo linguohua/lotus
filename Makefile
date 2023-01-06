@@ -1,6 +1,6 @@
 SHELL=/usr/bin/env bash
 
-all: build
+all: lin
 .PHONY: all
 
 unexport GOFLAGS
@@ -21,11 +21,45 @@ MODULES:=
 CLEAN:=
 BINS:=
 
-ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+LDFLAGS=-lnuma
+
+CPU_CHECK:=$(shell if lscpu | grep -iq amd; then echo "amd"; else echo "intel"; fi)
+
+dirtystr:=$(CPU_CHECK)
+ifeq ($(MAKECMDGOALS),dubai)
+	dirtystr := $(dirtystr)_dubai
+endif
+
+ifeq ($(MAKECMDGOALS),hn)
+        dirtystr := $(dirtystr)_hn
+endif
+
+ifeq ($(MAKECMDGOALS),jm)
+	dirtystr := $(dirtystr)_jm
+endif
+
+ifeq ($(MAKECMDGOALS),changsha)
+	dirtystr := $(dirtystr)_changsha
+endif
+
+ifeq ($(MAKECMDGOALS),yunkuang)
+	dirtystr := $(dirtystr)_yunkuang
+endif
+
+ifeq ($(MAKECMDGOALS),leshan)
+	dirtystr := $(dirtystr)_leshan
+endif
+
+ifeq ($(MAKECMDGOALS),hongkong)
+	dirtystr := $(dirtystr)_hongkong
+endif
+
+systemstr = $(shell lsb_release -i|cut -f 2).$(shell lsb_release -r|cut -f 2)
+ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)).$(dirtystr).$(systemstr)
+
 ifneq ($(strip $(LDFLAGS)),)
 	ldflags+=-extldflags=$(LDFLAGS)
 endif
-
 GOFLAGS+=-ldflags="$(ldflags)"
 
 
@@ -66,7 +100,8 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed
+#build-devnets: build lotus-seed lotus-shed
+build-devnets: lotus lotus-miner lotus-worker
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -75,7 +110,24 @@ debug: build-devnets
 2k: GOFLAGS+=-tags=2k
 2k: build-devnets
 
-calibnet: GOFLAGS+=-tags=calibnet
+dubai: GOFLAGS+=-tags=dubai
+dubai: build
+lin: GOFLAGS+=-tags=lin
+lin: build
+hn: GOFLAGS+=-tags=hn
+hn: build
+jm: GOFLAGS+=-tags=jm
+jm: build
+changsha: GOFLAGS+=-tags=changsha
+changsha: build
+yunkuang: GOFLAGS+=-tags=yunkuang
+yunkuang: build
+leshan: GOFLAGS+=-tags=leshan
+leshan: build
+hongkong: GOFLAGS+=-tags=hongkong
+hongkong: build
+
+calibnet: GOFLAGS+=-tags=calibnet,lin
 calibnet: build-devnets
 
 butterflynet: GOFLAGS+=-tags=butterflynet
