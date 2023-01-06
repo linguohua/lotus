@@ -210,4 +210,9 @@ type LocalStorageMeta struct {
 	// - "update-cache"
 	// Any other value will generate a warning and be ignored.
 	DenyTypes []string
+
+	// which group to bind
+	GroupID string
+	// how many sector instances can this storage allow
+	MaxSealingSectors int
 }
