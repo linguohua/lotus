@@ -921,18 +921,22 @@ func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorIn
 	// TODO: Maybe wait for some finality
 
 	// never keep unsealed
-	// cfg, err := m.getConfig()
-	// if err != nil {
-	// 	return xerrors.Errorf("getting sealing config: %w", err)
-	// }
+	cfg, err := m.getConfig()
+	if err != nil {
+		return xerrors.Errorf("getting sealing config: %w", err)
+	}
 
-	// never keep unsealed
-	// if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(sector.Pieces, false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
-	// 	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
-	// }
+	// keep unsealed if need
+	var keepUnsealed []storiface.Range = nil
+	keepUnsealed = sector.keepUnsealedRanges(sector.Pieces, false, cfg.AlwaysKeepUnsealedCopy)
+
 	log.Infof("Sealing handleFinalizeSector, sector:%d", sector.SectorNumber)
 	if m.recoverMode || !sector.HasFinalized {
-		if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), nil); err != nil {
+		if len(keepUnsealed) > 0 {
+			log.Warnf("Sealing handleFinalizeSector keep unsealed sector:%d", sector.SectorNumber)
+		}
+
+		if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), keepUnsealed); err != nil {
 			return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
 		}
 	} else {

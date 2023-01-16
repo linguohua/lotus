@@ -12,8 +12,8 @@ import (
 	"io/ioutil"
 	"math/bits"
 	"os"
-	"path/filepath"
 	"path"
+	"path/filepath"
 	"runtime"
 	"syscall"
 
@@ -1147,7 +1147,7 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef
 	txt := paths.Sealed + ".txt"
 	err = os.Remove(txt)
 	if err != nil {
-		log.Warnf("FinalizeSector: Remove txt file %s error:%v", txt, err)
+		log.Debug("FinalizeSector: Remove txt file %s error:%v", txt, err)
 	}
 
 	// ignore clear cache error
