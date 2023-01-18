@@ -785,7 +785,7 @@ func (st *Local) MoveStorage(ctx context.Context, s storiface.SectorRef, types s
 		return xerrors.Errorf("acquire dest storage: %w", err)
 	}
 
-	// lingh: PathStorage -> PathSealing
+	// lingh: PathSealing ->  PathStorage
 	src, srcIds, err := st.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathSealing, storiface.AcquireMove)
 	if err != nil {
 		return xerrors.Errorf("acquire src storage: %w", err)

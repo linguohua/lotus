@@ -801,7 +801,11 @@ func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.Secto
 		// }
 
 		// lingh: do move also
-		return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed)
+		if len(keepUnsealed) == 0 {
+			return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed)
+		} else {
+			return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed|storiface.FTUnsealed)
+		}
 	})
 }
 

@@ -1068,7 +1068,8 @@ func (sb *Sealer) freeUnsealed(ctx context.Context, sector storiface.SectorRef, 
 			}
 		}
 
-		paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathStorage)
+		// paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathStorage)
+		paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathSealing)
 		if err != nil {
 			return xerrors.Errorf("acquiring sector cache path: %w", err)
 		}
