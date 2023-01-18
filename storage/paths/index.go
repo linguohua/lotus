@@ -111,6 +111,10 @@ func (i *Index) allocStorageForFinalize(sector abi.SectorID, ft storiface.Sector
 			for _, d := range dd {
 				s, exist := i.stores[d.storage]
 				if exist {
+					if !s.info.CanStore {
+						continue
+					}
+
 					log.Debugf("allocStorageForFinalize found sector: %d bind to storage %s, path:%v , filetype:%d, return it",
 						sector, s.info.ID, s.info.URLs, ft)
 

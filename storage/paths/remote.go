@@ -200,17 +200,22 @@ func (r *Remote) AcquireSector(ctx context.Context, s storiface.SectorRef, exist
 
 	if len(sis) == 1 {
 		si := &sis[0]
-		loclpath := si.URLs[0]
-		for _, fileType := range storiface.PathTypes {
-			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(s.ID))
-			storiface.SetPathByType(&paths, fileType, dest)
-			storiface.SetPathByType(&stores, fileType, string(si.ID))
+		if len(si.URLs) > 0 {
+			loclpath := si.URLs[0]
+			for _, fileType := range storiface.PathTypes {
+				dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(s.ID))
+				storiface.SetPathByType(&paths, fileType, dest)
+				storiface.SetPathByType(&stores, fileType, string(si.ID))
+			}
 		}
-
 	} else {
 		sealS := &sis[1]
 		for j, fileType := range storiface.PathTypes {
 			si := &sis[j] // it will be ok
+			if len(si.URLs) == 0 {
+				continue
+			}
+
 			if si.ID == "" {
 				si = sealS
 			}
@@ -286,7 +291,6 @@ func tempFetchDest(spath string, create bool) (string, error) {
 // return "", xerrors.Errorf("failed to acquire sector %v from remote (tried %v): %w", s, si, merr)
 //return "", xerrors.Errorf("-lin- this version not support acquireFromRemote %s", dest)
 // }
-
 
 //func (r *Remote) fetchThrottled(ctx context.Context, url, outname string) (rerr error) {
 //	if len(r.limit) >= cap(r.limit) {
