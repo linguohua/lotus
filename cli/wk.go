@@ -273,3 +273,26 @@ var UpdateFinParamsCmd = &cli.Command{
 		return nodeApi.UpdateFinalizeTicketsParams(ReqContext(cctx), tickets, interval)
 	},
 }
+
+var ListAllMarketDealsCmd = &cli.Command{
+	Name:  "list-deals",
+	Usage: "list all market deals",
+	Action: func(cctx *cli.Context) error {
+		nodeApi, closer, err := GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		deals, err := nodeApi.MarketListDeals(ReqContext(cctx))
+		if err != nil {
+			return err
+		}
+
+		for _, d := range deals {
+			p := &d.Proposal
+			fmt.Printf("label %s, client %s, piece-cid:%s\n", p.Label, p.Client, p.PieceCID)
+		}
+		return nil
+	},
+}

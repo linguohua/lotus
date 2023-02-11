@@ -46,6 +46,7 @@ func main() {
 		lcli.RemoveWorkerCmd,
 		lcli.UpdateP1ParamsCmd,
 		lcli.UpdateFinParamsCmd,
+		lcli.ListAllMarketDealsCmd,
 		lcli.WithCategory("chain", actorCmd),
 		lcli.WithCategory("chain", infoCmd),
 		lcli.WithCategory("market", storageDealsCmd),
