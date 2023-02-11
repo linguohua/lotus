@@ -529,6 +529,7 @@ type FullNode interface {
 	StateMarketParticipants(context.Context, types.TipSetKey) (map[string]MarketBalance, error) //perm:read
 	// StateMarketDeals returns information about every deal in the Storage Market
 	StateMarketDeals(context.Context, types.TipSetKey) (map[string]*MarketDeal, error) //perm:read
+	StateMarketDealsDump(context.Context, types.TipSetKey, string) (int, error)        //perm:read
 	// StateMarketStorageDeal returns information about the indicated deal
 	StateMarketStorageDeal(context.Context, abi.DealID, types.TipSetKey) (*MarketDeal, error) //perm:read
 	// StateGetAllocationForPendingDeal returns the allocation for a given deal ID of a pending deal. Returns nil if

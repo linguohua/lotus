@@ -1,10 +1,12 @@
 package full
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/ipfs/go-cid"
@@ -761,6 +763,46 @@ func (a *StateAPI) StateMarketDeals(ctx context.Context, tsk types.TipSetKey) (m
 		return nil, err
 	}
 	return out, nil
+}
+
+func (a *StateAPI) StateMarketDealsDump(ctx context.Context, tsk types.TipSetKey, filepath string) (int, error) {
+	filePtr, err := os.OpenFile(filepath, os.O_WRONLY, 0666)
+	if err != nil {
+		return 0, err
+	}
+
+	//Create a buffer writter using file pointer.
+	bufferedWriter := bufio.NewWriter(filePtr)
+	defer func() {
+		bufferedWriter.Flush()
+		filePtr.Close()
+	}()
+
+	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
+	if err != nil {
+		return 0, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+
+	state, err := a.StateManager.GetMarketState(ctx, ts)
+	if err != nil {
+		return 0, err
+	}
+
+	da, err := state.Proposals()
+	if err != nil {
+		return 0, err
+	}
+
+	counter := 0
+	if err := da.ForEach(func(dealID abi.DealID, d market.DealProposal) error {
+		fmt.Fprintf(bufferedWriter, "label %s, client %s, piece-cid:%s\n", d.Label, d.Client, d.PieceCID)
+		counter = counter + 1
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return counter, nil
 }
 
 func (m *StateModule) StateMarketStorageDeal(ctx context.Context, dealId abi.DealID, tsk types.TipSetKey) (*api.MarketDeal, error) {

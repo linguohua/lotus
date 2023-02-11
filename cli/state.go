@@ -64,6 +64,7 @@ var StateCmd = &cli.Command{
 		StateActiveSectorsCmd,
 		StateListActorsCmd,
 		StateListMinersCmd,
+		StateDumpDealsCmd,
 		StateCircSupplyCmd,
 		StateSectorCmd,
 		StateGetActorCmd,

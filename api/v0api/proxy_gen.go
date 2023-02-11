@@ -308,6 +308,8 @@ type FullNodeStruct struct {
 
 		StateMarketDeals func(p0 context.Context, p1 types.TipSetKey) (map[string]*api.MarketDeal, error) `perm:"read"`
 
+		StateMarketDealsDump func(p0 context.Context, p1 types.TipSetKey, p2 string) (int, error) `perm:"read"`
+
 		StateMarketParticipants func(p0 context.Context, p1 types.TipSetKey) (map[string]api.MarketBalance, error) `perm:"read"`
 
 		StateMarketStorageDeal func(p0 context.Context, p1 abi.DealID, p2 types.TipSetKey) (*api.MarketDeal, error) `perm:"read"`
@@ -1967,6 +1969,17 @@ func (s *FullNodeStruct) StateMarketDeals(p0 context.Context, p1 types.TipSetKey
 
 func (s *FullNodeStub) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]*api.MarketDeal, error) {
 	return *new(map[string]*api.MarketDeal), ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateMarketDealsDump(p0 context.Context, p1 types.TipSetKey, p2 string) (int, error) {
+	if s.Internal.StateMarketDealsDump == nil {
+		return 0, ErrNotSupported
+	}
+	return s.Internal.StateMarketDealsDump(p0, p1, p2)
+}
+
+func (s *FullNodeStub) StateMarketDealsDump(p0 context.Context, p1 types.TipSetKey, p2 string) (int, error) {
+	return 0, ErrNotSupported
 }
 
 func (s *FullNodeStruct) StateMarketParticipants(p0 context.Context, p1 types.TipSetKey) (map[string]api.MarketBalance, error) {
