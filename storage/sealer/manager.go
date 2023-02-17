@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"os"
+	"runtime/debug"
+	"sort"
 	"sync"
 	"time"
 
@@ -349,6 +350,8 @@ func (m *Manager) schedFetch(sector storiface.SectorRef, ft storiface.SectorFile
 func (m *Manager) SectorsUnsealPiece(ctx context.Context, sector storiface.SectorRef, offset storiface.UnpaddedByteIndex, size abi.UnpaddedPieceSize, ticket abi.SealRandomness, unsealed *cid.Cid) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	log.Infof("Manager.SectorsUnsealPiece call, stack:\n%s\n", string(debug.Stack()))
 
 	log.Debugf("acquire unseal sector lock for sector %d", sector.ID)
 	if err := m.index.StorageLock(ctx, sector.ID, storiface.FTSealed|storiface.FTCache|storiface.FTUpdate|storiface.FTUpdateCache, storiface.FTUnsealed); err != nil {

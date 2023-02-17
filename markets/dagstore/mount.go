@@ -56,6 +56,7 @@ func (l *LotusMount) Deserialize(u *url.URL) error {
 }
 
 func (l *LotusMount) Fetch(ctx context.Context) (mount.Reader, error) {
+	log.Infof("LotusMount Fetch call, piece cid:%s", l.PieceCid)
 	return l.API.FetchUnsealedPiece(ctx, l.PieceCid)
 }
 
@@ -73,6 +74,8 @@ func (l *LotusMount) Close() error {
 }
 
 func (l *LotusMount) Stat(ctx context.Context) (mount.Stat, error) {
+	log.Infof("LotusMount Stat call, piece cid:%s", l.PieceCid)
+
 	size, err := l.API.GetUnpaddedCARSize(ctx, l.PieceCid)
 	if err != nil {
 		return mount.Stat{}, xerrors.Errorf("failed to fetch piece size for piece %s: %w", l.PieceCid, err)
