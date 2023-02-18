@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"io"
-	"runtime/debug"
 
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -157,7 +156,7 @@ var _ io.Closer = funcCloser(nil)
 // the returned boolean parameter will be set to true.
 // If we have an existing unsealed file containing the given piece, the returned boolean will be set to false.
 func (p *pieceProvider) ReadPiece(ctx context.Context, sector storiface.SectorRef, pieceOffset storiface.UnpaddedByteIndex, size abi.UnpaddedPieceSize, ticket abi.SealRandomness, unsealed cid.Cid) (mount.Reader, bool, error) {
-	log.Debugf("pieceProvider.ReadPiece call, stack:\n%s\n", string(debug.Stack()))
+	log.Debugf("pieceProvider.ReadPiece call, sector=%+v, pieceOffset=%d, size=%d", sector, pieceOffset, size)
 
 	if err := pieceOffset.Valid(); err != nil {
 		return nil, false, xerrors.Errorf("pieceOffset is not valid: %w", err)
