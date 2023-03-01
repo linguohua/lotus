@@ -14,10 +14,10 @@ import (
 var log = logging.Logger("rpcenc")
 
 type CarReader struct {
-	URL          string
-	PaddedSize   uint64
-	paddedReader io.Reader
-	carReader    *carv2.Reader
+	URL            string
+	PaddedSize     uint64
+	unPaddedReader io.Reader
+	carReader      *carv2.Reader
 }
 
 func (r *CarReader) Close() error {
@@ -31,7 +31,7 @@ func (r *CarReader) Close() error {
 }
 
 func (r *CarReader) Read(out []byte) (int, error) {
-	if r.paddedReader == nil {
+	if r.unPaddedReader == nil {
 		if r.carReader != nil {
 			r.carReader.Close()
 		}
@@ -42,14 +42,14 @@ func (r *CarReader) Read(out []byte) (int, error) {
 		}
 
 		r.carReader = cr
-		r.paddedReader = rr
+		r.unPaddedReader = rr
 	}
 
-	return r.paddedReader.Read(out)
+	return r.unPaddedReader.Read(out)
 }
 
-func NewWithPaddedReader(filepath string, paddedSize uint64, paddedReader io.Reader) *CarReader {
-	return &CarReader{URL: filepath, paddedReader: paddedReader, PaddedSize: paddedSize}
+func NewWithUnPaddedReader(filepath string, paddedSize uint64, unPaddedReader io.Reader) *CarReader {
+	return &CarReader{URL: filepath, unPaddedReader: unPaddedReader, PaddedSize: paddedSize}
 }
 
 func NewWithPath(filepath string, paddedSize uint64) (*CarReader, error) {
