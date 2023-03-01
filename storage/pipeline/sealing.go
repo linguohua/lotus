@@ -3,6 +3,7 @@ package sealing
 import (
 	"context"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -382,6 +383,14 @@ func (m *Sealing) Address() address.Address {
 }
 
 func getDealPerSectorLimit(size abi.SectorSize) (int, error) {
+	msd := os.Getenv("LOTUS_SEALING_MAXDEALS_PER_SECTOR")
+	if len(msd) > 0 {
+		msdi, err := strconv.Atoi(msd)
+		if err == nil {
+			return msdi, nil
+		}
+	}
+
 	if size < 64<<30 {
 		return 256, nil
 	}
