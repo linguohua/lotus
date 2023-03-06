@@ -228,6 +228,7 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 
 		offset += padLength.Unpadded()
 
+		groupID := sector.SealGroupID
 		for _, p := range pads {
 			expectCid := zerocomm.ZeroPieceCommitment(p.Unpadded())
 
@@ -240,6 +241,7 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 				errStr := err.Error()
 				if i := strings.Index(errStr, "ugly:"); i >= 0 {
 					// TODO: log
+					groupID = errStr[i+5:]
 				} else {
 					err = xerrors.Errorf("writing padding piece: %w", err)
 					deal.accepted(sector.SectorNumber, offset, err)
@@ -258,7 +260,6 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 			})
 		}
 
-		groupID := ""
 		ppi, err := m.sealer.AddPiece(sealer.WithPriority(ctx.Context(), DealSectorPriority),
 			m.minerSector(sector.SectorType, sector.SectorNumber),
 			pieceSizes,
@@ -591,7 +592,8 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 	log.Debugw("updateInput matching done", "matches", len(matches), "toAssign", len(toAssign), "assigned", assigned, "openSectors", len(m.openSectors), "pieces", len(m.pendingPieces))
 
 	if len(toAssign) > 0 {
-		log.Errorf("we are trying to create a new sector with open sectors %v", m.openSectors)
+		// log.Errorf("we are trying to create a new sector with open sectors %v", m.openSectors)
+		log.Errorf("we are trying to create a new sector for deals %v", toAssign)
 		if err := m.tryGetDealSector(ctx, sp, getExpirationCached); err != nil {
 			log.Errorw("Failed to create a new sector for deals", "error", err)
 		}

@@ -439,16 +439,22 @@ func (m *Manager) AddPiece(ctx context.Context, sector storiface.SectorRef, exis
 
 	var selector WorkerSelector
 	var err error
+	groupID, err := findSectorGroup(ctx, m.index, sector.ProofType, sector.ID, storiface.FTUnsealed)
 
 	if len(existingPieces) == 0 {
-		log.Debugf("Manager.AddPiece try to use exist new addpiece selector, sector: %s", sector.ID)
-		// new
-		selector = newAddPieceSelector(m.index, sector,
-			storiface.FTUnsealed, storiface.PathSealing)
+		if groupID != "" {
+			log.Debugf("Manager.AddPiece try to use exist selector, sector: %s, existing pieces:%d", sector.ID, len(existingPieces))
+			selector = newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTUnsealed, groupID)
+		} else {
+			log.Debugf("Manager.AddPiece try to use new selector, sector: %s, existing pieces:%d", sector.ID, len(existingPieces))
+			// new
+			selector = newAddPieceSelector(m.index, sector,
+				storiface.FTUnsealed, storiface.PathSealing)
+		}
+
 	} else {
-		log.Debugf("Manager.AddPiece try to use exist selector, sector: %s", sector.ID)
+		log.Debugf("Manager.AddPiece try to use exist selector, sector: %s, existing pieces:%d", sector.ID, len(existingPieces))
 		// use existing
-		groupID, err := findSectorGroup(ctx, m.index, sector.ProofType, sector.ID, storiface.FTUnsealed)
 		if err != nil {
 			return abi.PieceInfo{}, err
 		}
