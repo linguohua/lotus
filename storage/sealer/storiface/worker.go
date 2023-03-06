@@ -30,6 +30,8 @@ type WorkerInfo struct {
 	// Default should be false (zero value, i.e. resources taken into account).
 	IgnoreResources bool
 	Resources       WorkerResources
+
+	GroupID string
 }
 
 type WorkerResources struct {
@@ -40,9 +42,55 @@ type WorkerResources struct {
 
 	CPUs uint64 // Logical cores
 	GPUs []string
-
 	// if nil use the default resource table
 	Resources map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
+
+	P1  uint32
+	P2  uint32
+	C1  uint32
+	C2  uint32
+	AP  uint32
+	FIN uint32
+}
+
+func (wr *WorkerResources) Windows() uint32 {
+	return wr.P1 + wr.P2 + wr.C1 + wr.C2 + wr.AP + wr.FIN
+}
+
+func (wr *WorkerResources) ValidTaskType() ([]sealtasks.TaskType, []uint32) {
+	tt := make([]sealtasks.TaskType, 0, 6)
+	counts := make([]uint32, 0, 6)
+	if wr.P1 > 0 {
+		tt = append(tt, sealtasks.TTPreCommit1)
+		counts = append(counts, wr.P1)
+	}
+
+	if wr.P2 > 0 {
+		tt = append(tt, sealtasks.TTPreCommit2)
+		counts = append(counts, wr.P2)
+	}
+
+	if wr.C1 > 0 {
+		tt = append(tt, sealtasks.TTCommit1)
+		counts = append(counts, wr.C1)
+	}
+
+	if wr.C2 > 0 {
+		tt = append(tt, sealtasks.TTCommit2)
+		counts = append(counts, wr.C2)
+	}
+
+	if wr.AP > 0 {
+		tt = append(tt, sealtasks.TTAddPiece)
+		counts = append(counts, wr.AP)
+	}
+
+	if wr.FIN > 0 {
+		tt = append(tt, sealtasks.TTFinalize)
+		counts = append(counts, wr.FIN)
+	}
+
+	return tt, counts
 }
 
 func (wr WorkerResources) ResourceSpec(spt abi.RegisteredSealProof, tt sealtasks.TaskType) Resources {
@@ -70,12 +118,18 @@ type WorkerStats struct {
 	Tasks   []sealtasks.TaskType
 	Enabled bool
 
+	TaskTypes  []sealtasks.TaskType
+	TaskCounts []uint32
+
+	Url  string
+	UUID string
+
+	Paused string
+
 	MemUsedMin uint64
 	MemUsedMax uint64
 	GpuUsed    float64 // nolint
 	CpuUse     uint64  // nolint
-
-	TaskCounts map[string]int
 }
 
 const (

@@ -4142,3 +4142,7 @@ func (mr *MockFullNodeMockRecorder) Web3ClientVersion(arg0 interface{}) *gomock.
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Web3ClientVersion", reflect.TypeOf((*MockFullNode)(nil).Web3ClientVersion), arg0)
 }
+
+func (m *MockFullNode) AnchorBlocksCountByHeight(context.Context, abi.ChainEpoch) (int, error) {
+	return 0, nil
+}
