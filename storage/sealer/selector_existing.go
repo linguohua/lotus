@@ -64,25 +64,23 @@ func newExistingSelector(queryWorker bool, index paths.SectorIndex, sector abi.S
 	}
 }
 
-func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
+func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd SchedWorker) (bool, bool, error) {
 	//tasks, err := whnd.workerRpc.TaskTypes(ctx)
 	//if err != nil {
 	//	return false, xerrors.Errorf("getting supported worker task types: %w", err)
 	//}
 	supported := false
-	tasks := whnd.acceptTaskTypes
-	for _, t := range tasks {
-		if t == task {
-			supported = true
-			break
-		}
+	tasks, err := whnd.TaskTypes(ctx)
+	if err != nil {
+		return false, false, err
 	}
 
+	_, supported = tasks[task]
 	if !supported {
 		return false, false, nil
 	}
 
-	workerGroupID := whnd.Info.GroupID
+	workerGroupID := whnd.GroupID()
 	if workerGroupID != s.groupID {
 		return false, false, nil
 	}
@@ -91,7 +89,7 @@ func (s *existingSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt 
 		if task == sealtasks.TTPreCommit1 || task == sealtasks.TTPreCommit2 ||
 			task == sealtasks.TTCommit2 {
 
-			if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
+			if false == whnd.RemoteWorkerHasResourceForNewTask(ctx, task) {
 				return false, false, nil
 			}
 		}

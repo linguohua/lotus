@@ -920,12 +920,10 @@ func (m *Sealing) handleCommitWait(ctx statemachine.Context, sector SectorInfo) 
 func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorInfo) error {
 	// TODO: Maybe wait for some finality
 
-	// never keep unsealed
 	cfg, err := m.getConfig()
 	if err != nil {
 		return xerrors.Errorf("getting sealing config: %w", err)
 	}
-
 
 	//if err := m.sealer.ReleaseUnsealed(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(sector.Pieces, false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
 	//	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("release unsealed: %w", err)})
@@ -951,8 +949,9 @@ func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorIn
 		log.Infof("Sealing handleFinalizeSector, sector:%d, early finalized", sector.SectorNumber)
 	}
 
-	// if cfg.MakeCCSectorsAvailable && !sector.hasDeals() {
-	// 	return ctx.Send(SectorFinalizedAvailable{})
-	// }
+	if cfg.MakeCCSectorsAvailable && !sector.hasDeals() {
+		return ctx.Send(SectorFinalizedAvailable{})
+	}
+
 	return ctx.Send(SectorFinalized{})
 }

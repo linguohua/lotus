@@ -20,22 +20,20 @@ func newTaskSelector(queryWorker bool) *taskSelector {
 	}
 }
 
-func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
+func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd SchedWorker) (bool, bool, error) {
 	supported := false
-	tasks := whnd.acceptTaskTypes
-	for _, t := range tasks {
-		if t == task {
-			supported = true
-			break
-		}
+	tasks, err := whnd.TaskTypes(ctx)
+	if err != nil {
+		return false, false, err
 	}
 
+	_, supported = tasks[task]
 	if !supported {
 		return false, false, nil
 	}
 
 	if s.queryWorker {
-		if false == whnd.workerRpc.HasResourceForNewTask(ctx, task) {
+		if false == whnd.RemoteWorkerHasResourceForNewTask(ctx, task) {
 			return false, false, nil
 		}
 	}
@@ -43,7 +41,7 @@ func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.
 	return true, false, nil
 }
 
-func (s *taskSelector) Cmp(ctx context.Context, _ sealtasks.TaskType, a, b *WorkerHandle) (bool, error) {
+func (s *taskSelector) Cmp(ctx context.Context, _ sealtasks.TaskType, a, b SchedWorker) (bool, error) {
 	//atasks, err := a.TaskTypes(ctx)
 	//if err != nil {
 	//	return false, xerrors.Errorf("getting supported worker task types: %w", err)

@@ -26,31 +26,17 @@ func newAllocSelector(index paths.SectorIndex, alloc storiface.SectorFileType, p
 	}
 }
 
-func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
+func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd SchedWorker) (bool, bool, error) {
 	supported := false
-	tasks := whnd.acceptTaskTypes
-	for _, t := range tasks {
-		if t == task {
-			supported = true
-			break
-		}
+	tasks, err := whnd.TaskTypes(ctx)
+	if err != nil {
+		return false, false, err
 	}
 
+	_, supported = tasks[task]
 	if !supported {
 		return false, false, nil
 	}
-
-
-	// paths, err := whnd.workerRpc.Paths(ctx)
-	// if err != nil {
-	// 	return false, xerrors.Errorf("getting worker paths: %w", err)
-	// }
-
-
-	// have := map[storiface.ID]struct{}{}
-	// for _, path := range paths {
-	// 	have[path.ID] = struct{}{}
-	// }
 
 	ssize, err := spt.SectorSize()
 	if err != nil {
@@ -62,11 +48,8 @@ func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi
 		return false, false, xerrors.Errorf("finding best alloc storage: %w", err)
 	}
 
-	workerGroupID := whnd.Info.GroupID
+	workerGroupID := whnd.GroupID()
 	for _, info := range best {
-		// if _, ok := have[info.ID]; ok {
-		// 	return true, nil
-		// }
 		if info.GroupID == "" {
 			// can bind to any worker
 			//log.Infof("found match worker and free bind storage, worker group id:%s", workerGroupID)
@@ -111,11 +94,11 @@ func newAddPieceSelector(index paths.SectorIndex,
 	}
 }
 
-func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *WorkerHandle) (bool, bool, error) {
+func (s *addPieceSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd SchedWorker) (bool, bool, error) {
 	return true, true, nil
 }
 
-func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *WorkerHandle) (bool, error) {
+func (s *addPieceSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b SchedWorker) (bool, error) {
 	return a.Utilization() < b.Utilization(), nil
 }
 

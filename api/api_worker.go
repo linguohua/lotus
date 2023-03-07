@@ -28,9 +28,9 @@ type Worker interface {
 	Version(context.Context) (Version, error) //perm:admin
 
 	// TaskType -> Weight
-	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error) //perm:admin
-	Paths(context.Context) ([]storiface.StoragePath, error)             //perm:admin
-	Info(context.Context) (storiface.WorkerInfo, error)                 //perm:admin
+	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error)          //perm:admin
+	Paths(context.Context) ([]storiface.StoragePath, error)                      //perm:admin
+	Info(context.Context) (storiface.WorkerInfo, error)                          //perm:admin
 	HasResourceForNewTask(ctx context.Context, tasktype sealtasks.TaskType) bool //perm:admin
 
 	// storiface.WorkerCalls
@@ -40,8 +40,8 @@ type Worker interface {
 	SealPreCommit2(ctx context.Context, sector storiface.SectorRef, pc1o storiface.PreCommit1Out) (storiface.CallID, error)                                                                                  //perm:admin
 	SealCommit1(ctx context.Context, sector storiface.SectorRef, ticket abi.SealRandomness, seed abi.InteractiveSealRandomness, pieces []abi.PieceInfo, cids storiface.SectorCids) (storiface.CallID, error) //perm:admin
 	SealCommit2(ctx context.Context, sector storiface.SectorRef, c1o storiface.Commit1Out) (storiface.CallID, error)                                                                                         //perm:admin
-	FinalizeSector(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error)                                                                                                                //perm:admin
-	FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error)                                                                                                         //perm:admin
+	FinalizeSector(ctx context.Context, sector storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error)                                                                                          //perm:admin
+	FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error)                                                                                   //perm:admin
 	ReplicaUpdate(ctx context.Context, sector storiface.SectorRef, pieces []abi.PieceInfo) (storiface.CallID, error)                                                                                         //perm:admin
 	ProveReplicaUpdate1(ctx context.Context, sector storiface.SectorRef, sectorKey, newSealed, newUnsealed cid.Cid) (storiface.CallID, error)                                                                //perm:admin
 	ProveReplicaUpdate2(ctx context.Context, sector storiface.SectorRef, sectorKey, newSealed, newUnsealed cid.Cid, vanillaProofs storiface.ReplicaVanillaProofs) (storiface.CallID, error)                  //perm:admin

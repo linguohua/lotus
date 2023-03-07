@@ -51,6 +51,8 @@ type WorkerAction func(ctx context.Context, w Worker) error
 type SchedWorker interface {
 	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error)
 	Paths(context.Context) ([]storiface.StoragePath, error)
+	RemoteWorkerHasResourceForNewTask(ctx context.Context, task sealtasks.TaskType) bool
+	GroupID() string
 	Utilization() float64
 }
 
@@ -195,7 +197,9 @@ type WorkerHandle struct {
 	closedMgr      chan struct{}
 	closingMgr     chan struct{}
 
-	acceptTaskTypes  []sealtasks.TaskType
+	acceptTaskTypes   []sealtasks.TaskType
+	acceptTaskTypeMap map[sealtasks.TaskType]struct{}
+
 	taskTypeCounters []uint32
 
 	// count all request windows
@@ -203,6 +207,22 @@ type WorkerHandle struct {
 	paused         map[sealtasks.TaskType]struct{}
 	removed        bool
 	url            string
+}
+
+func (wh *WorkerHandle) GroupID() string {
+	return wh.Info.GroupID
+}
+
+func (wh *WorkerHandle) TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error) {
+	return wh.acceptTaskTypeMap, nil
+}
+
+func (wh *WorkerHandle) Paths(ctx context.Context) ([]storiface.StoragePath, error) {
+	return wh.workerRpc.Paths(ctx)
+}
+
+func (wh *WorkerHandle) RemoteWorkerHasResourceForNewTask(ctx context.Context, task sealtasks.TaskType) bool {
+	return wh.workerRpc.HasResourceForNewTask(ctx, task)
 }
 
 type SchedWindowRequest struct {

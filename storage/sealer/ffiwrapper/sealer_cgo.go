@@ -1112,13 +1112,13 @@ func (sb *Sealer) ReleaseUnsealed(ctx context.Context, sector storiface.SectorRe
 	return nil
 }
 
-func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef) error {
+func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	ssize, err := sector.ProofType.SectorSize()
 	if err != nil {
 		return err
 	}
 
-	if err := sb.freeUnsealed(ctx, sector, keepUnsealed); err != nil {
+	if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
 		return err
 	}
 
@@ -1193,9 +1193,13 @@ func (sb *Sealer) FinalizeSectorInto(ctx context.Context, sector storiface.Secto
 	return ffi.ClearCache(uint64(ssize), dest)
 }
 
-func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) error {
+func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	ssize, err := sector.ProofType.SectorSize()
 	if err != nil {
+		return err
+	}
+
+	if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
 		return err
 	}
 
@@ -1224,6 +1228,7 @@ func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.Se
 	}
 
 	return nil
+
 }
 
 func (sb *Sealer) ReleaseReplicaUpgrade(ctx context.Context, sector storiface.SectorRef) error {

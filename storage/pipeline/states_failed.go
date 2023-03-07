@@ -439,7 +439,7 @@ func (m *Sealing) handleAbortUpgrade(ctx statemachine.Context, sector SectorInfo
 	}
 
 	// and makes sure sealed/cache files only exist in long-term-storage
-	if err := m.sealer.FinalizeSector(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber)); err != nil {
+	if err := m.sealer.FinalizeSector(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber), nil); err != nil {
 		log.Error(err)
 	}
 

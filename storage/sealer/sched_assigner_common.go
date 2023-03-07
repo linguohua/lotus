@@ -4,11 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"go.opencensus.io/stats"
-
-	"github.com/filecoin-project/lotus/metrics"
-	"github.com/filecoin-project/lotus/storage/sealer/storiface"
-
 	sealtasks "github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 )
 
@@ -50,7 +45,6 @@ func (a *AssignerCommon) TrySched(sh *Scheduler) {
 	//stats.Record(sh.mctx, metrics.SchedCycleQueueSize.M(int64(queueLen)))
 	//
 	//log.Debugf("SCHED %d queued; %d open windows", queueLen, windowsLen)
-
 
 	// schedule AddPiece Task
 	a.trySchedAddPiece(sh)

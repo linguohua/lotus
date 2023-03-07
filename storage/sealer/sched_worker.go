@@ -38,12 +38,18 @@ func newWorkerHandle(ctx context.Context, w Worker, url string) (*WorkerHandle, 
 	}
 
 	acceptTaskTypes, taskTypeCounters := info.Resources.ValidTaskType()
+	acceptTaskTypeMap := make(map[sealtasks.TaskType]struct{})
+	for _, r := range acceptTaskTypes {
+		acceptTaskTypeMap[r] = struct{}{}
+	}
+
 	worker := &WorkerHandle{
 		workerRpc: w,
 		Info:      info,
 
-		acceptTaskTypes:  acceptTaskTypes,
-		taskTypeCounters: taskTypeCounters,
+		acceptTaskTypes:   acceptTaskTypes,
+		acceptTaskTypeMap: acceptTaskTypeMap,
+		taskTypeCounters:  taskTypeCounters,
 
 		//preparing: &activeResources{},
 		//active:  &activeResources{},
@@ -132,9 +138,9 @@ func convertTaskTypes(tt string) []sealtasks.TaskType {
 	}
 }
 
-func (sw *WorkerHandle) pauseStat() string {
+func (wh *WorkerHandle) pauseStat() string {
 	str := ""
-	for k := range sw.paused {
+	for k := range wh.paused {
 		str = str + string(k) + ","
 	}
 

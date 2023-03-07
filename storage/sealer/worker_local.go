@@ -782,7 +782,7 @@ func (l *LocalWorker) GenerateSectorKeyFromData(ctx context.Context, sector stor
 	})
 }
 
-func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
+func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
 	sb, err := l.executor()
 	if err != nil {
 		return storiface.UndefCall, err
@@ -809,36 +809,39 @@ func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.Secto
 	})
 }
 
-func (l *LocalWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
+func (l *LocalWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
 	sb, err := l.executor()
 	if err != nil {
 		return storiface.UndefCall, err
 	}
 
 	return l.asyncCall(ctx, sector, FinalizeReplicaUpdate, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return nil, sb.FinalizeReplicaUpdate(ctx, sector)
+		return nil, sb.FinalizeReplicaUpdate(ctx, sector, keepUnsealed)
 	})
 }
 
 func (l *LocalWorker) ReleaseUnsealed(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
-	sb, err := l.executor()
-	if err != nil {
-		return storiface.UndefCall, err
-	}
+	// sb, err := l.executor()
+	// if err != nil {
+	// 	return storiface.UndefCall, err
+	// }
 
-	return l.asyncCall(ctx, sector, ReleaseUnsealed, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
-			return nil, xerrors.Errorf("finalizing sector: %w", err)
-		}
+	// return l.asyncCall(ctx, sector, ReleaseUnsealed, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
+	// 	if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
+	// 		return nil, xerrors.Errorf("finalizing sector: %w", err)
+	// 	}
 
-		if len(keepUnsealed) == 0 {
-			if err := l.storage.Remove(ctx, sector.ID, storiface.FTUnsealed, true, nil); err != nil {
-				return nil, xerrors.Errorf("removing unsealed data: %w", err)
-			}
-		}
+	// 	if len(keepUnsealed) == 0 {
+	// 		if err := l.storage.Remove(ctx, sector.ID, storiface.FTUnsealed, true, nil); err != nil {
+	// 			return nil, xerrors.Errorf("removing unsealed data: %w", err)
+	// 		}
+	// 	}
 
-		return nil, err
-	})
+	// 	return nil, err
+	// })
+
+	// rollback to v1.19
+	return storiface.UndefCall, xerrors.Errorf("implement me")
 }
 
 func (l *LocalWorker) Remove(ctx context.Context, sector abi.SectorID) error {

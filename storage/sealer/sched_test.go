@@ -92,7 +92,7 @@ func (s *schedTestWorker) SealCommit2(ctx context.Context, sector storiface.Sect
 	panic("implement me")
 }
 
-func (s *schedTestWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
+func (s *schedTestWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
 	panic("implement me")
 }
 
@@ -128,7 +128,7 @@ func (s *schedTestWorker) GenerateSectorKeyFromData(ctx context.Context, sector 
 	panic("implement me")
 }
 
-func (s *schedTestWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
+func (s *schedTestWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
 	panic("implement me")
 }
 
@@ -621,7 +621,7 @@ type tw struct {
 func BenchmarkTrySched(b *testing.B) {
 	logging.SetAllLoggers(logging.LevelInfo)
 	defer logging.SetAllLoggers(logging.LevelDebug)
-	// ctx := context.Background()
+	ctx := context.Background()
 
 	test := func(windows, queue int) func(b *testing.B) {
 		return func(b *testing.B) {
@@ -647,7 +647,7 @@ func BenchmarkTrySched(b *testing.B) {
 						Resources: decentWorkerResources,
 					},
 
-					Enabled:   true,
+					Enabled: true,
 					//preparing: NewActiveResources(),
 					//active:    NewActiveResources(),
 				}

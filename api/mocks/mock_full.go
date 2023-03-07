@@ -3319,6 +3319,11 @@ func (m *MockFullNode) StateMarketDeals(arg0 context.Context, arg1 types.TipSetK
 	return ret0, ret1
 }
 
+// StateMarketDealsDump mocks base method.
+func (m *MockFullNode) StateMarketDealsDump(context.Context, types.TipSetKey, string) (int, error) {
+	return 0, nil
+}
+
 // StateMarketDeals indicates an expected call of StateMarketDeals.
 func (mr *MockFullNodeMockRecorder) StateMarketDeals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
