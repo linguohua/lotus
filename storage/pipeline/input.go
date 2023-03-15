@@ -3,6 +3,7 @@ package sealing
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -227,6 +228,7 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 
 		offset += padLength.Unpadded()
 
+		groupID := sector.SealGroupID
 		for _, p := range pads {
 			expectCid := zerocomm.ZeroPieceCommitment(p.Unpadded())
 
@@ -236,9 +238,15 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 				p.Unpadded(),
 				nullreader.NewNullReader(p.Unpadded()))
 			if err != nil {
-				err = xerrors.Errorf("writing padding piece: %w", err)
-				deal.accepted(sector.SectorNumber, offset, err)
-				return ctx.Send(SectorAddPieceFailed{err})
+				errStr := err.Error()
+				if i := strings.Index(errStr, "ugly:"); i >= 0 {
+					// TODO: log
+					groupID = errStr[i+5:]
+				} else {
+					err = xerrors.Errorf("writing padding piece: %w", err)
+					deal.accepted(sector.SectorNumber, offset, err)
+					return ctx.Send(SectorAddPieceFailed{err})
+				}
 			}
 			if !ppi.PieceCID.Equals(expectCid) {
 				err = xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
@@ -258,23 +266,30 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 			deal.size,
 			deal.data)
 		if err != nil {
-			err = xerrors.Errorf("writing piece: %w", err)
-			deal.accepted(sector.SectorNumber, offset, err)
-			return ctx.Send(SectorAddPieceFailed{err})
+			errStr := err.Error()
+			if i := strings.Index(errStr, "ugly:"); i >= 0 {
+				groupID = errStr[i+5:]
+			} else {
+				err = xerrors.Errorf("writing piece: %w", err)
+				deal.accepted(sector.SectorNumber, offset, err)
+				return ctx.Send(SectorAddPieceFailed{err})
+			}
 		}
+
 		if !ppi.PieceCID.Equals(deal.deal.DealProposal.PieceCID) {
 			err = xerrors.Errorf("got unexpected piece CID: expected:%s, got:%s", deal.deal.DealProposal.PieceCID, ppi.PieceCID)
 			deal.accepted(sector.SectorNumber, offset, err)
 			return ctx.Send(SectorAddPieceFailed{err})
 		}
 
-		log.Infow("deal added to a sector", "deal", deal.deal.DealID, "sector", sector.SectorNumber, "piece", ppi.PieceCID)
+		log.Infow("deal added to a sector", "deal", deal.deal.DealID, "sector", sector.SectorNumber, "piece", ppi.PieceCID, "group", groupID)
 
 		deal.accepted(sector.SectorNumber, offset, nil)
 
 		offset += deal.size
 		pieceSizes = append(pieceSizes, deal.size)
 
+		res.GroupID = groupID
 		res.NewPieces = append(res.NewPieces, api.SectorPiece{
 			Piece:    ppi,
 			DealInfo: &deal.deal,
@@ -577,7 +592,8 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 	log.Debugw("updateInput matching done", "matches", len(matches), "toAssign", len(toAssign), "assigned", assigned, "openSectors", len(m.openSectors), "pieces", len(m.pendingPieces))
 
 	if len(toAssign) > 0 {
-		log.Errorf("we are trying to create a new sector with open sectors %v", m.openSectors)
+		// log.Errorf("we are trying to create a new sector with open sectors %v", m.openSectors)
+		log.Errorf("we are trying to create a new sector for deals %v", toAssign)
 		if err := m.tryGetDealSector(ctx, sp, getExpirationCached); err != nil {
 			log.Errorw("Failed to create a new sector for deals", "error", err)
 		}
@@ -933,6 +949,9 @@ func (m *Sealing) SectorsStatus(ctx context.Context, sid abi.SectorNumber, showO
 		InitialPledge:      big.Zero(),
 		OnTime:             0,
 		Early:              0,
+
+		HasFinalized: info.HasFinalized,
+		SealGroupID:  info.SealGroupID,
 	}
 
 	return sInfo, nil
