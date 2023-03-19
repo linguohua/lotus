@@ -12,6 +12,7 @@ import (
 	"path"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/filecoin-project/lotus/lib/httpreader"
+	"github.com/filecoin-project/lotus/lib/localreader"
 	"github.com/filecoin-project/lotus/storage/pipeline/lib/nullreader"
 )
 
@@ -33,9 +35,10 @@ var Timeout = 30 * time.Second
 type StreamType string
 
 const (
-	Null       StreamType = "null"
-	PushStream StreamType = "push"
-	HTTP       StreamType = "http"
+	Null           StreamType = "null"
+	PushStream     StreamType = "push"
+	HTTP           StreamType = "http"
+	LocalCarReader StreamType = "localcar"
 	// TODO: Data transfer handoff to workers?
 )
 
@@ -109,6 +112,11 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 		}
 		if r, ok := r.(*httpreader.HttpReader); ok && r.URL != "" {
 			return reflect.ValueOf(ReaderStream{Type: HTTP, Info: r.URL}), nil
+		}
+
+		if r, ok := r.(*localreader.CarReader); ok {
+			log.Infof("encode local carfile reader with path:%s, padded size:%d", r.URL, r.PaddedSize)
+			return reflect.ValueOf(ReaderStream{Type: LocalCarReader, Info: fmt.Sprintf("%s;%d", r.URL, r.PaddedSize)}), nil
 		}
 
 		reqID := uuid.New()
@@ -428,6 +436,25 @@ func ReaderParamDecoder() (http.HandlerFunc, jsonrpc.ServerOption) {
 			return reflect.ValueOf(nullreader.NewNullReader(abi.UnpaddedPieceSize(n))), nil
 		case HTTP:
 			return reflect.ValueOf(&httpreader.HttpReader{URL: rs.Info}), nil
+		case LocalCarReader:
+			pp := strings.Split(rs.Info, ";")
+			if len(pp) != 2 {
+				return reflect.Value{}, fmt.Errorf("new local carfile reader failed rs.Info format error:%s", rs.Info)
+			}
+
+			p := pp[0]
+			paddedSize, err := strconv.ParseUint(pp[1], 10, 64)
+			if err != nil {
+				return reflect.Value{}, fmt.Errorf("new local carfile reader failed rs.Info pad size parse error:%w, info:%s", err, rs.Info)
+			}
+
+			log.Infof("decode local carfile reader with path:%s, padded size:%d", p, paddedSize)
+			r, err := localreader.NewWithPath(p, paddedSize)
+			if err != nil {
+				return reflect.Value{}, fmt.Errorf("new local carfile reader failed: %w, path:%s", err, rs.Info)
+			}
+
+			return reflect.ValueOf(r), nil
 		}
 
 		u, err := uuid.Parse(rs.Info)

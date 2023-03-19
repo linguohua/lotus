@@ -63,7 +63,7 @@ type Sealer interface {
 	SealCommit1(ctx context.Context, sector SectorRef, ticket abi.SealRandomness, seed abi.InteractiveSealRandomness, pieces []abi.PieceInfo, cids SectorCids) (Commit1Out, error)
 	SealCommit2(ctx context.Context, sector SectorRef, c1o Commit1Out) (Proof, error)
 
-	FinalizeSector(ctx context.Context, sector SectorRef) error
+	FinalizeSector(ctx context.Context, sector SectorRef, keepUnsealed []Range) error
 
 	// ReleaseUnsealed marks parts of the unsealed sector file as safe to drop
 	//  (called by the fsm on restart, allows storage to keep no persistent
@@ -89,7 +89,7 @@ type Sealer interface {
 	// GenerateSectorKeyFromData computes sector key given unsealed data and updated replica
 	GenerateSectorKeyFromData(ctx context.Context, sector SectorRef, unsealed cid.Cid) error
 
-	FinalizeReplicaUpdate(ctx context.Context, sector SectorRef) error
+	FinalizeReplicaUpdate(ctx context.Context, sector SectorRef, keepUnsealed []Range) error
 
 	DownloadSectorData(ctx context.Context, sector SectorRef, finalized bool, src map[SectorFileType]SectorLocation) error
 }
@@ -214,4 +214,9 @@ type LocalStorageMeta struct {
 	// - "update-cache"
 	// Any other value will generate a warning and be ignored.
 	DenyTypes []string
+
+	// which group to bind
+	GroupID string
+	// how many sector instances can this storage allow
+	MaxSealingSectors int
 }
