@@ -101,7 +101,7 @@ deps: $(BUILD_DEPS)
 .PHONY: deps
 
 #build-devnets: build lotus-seed lotus-shed
-build-devnets: lotus lotus-miner lotus-worker
+build-devnets: lotus lotus-miner lotus-worker lotus-shed
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -136,6 +136,9 @@ butterflynet: build-devnets
 interopnet: GOFLAGS+=-tags=interopnet
 interopnet: build-devnets
 
+hyperspacenet: GOFLAGS+=-tags=hyperspacenet
+hyperspacenet: build-devnets
+
 lotus: $(BUILD_DEPS)
 	rm -f lotus
 	$(GOCC) build $(GOFLAGS) -o lotus ./cmd/lotus
@@ -167,7 +170,7 @@ lotus-gateway: $(BUILD_DEPS)
 .PHONY: lotus-gateway
 BINS+=lotus-gateway
 
-build: lotus lotus-miner lotus-worker
+build: lotus lotus-miner lotus-worker lotus-shed
 	@[[ $$(type -P "lotus") ]] && echo "Caution: you have \
 an existing lotus binary in your PATH. This may cause problems if you don't run 'sudo make install'" || true
 
