@@ -114,6 +114,8 @@ func (m *minerAPI) FetchUnsealedPiece(ctx context.Context, pieceCid cid.Cid) (mo
 		return nil, err
 	}
 
+	log.Infof("FetchUnsealedPiece, pieceCid: %s", pieceCid)
+
 	// Throttle this path to avoid flooding the storage subsystem.
 	var pieceInfo piecestore.PieceInfo
 	err = m.throttle.Do(ctx, func(ctx context.Context) (err error) {
@@ -132,6 +134,7 @@ func (m *minerAPI) FetchUnsealedPiece(ctx context.Context, pieceCid cid.Cid) (mo
 	// prefer an unsealed sector containing the piece if one exists
 	for _, deal := range pieceInfo.Deals {
 		deal := deal
+		log.Infof("FetchUnsealedPiece, piece id:%s, deal id:%s, length:%d, offset:%d, sector ID:%s", pieceCid, deal.DealID, deal.Length, deal.Offset, deal.SectorID)
 
 		// Throttle this path to avoid flooding the storage subsystem.
 		var reader mount.Reader
@@ -140,6 +143,9 @@ func (m *minerAPI) FetchUnsealedPiece(ctx context.Context, pieceCid cid.Cid) (mo
 			if err != nil {
 				return fmt.Errorf("failed to check if sector %d for deal %d was unsealed: %w", deal.SectorID, deal.DealID, err)
 			}
+
+			log.Infof("FetchUnsealedPiece, piece id:%s, sector id:%s, isUnsealed:%v", pieceCid, deal.SectorID, isUnsealed)
+
 			if !isUnsealed {
 				return nil
 			}
@@ -160,7 +166,7 @@ func (m *minerAPI) FetchUnsealedPiece(ctx context.Context, pieceCid cid.Cid) (mo
 	}
 
 	lastErr := xerrors.New("no sectors found to unseal from")
-
+	log.Infof("FetchUnsealedPiece, piece id:%s, no unseal file found for it, try to unseal an sealed sector")
 	// if there is no unsealed sector containing the piece, just read the piece from the first sector we are able to unseal.
 	for _, deal := range pieceInfo.Deals {
 		// Note that if the deal data is not already unsealed, unsealing may

@@ -111,6 +111,13 @@ func infoCmdAct(cctx *cli.Context) error {
 		return err
 	}
 
+	if subsystems.Has(api.SubsystemMarkets) {
+		err = handleMarketsInfo(ctx, marketsApi)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

@@ -107,29 +107,30 @@ func (ps *poStScheduler) Schedule(ctx context.Context, primary bool, spt abi.Reg
 
 	var rpcErrs error
 
-	for i, selected := range candidates {
-		worker := ps.workers[selected.id]
-
-		err := worker.active.withResources(selected.id, worker.Info, ps.postType.SealTask(spt), selected.res, &ps.lk, func() error {
-			ps.lk.Unlock()
-			defer ps.lk.Lock()
-
-			return work(ctx, worker.workerRpc)
-		})
-		if err == nil {
-			return nil
-		}
-
-		// if the error is RPCConnectionError, try another worker, if not, return the error
-		if !errors.As(err, new(*jsonrpc.RPCConnectionError)) {
-			return err
-		}
-
-		log.Warnw("worker RPC connection error, will retry with another candidate if possible", "error", err, "worker", selected.id, "candidate", i, "candidates", len(candidates))
-		rpcErrs = multierror.Append(rpcErrs, err)
-	}
+	//for i, selected := range candidates {
+	//	worker := ps.workers[selected.id]
+	//
+	//	err := worker.active.withResources(selected.id, worker.Info, ps.postType.SealTask(spt), selected.res, &ps.lk, func() error {
+	//		ps.lk.Unlock()
+	//		defer ps.lk.Lock()
+	//
+	//		return work(ctx, worker.workerRpc)
+	//	})
+	//	if err == nil {
+	//		return nil
+	//	}
+	//
+	//	// if the error is RPCConnectionError, try another worker, if not, return the error
+	//	if !errors.As(err, new(*jsonrpc.RPCConnectionError)) {
+	//		return err
+	//	}
+	//
+	//	log.Warnw("worker RPC connection error, will retry with another candidate if possible", "error", err, "worker", selected.id, "candidate", i, "candidates", len(candidates))
+	//	rpcErrs = multierror.Append(rpcErrs, err)
+	//}
 
 	return xerrors.Errorf("got RPC errors from all workers: %w", rpcErrs)
+
 }
 
 type candidateWorker struct {
@@ -139,24 +140,6 @@ type candidateWorker struct {
 
 func (ps *poStScheduler) readyWorkers(spt abi.RegisteredSealProof) (bool, []candidateWorker) {
 	var accepts []candidateWorker
-	//if the gpus of the worker are insufficient or it's disabled, it cannot be scheduled
-	for wid, wr := range ps.workers {
-		needRes := wr.Info.Resources.ResourceSpec(spt, ps.postType)
-
-		if !wr.Enabled {
-			log.Debugf("sched: not scheduling on PoSt-worker %s, worker disabled", wid)
-			continue
-		}
-
-		if !wr.active.CanHandleRequest(ps.postType.SealTask(spt), needRes, wid, "post-readyWorkers", wr.Info) {
-			continue
-		}
-
-		accepts = append(accepts, candidateWorker{
-			id:  wid,
-			res: needRes,
-		})
-	}
 
 	// todo: round robin or something
 	rand.Shuffle(len(accepts), func(i, j int) {
