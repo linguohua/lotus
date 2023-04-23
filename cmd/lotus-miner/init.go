@@ -154,10 +154,14 @@ var initCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		log.Info("Checking proof parameters")
+		if os.Getenv("no_fetch_params") != "" {
+			log.Info("no_fetch_params is not empty, skip fetch and check proof parameters")
+		} else {
+			log.Info("Checking proof parameters")
 
-		if err := paramfetch.GetParams(ctx, build.ParametersJSON(), build.SrsJSON(), uint64(ssize)); err != nil {
-			return xerrors.Errorf("fetching proof parameters: %w", err)
+			if err := paramfetch.GetParams(ctx, build.ParametersJSON(), build.SrsJSON(), uint64(ssize)); err != nil {
+				return xerrors.Errorf("fetching proof parameters: %w", err)
+			}
 		}
 
 		log.Info("Trying to connect to full node RPC")
@@ -466,23 +470,24 @@ func storageMinerInit(ctx context.Context, cctx *cli.Context, api v1api.FullNode
 
 			si := paths.NewIndex(nil)
 
-			lstor, err := paths.NewLocal(ctx, lr, si, nil)
+			lstor, err := paths.NewLocal(ctx, lr, si, nil, "miner", "")
 			if err != nil {
 				return err
 			}
-			stor := paths.NewRemote(lstor, si, http.Header(sa), 10, &paths.DefaultPartialFileHandler{})
+			stor := paths.NewRemote(lstor, si, http.Header(sa), 10, &paths.DefaultPartialFileHandler{}, "")
 
 			smgr, err := sealer.New(ctx, lstor, stor, lr, si, config.SealerConfig{
 				ParallelFetchLimit:       10,
-				AllowAddPiece:            true,
-				AllowPreCommit1:          true,
-				AllowPreCommit2:          true,
-				AllowCommit:              true,
-				AllowUnseal:              true,
-				AllowReplicaUpdate:       true,
-				AllowProveReplicaUpdate2: true,
-				AllowRegenSectorKey:      true,
+				AllowAddPiece:            false,
+				AllowPreCommit1:          false,
+				AllowPreCommit2:          false,
+				AllowCommit:              false,
+				AllowUnseal:              false,
+				AllowReplicaUpdate:       false,
+				AllowProveReplicaUpdate2: false,
+				AllowRegenSectorKey:      false,
 			}, config.ProvingConfig{}, wsts, smsts)
+
 			if err != nil {
 				return err
 			}

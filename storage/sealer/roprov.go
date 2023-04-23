@@ -5,6 +5,7 @@ import (
 
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/storage/paths"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
@@ -35,4 +36,8 @@ func (l *readonlyProvider) AcquireSector(ctx context.Context, id storiface.Secto
 	p, _, err := l.stor.AcquireSector(ctx, id, existing, allocate, sealing, storiface.AcquireMove)
 
 	return p, cancel, err
+}
+
+func (l *readonlyProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
+	return l.stor.DiscoverSectorStore(ctx, id)
 }
