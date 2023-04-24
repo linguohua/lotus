@@ -1,11 +1,5 @@
 package sealer
 
-import (
-	"math"
-
-	"github.com/filecoin-project/lotus/storage/sealer/storiface"
-)
-
 func NewSpreadAssigner(queued bool) Assigner {
 	return &AssignerCommon{
 		WindowSel: SpreadWS(queued),

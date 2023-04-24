@@ -2,15 +2,12 @@ package sealer
 
 import (
 	"context"
-	"errors"
 	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/filecoin-project/lotus/storage/paths"
@@ -88,22 +85,22 @@ func (ps *poStScheduler) Schedule(ctx context.Context, primary bool, spt abi.Reg
 	}
 
 	// Get workers by resource
-	canDo, candidates := ps.readyWorkers(spt)
-	for !canDo {
-		//if primary is true, it must be dispatched to a worker
-		if primary {
-			ps.cond.Wait()
-			canDo, candidates = ps.readyWorkers(spt)
-		} else {
-			return xerrors.Errorf("can't find %s post worker", ps.postType)
-		}
-	}
+	// canDo, candidates := ps.readyWorkers(spt)
+	// for !canDo {
+	// 	//if primary is true, it must be dispatched to a worker
+	// 	if primary {
+	// 		ps.cond.Wait()
+	// 		canDo, candidates = ps.readyWorkers(spt)
+	// 	} else {
+	// 		return xerrors.Errorf("can't find %s post worker", ps.postType)
+	// 	}
+	// }
 
-	defer func() {
-		if ps.cond != nil {
-			ps.cond.Broadcast()
-		}
-	}()
+	// defer func() {
+	// 	if ps.cond != nil {
+	// 		ps.cond.Broadcast()
+	// 	}
+	// }()
 
 	var rpcErrs error
 
