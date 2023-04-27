@@ -172,8 +172,13 @@ func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []st
 }
 
 func (st *Local) OpenPath(ctx context.Context, p string) error {
+	unlock := false
 	st.localLk.Lock()
-	defer st.localLk.Unlock()
+	defer func() {
+		if !unlock {
+			st.localLk.Unlock()
+		}
+	}()
 
 	mb, err := os.ReadFile(filepath.Join(p, MetaFile))
 	if err != nil {
@@ -239,12 +244,16 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 		return xerrors.Errorf("declaring storage in index: %w", err)
 	}
 
+	unlock = true
+	st.localLk.Unlock()
 	if err := st.declareSectors(ctx, p, meta.ID, meta.CanStore, false); err != nil {
 		return err
 	}
 
+	st.localLk.Lock()
 	st.paths[meta.ID] = out
 	st.lookupPathsValid = false
+	st.localLk.Unlock()
 
 	return nil
 }
@@ -274,11 +283,33 @@ func (st *Local) open(ctx context.Context) error {
 		return xerrors.Errorf("getting local storage config: %w", err)
 	}
 
+	errorResult := make([]error, 0, len(cfg.StoragePaths))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for _, path := range cfg.StoragePaths {
-		err := st.OpenPath(ctx, path.Path)
-		if err != nil {
-			return xerrors.Errorf("opening path %s: %w", path.Path, err)
-		}
+		wg.Add(1)
+		xpath := path
+		go func() {
+			defer wg.Done()
+			err := st.OpenPath(ctx, xpath.Path)
+			if err != nil {
+				err = xerrors.Errorf("opening path %s: %w", xpath.Path, err)
+
+				mu.Lock()
+				errorResult = append(errorResult, err)
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	for _, errx := range errorResult {
+		log.Errorf("Local.open failed:%w", errx)
+	}
+
+	if len(errorResult) > 0 {
+		return xerrors.Errorf("Local.open failed with %d paths", len(errorResult))
 	}
 
 	go st.reportHealth(ctx)
