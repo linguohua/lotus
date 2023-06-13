@@ -101,7 +101,7 @@ func (m *Sealing) maybeStartSealing(ctx statemachine.Context, sector SectorInfo,
 	now := time.Now()
 	st := m.sectorTimers[m.minerSectorID(sector.SectorNumber)]
 	if st != nil {
-		if !st.Stop() && len(sector.Pieces) > 0 { // timer expired, SectorStartPacking was/is being sent
+		if !st.Stop() && sector.hasDeals() { // timer expired, SectorStartPacking was/is being sent
 			// we send another SectorStartPacking in case one was sent in the handleAddPiece state
 			log.Infow("starting to seal deal sector", "trigger", "wait-timeout")
 			return true, ctx.Send(SectorStartPacking{})
@@ -118,13 +118,13 @@ func (m *Sealing) maybeStartSealing(ctx statemachine.Context, sector SectorInfo,
 		return false, xerrors.Errorf("getting per-sector deal limit: %w", err)
 	}
 
-	if len(sector.Pieces) > 0 && len(sector.dealIDs()) >= maxDeals {
+	if len(sector.dealIDs()) >= maxDeals {
 		// can't accept more deals
 		log.Infow("starting to seal deal sector", "trigger", "maxdeals")
 		return true, ctx.Send(SectorStartPacking{})
 	}
 
-	if used.Padded() == abi.PaddedPieceSize(ssize) {
+	if used.Padded() == abi.PaddedPieceSize(ssize) && sector.hasDeals() {
 		// sector full
 		log.Infow("starting to seal deal sector", "trigger", "filled")
 		return true, ctx.Send(SectorStartPacking{})
@@ -171,14 +171,14 @@ func (m *Sealing) maybeStartSealing(ctx statemachine.Context, sector SectorInfo,
 			sealTime = dealSafeSealTime
 		}
 
-		if now.After(sealTime) && len(sector.Pieces) > 0 {
+		if now.After(sealTime) && sector.hasDeals() {
 			log.Infow("starting to seal deal sector", "trigger", "wait-timeout", "creation", sector.CreationTime)
 			return true, ctx.Send(SectorStartPacking{})
 		}
 
 		m.sectorTimers[m.minerSectorID(sector.SectorNumber)] = time.AfterFunc(sealTime.Sub(now), func() {
 			log.Infow("starting to seal deal sector", "trigger", "wait-timer")
-			if len(sector.Pieces) > 0 {
+			if sector.hasDeals() {
 				if err := ctx.Send(SectorStartPacking{}); err != nil {
 					log.Errorw("sending SectorStartPacking event failed", "error", err)
 				}
@@ -884,6 +884,15 @@ func (m *Sealing) StartPackingSector(sid abi.SectorNumber) error {
 	m.startupWait.Wait()
 
 	log.Infow("starting to seal deal sector", "sector", sid, "trigger", "user")
+	ss, err := m.GetSectorInfo(sid)
+	if err != nil {
+		return err
+	}
+
+	if !ss.hasDeals() {
+		return xerrors.Errorf("no deal with sector %v", sid)
+	}
+
 	return m.sectors.Send(uint64(sid), SectorStartPacking{})
 }
 
