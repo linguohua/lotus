@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hashicorp/go-multierror"
 
 	"golang.org/x/xerrors"
 
@@ -143,23 +142,23 @@ func (ps *poStScheduler) readyWorkers(spt abi.RegisteredSealProof) (bool, []cand
 	var accepts []candidateWorker
 
 	//if the gpus of the worker are insufficient or it's disabled, it cannot be scheduled
-	for wid, wr := range ps.workers {
-		needRes := wr.Info.Resources.ResourceSpec(spt, ps.postType)
-
-		if !wr.Enabled {
-			log.Debugf("sched: not scheduling on PoSt-worker %s, worker disabled", wid)
-			continue
-		}
-
-		if !wr.active.CanHandleRequest(uuid.UUID{}, ps.postType.SealTask(spt), needRes, wid, "post-readyWorkers", wr.Info) {
-			continue
-		}
-
-		accepts = append(accepts, candidateWorker{
-			id:  wid,
-			res: needRes,
-		})
-	}
+	//for wid, wr := range ps.workers {
+	//	needRes := wr.Info.Resources.ResourceSpec(spt, ps.postType)
+	//
+	//	if !wr.Enabled {
+	//		log.Debugf("sched: not scheduling on PoSt-worker %s, worker disabled", wid)
+	//		continue
+	//	}
+	//
+	//	if !wr.active.CanHandleRequest(uuid.UUID{}, ps.postType.SealTask(spt), needRes, wid, "post-readyWorkers", wr.Info) {
+	//		continue
+	//	}
+	//
+	//	accepts = append(accepts, candidateWorker{
+	//		id:  wid,
+	//		res: needRes,
+	//	})
+	//}
 
 	// todo: round robin or something
 	rand.Shuffle(len(accepts), func(i, j int) {
