@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
