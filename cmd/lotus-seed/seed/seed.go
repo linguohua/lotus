@@ -49,7 +49,7 @@ func PreSeal(maddr address.Address, spt abi.RegisteredSealProof, offset abi.Sect
 		Root: sbroot,
 	}
 
-	sb, err := ffiwrapper.New(sbfs)
+	sb, err := ffiwrapper.New(sbfs, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -163,7 +163,7 @@ func presealSector(sb *ffiwrapper.Sealer, sbfs *basicfs.Provider, sid storiface.
 		return nil, xerrors.Errorf("commit: %w", err)
 	}
 
-	if err := sb.FinalizeSector(context.TODO(), sid); err != nil {
+	if err := sb.FinalizeSector(context.TODO(), sid, nil); err != nil {
 		return nil, xerrors.Errorf("trim cache: %w", err)
 	}
 

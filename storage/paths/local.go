@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -39,9 +40,15 @@ type Local struct {
 	index        SectorIndex
 	urls         []string
 
-	paths map[storiface.ID]*path
+	paths             map[storiface.ID]*path
+	lookupPathsCached []*cpath
+	lookupPathsValid  bool
 
 	localLk sync.RWMutex
+	groupID string
+	role    string
+
+	finalizeBandwidth string
 }
 
 type path struct {
@@ -50,6 +57,14 @@ type path struct {
 
 	reserved     int64
 	reservations map[abi.SectorID]storiface.SectorFileType
+}
+
+type cpath struct {
+	id       storiface.ID
+	weight   uint64
+	canStore bool
+
+	p *path
 }
 
 func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
@@ -129,26 +144,41 @@ func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
 	return stat, err
 }
 
+// lingh: sector path
 func (p *path) sectorPath(sid abi.SectorID, fileType storiface.SectorFileType) string {
 	return filepath.Join(p.local, fileType.String(), storiface.SectorName(sid))
 }
 
 type URLs []string
 
-func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []string) (*Local, error) {
+func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []string, role string, groupID string) (*Local, error) {
 	l := &Local{
 		localStorage: newCachedLocalStorage(ls),
 		index:        index,
 		urls:         urls,
 
 		paths: map[storiface.ID]*path{},
+
+		role:    role,
+		groupID: groupID,
 	}
+
+	l.finalizeBandwidth = os.Getenv("YOUZHOU_FINALIZE_BANDWIDTH")
+	if l.finalizeBandwidth != "" {
+		log.Warnf("Local use finalize bandwidth limit:%s", l.finalizeBandwidth)
+	}
+
 	return l, l.open(ctx)
 }
 
 func (st *Local) OpenPath(ctx context.Context, p string) error {
+	unlock := false
 	st.localLk.Lock()
-	defer st.localLk.Unlock()
+	defer func() {
+		if !unlock {
+			st.localLk.Unlock()
+		}
+	}()
 
 	mb, err := os.ReadFile(filepath.Join(p, MetaFile))
 	if err != nil {
@@ -165,6 +195,9 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 	}
 
 	// TODO: Check existing / dedupe
+	if meta.GroupID != st.groupID {
+		log.Errorf("local storage group id %s != %s (worker group id)", meta.GroupID, st.groupID)
+	}
 
 	out := &path{
 		local: p,
@@ -179,9 +212,13 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 		return err
 	}
 
-	err = st.index.StorageAttach(ctx, storiface.StorageInfo{
+	if meta.CanSeal && meta.MaxSealingSectors < 1 {
+		meta.MaxSealingSectors = 1
+	}
+
+	sinfo := storiface.StorageInfo{
 		ID:         meta.ID,
-		URLs:       st.urls,
+		URLs:       []string{p}, // use local path as URL
 		Weight:     meta.Weight,
 		MaxStorage: meta.MaxStorage,
 		CanSeal:    meta.CanSeal,
@@ -190,16 +227,33 @@ func (st *Local) OpenPath(ctx context.Context, p string) error {
 		AllowTo:    meta.AllowTo,
 		AllowTypes: meta.AllowTypes,
 		DenyTypes:  meta.DenyTypes,
-	}, fst)
+
+		GroupID:           meta.GroupID,
+		MaxSealingSectors: meta.MaxSealingSectors,
+	}
+
+	if st.role == "miner" && sinfo.CanSeal {
+		sinfo.CanSeal = false
+		log.Warnf("miner local stores should not can-seal, rewirte to false, %s", p)
+	}
+
+	log.Infof("local stores call remote index StorageAttach with:%+v", sinfo)
+	err = st.index.StorageAttach(ctx, sinfo, fst)
+
 	if err != nil {
 		return xerrors.Errorf("declaring storage in index: %w", err)
 	}
 
+	unlock = true
+	st.localLk.Unlock()
 	if err := st.declareSectors(ctx, p, meta.ID, meta.CanStore, false); err != nil {
 		return err
 	}
 
+	st.localLk.Lock()
 	st.paths[meta.ID] = out
+	st.lookupPathsValid = false
+	st.localLk.Unlock()
 
 	return nil
 }
@@ -229,11 +283,33 @@ func (st *Local) open(ctx context.Context) error {
 		return xerrors.Errorf("getting local storage config: %w", err)
 	}
 
+	errorResult := make([]error, 0, len(cfg.StoragePaths))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for _, path := range cfg.StoragePaths {
-		err := st.OpenPath(ctx, path.Path)
-		if err != nil {
-			return xerrors.Errorf("opening path %s: %w", path.Path, err)
-		}
+		wg.Add(1)
+		xpath := path
+		go func() {
+			defer wg.Done()
+			err := st.OpenPath(ctx, xpath.Path)
+			if err != nil {
+				err = xerrors.Errorf("opening path %s: %w", xpath.Path, err)
+
+				mu.Lock()
+				errorResult = append(errorResult, err)
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	for _, errx := range errorResult {
+		log.Errorf("Local.open failed:%w", errx)
+	}
+
+	if len(errorResult) > 0 {
+		return xerrors.Errorf("Local.open failed with %d paths", len(errorResult))
 	}
 
 	go st.reportHealth(ctx)
@@ -244,6 +320,8 @@ func (st *Local) open(ctx context.Context) error {
 func (st *Local) Redeclare(ctx context.Context, filterId *storiface.ID, dropMissingDecls bool) error {
 	st.localLk.Lock()
 	defer st.localLk.Unlock()
+
+	st.lookupPathsValid = false
 
 	for id, p := range st.paths {
 		mb, err := os.ReadFile(filepath.Join(p.local, MetaFile))
@@ -269,9 +347,16 @@ func (st *Local) Redeclare(ctx context.Context, filterId *storiface.ID, dropMiss
 			continue
 		}
 
+		if meta.CanSeal && meta.MaxSealingSectors < 1 {
+			meta.MaxSealingSectors = 1
+		}
+
 		err = st.index.StorageAttach(ctx, storiface.StorageInfo{
+			GroupID:           meta.GroupID,
+			MaxSealingSectors: meta.MaxSealingSectors,
+
 			ID:         id,
-			URLs:       st.urls,
+			URLs:       []string{p.local}, // use local path as URL
 			Weight:     meta.Weight,
 			MaxStorage: meta.MaxStorage,
 			CanSeal:    meta.CanSeal,
@@ -312,10 +397,16 @@ func (st *Local) declareSectors(ctx context.Context, p string, id storiface.ID, 
 	}
 
 	for _, t := range storiface.PathTypes {
-		ents, err := os.ReadDir(filepath.Join(p, t.String()))
+		pp := filepath.Join(p, t.String())
+		ents, err := os.ReadDir(pp)
 		if err != nil {
 			if os.IsNotExist(err) {
 				if err := os.MkdirAll(filepath.Join(p, t.String()), 0755); err != nil { // nolint
+					if t.IsForUpdate() {
+						// lingh: ignore update dir
+						continue
+					}
+
 					return xerrors.Errorf("openPath mkdir '%s': %w", filepath.Join(p, t.String()), err)
 				}
 
@@ -324,6 +415,7 @@ func (st *Local) declareSectors(ctx context.Context, p string, id storiface.ID, 
 			return xerrors.Errorf("listing %s: %w", filepath.Join(p, t.String()), err)
 		}
 
+		log.Debugf("Local.declareSectors into path:%s, storage id:%s", pp, id)
 		for _, ent := range ents {
 			if ent.Name() == FetchTempSubdir {
 				continue
@@ -331,13 +423,16 @@ func (st *Local) declareSectors(ctx context.Context, p string, id storiface.ID, 
 
 			sid, err := storiface.ParseSectorID(ent.Name())
 			if err != nil {
-				return xerrors.Errorf("parse sector id %s: %w", ent.Name(), err)
+				// return xerrors.Errorf("parse sector id %s: %w", ent.Name(), err)
+				continue
 			}
 
 			delete(indexed, storiface.Decl{
 				SectorID:       sid,
 				SectorFileType: t,
 			})
+
+			log.Debugf("Local.declareSectors declare sector id:%d", sid)
 
 			if err := st.index.StorageDeclareSector(ctx, id, sid, t, primary); err != nil {
 				return xerrors.Errorf("declare sector %d(t:%d) -> %s: %w", sid, t, id, err)
@@ -463,100 +558,136 @@ func (st *Local) AcquireSector(ctx context.Context, sid storiface.SectorRef, exi
 	if existing|allocate != existing^allocate {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")
 	}
+	paths := storiface.SectorPaths{}
+	stores := storiface.SectorPaths{}
+	groupID := st.groupID
+	if pathType != storiface.PathSealing {
+		//return paths, stores, xerrors.Errorf("-lin- this version only supply remote.AcquireSector with sealing type:%s", pathType)
+		groupID = "" // use empty groupID to alloc store type storage
+	}
 
-	ssize, err := sid.ProofType.SectorSize()
+	// get the local path, lock storage by sector
+	sis, err := st.index.TryBindSector2SealStorage(ctx, existing, pathType, sid.ID, groupID)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
 
-	st.localLk.RLock()
-	defer st.localLk.RUnlock()
-
-	var out storiface.SectorPaths
-	var storageIDs storiface.SectorPaths
-
-	for _, fileType := range storiface.PathTypes {
-		if fileType&existing == 0 {
-			continue
+	if len(sis) == 1 {
+		si := &sis[0]
+		loclpath := si.URLs[0]
+		for _, fileType := range storiface.PathTypes {
+			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(sid.ID))
+			storiface.SetPathByType(&paths, fileType, dest)
+			storiface.SetPathByType(&stores, fileType, string(si.ID))
 		}
+	} else {
+		sealS := &sis[1]
+		for j, fileType := range storiface.PathTypes {
+			si := &sis[j] // it will be ok
+			if si.ID == "" {
+				si = sealS
+			}
 
-		si, err := st.index.StorageFindSector(ctx, sid.ID, fileType, ssize, false)
-		if err != nil {
-			log.Warnf("finding existing sector %d(t:%d) failed: %+v", sid, fileType, err)
-			continue
-		}
-
-		for _, info := range si {
-			p, ok := st.paths[info.ID]
-			if !ok {
+			if len(si.URLs) == 0 {
 				continue
 			}
 
-			if p.local == "" { // TODO: can that even be the case?
-				continue
-			}
+			loclpath := si.URLs[0]
+			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(sid.ID))
+			storiface.SetPathByType(&paths, fileType, dest)
 
-			spath := p.sectorPath(sid.ID, fileType)
-			storiface.SetPathByType(&out, fileType, spath)
-			storiface.SetPathByType(&storageIDs, fileType, string(info.ID))
-
-			existing ^= fileType
-			break
+			storiface.SetPathByType(&stores, fileType, string(si.ID))
 		}
 	}
 
-	for _, fileType := range storiface.PathTypes {
-		if fileType&allocate == 0 {
-			continue
+	return paths, stores, nil
+}
+
+func (st *Local) lookupPaths() []*cpath {
+	st.localLk.Lock()
+	defer st.localLk.Unlock()
+
+	//var best string
+	//var bestID storiface.ID
+	//
+	//for _, si := range sis {
+	//	p, ok := st.paths[si.ID]
+	//	if !ok {
+
+	ctx := context.TODO()
+	if !st.lookupPathsValid {
+		cached := make([]*cpath, 0, len(st.paths))
+		for id, p := range st.paths {
+			si, err := st.index.StorageInfo(ctx, id)
+			if err != nil {
+				log.Errorf("get storage info for %s: %w", id, err)
+				continue
+			}
+			cp := &cpath{
+				id:       id,
+				weight:   si.Weight,
+				canStore: si.CanStore,
+				p:        p,
+			}
+
+			cached = append(cached, cp)
 		}
 
-		sis, err := st.index.StorageBestAlloc(ctx, fileType, ssize, pathType)
-		if err != nil {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("finding best storage for allocating : %w", err)
-		}
+		sort.Slice(cached, func(i int, j int) bool {
+			a := cached[i]
+			b := cached[j]
 
-		var best string
-		var bestID storiface.ID
-
-		for _, si := range sis {
-			p, ok := st.paths[si.ID]
-			if !ok {
-				continue
+			if a.canStore && !b.canStore {
+				return true
 			}
 
-			if p.local == "" { // TODO: can that even be the case?
-				continue
+			if a.weight > b.weight {
+				return true
 			}
 
-			if (pathType == storiface.PathSealing) && !si.CanSeal {
-				continue
-			}
+			return false
+		})
 
-			if (pathType == storiface.PathStorage) && !si.CanStore {
-				continue
-			}
-
-			if !fileType.Allowed(si.AllowTypes, si.DenyTypes) {
-				continue
-			}
-
-			// TODO: Check free space
-
-			best = p.sectorPath(sid.ID, fileType)
-			bestID = si.ID
-			break
-		}
-
-		if best == "" {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("couldn't find a suitable path for a sector")
-		}
-
-		storiface.SetPathByType(&out, fileType, best)
-		storiface.SetPathByType(&storageIDs, fileType, string(bestID))
-		allocate ^= fileType
+		st.lookupPathsCached = cached
+		st.lookupPathsValid = true
 	}
 
-	return out, storageIDs, nil
+	return st.lookupPathsCached
+}
+
+func (st *Local) DiscoverSectorStore(ctx context.Context, sector abi.SectorID) error {
+	storeIDs, err := st.index.StorageFindSector(ctx, sector, storiface.FTSealed, abi.SectorSize(0), false)
+	if err != nil {
+		return err
+	}
+
+	if len(storeIDs) > 0 {
+		// already found
+		return nil
+	}
+
+	// find in path, redeclare it
+	sectorName := storiface.SectorName(sector)
+	log.Infof("Local.DiscoverSectorStore try to found sector id:%s", sectorName)
+
+	t := storiface.FTSealed | storiface.FTCache
+	for _, cp := range st.lookupPaths() {
+		// only check sealed file, assume cached file under the same directory
+		pathoo := filepath.Join(cp.p.local, storiface.FTSealed.String(), sectorName)
+		log.Infof("Local.DiscoverSectorStore try to found sector %s", pathoo)
+		_, err = os.Stat(pathoo)
+		if err == nil {
+			log.Infof("Local.DiscoverSectorStore re-declare sector %s", pathoo)
+			if err := st.index.StorageDeclareSector(ctx, cp.id, sector, t, cp.canStore); err != nil {
+				return xerrors.Errorf("DiscoverSectorStore declare sector %s(t:%d) -> %s: %w", sectorName, t, cp.id, err)
+			}
+
+			// found
+			return nil
+		}
+	}
+
+	return xerrors.Errorf("DiscoverSectorStore can't found sector:%s", sectorName)
 }
 
 func (st *Local) Local(ctx context.Context) ([]storiface.StoragePath, error) {
@@ -684,10 +815,13 @@ func (st *Local) MoveStorage(ctx context.Context, s storiface.SectorRef, types s
 		return xerrors.Errorf("acquire dest storage: %w", err)
 	}
 
-	src, srcIds, err := st.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+	// lingh: PathSealing ->  PathStorage
+	src, srcIds, err := st.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathSealing, storiface.AcquireMove)
 	if err != nil {
 		return xerrors.Errorf("acquire src storage: %w", err)
 	}
+
+	pathNeedRemove := make([]string, 0, len(storiface.PathTypes))
 
 	for _, fileType := range storiface.PathTypes {
 		if fileType&types == 0 {
@@ -714,22 +848,51 @@ func (st *Local) MoveStorage(ctx context.Context, s storiface.SectorRef, types s
 			continue
 		}
 
-		log.Debugf("moving %v(%d) to storage: %s(se:%t; st:%t) -> %s(se:%t; st:%t)", s, fileType, sst.ID, sst.CanSeal, sst.CanStore, dst.ID, dst.CanSeal, dst.CanStore)
+		log.Infof("moving %v(%d) to storage: %s(se:%t; st:%t) -> %s(se:%t; st:%t)", s, fileType, sst.ID, sst.CanSeal, sst.CanStore, dst.ID, dst.CanSeal, dst.CanStore)
 
-		if err := st.index.StorageDropSector(ctx, storiface.ID(storiface.PathByType(srcIds, fileType)), s.ID, fileType); err != nil {
-			return xerrors.Errorf("dropping source sector from index: %w", err)
+		//if err := st.index.StorageDropSector(ctx, storiface.ID(storiface.PathByType(srcIds, fileType)), s.ID, fileType); err != nil {
+		//	return xerrors.Errorf("dropping source sector from index: %w", err)
+		//}
+
+		srcPath := storiface.PathByType(src, fileType)
+		if st.finalizeBandwidth != "" {
+			err = utilCopy2(srcPath, storiface.PathByType(dest, fileType), st.finalizeBandwidth)
+		} else {
+			err = utilCopy(srcPath, storiface.PathByType(dest, fileType))
 		}
 
-		if err := move(storiface.PathByType(src, fileType), storiface.PathByType(dest, fileType)); err != nil {
+		if err != nil {
 			// TODO: attempt some recovery (check if src is still there, re-declare)
 			return xerrors.Errorf("moving sector %v(%d): %w", s, fileType, err)
 		}
 
-		if err := st.index.StorageDeclareSector(ctx, storiface.ID(storiface.PathByType(destIds, fileType)), s.ID, fileType, true); err != nil {
-			return xerrors.Errorf("declare sector %d(t:%d) -> %s: %w", s, fileType, storiface.ID(storiface.PathByType(destIds, fileType)), err)
+		//if err := st.index.StorageDeclareSector(ctx, storiface.ID(storiface.PathByType(destIds, fileType)), s.ID, fileType, true); err != nil {
+		//	return xerrors.Errorf("declare sector %d(t:%d) -> %s: %w", s, fileType, storiface.ID(storiface.PathByType(destIds, fileType)), err)
+		//}
+
+		pathNeedRemove = append(pathNeedRemove, srcPath)
+	}
+
+	for _, pathStr := range pathNeedRemove {
+		if err := utilRemove(pathStr); err != nil {
+			// TODO: attempt some recovery (check if src is still there, re-declare)
+			log.Warnf("moving sector: remove path %s failed: %v", s, pathStr, err)
 		}
 	}
 
+	for _, fileType := range storiface.PathTypes {
+		if fileType&types == 0 {
+			continue
+		}
+
+		if err := st.index.StorageDropSector(ctx, storiface.ID(storiface.PathByType(srcIds, fileType)), s.ID, fileType); err != nil {
+			log.Errorf("dropping source sector from index: %w", err)
+		}
+
+		if err := st.index.StorageDeclareSector(ctx, storiface.ID(storiface.PathByType(destIds, fileType)), s.ID, fileType, true); err != nil {
+			log.Errorf("declare sector %d(t:%d) -> %s: %w", s, fileType, storiface.ID(storiface.PathByType(destIds, fileType)), err)
+		}
+	}
 	st.reportStorage(ctx) // report space use changes
 
 	return nil

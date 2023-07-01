@@ -8,14 +8,12 @@ import (
 	"math"
 	"sort"
 
+	abi "github.com/filecoin-project/go-state-types/abi"
+	api "github.com/filecoin-project/lotus/api"
+	storiface "github.com/filecoin-project/lotus/storage/sealer/storiface"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
-
-	abi "github.com/filecoin-project/go-state-types/abi"
-
-	api "github.com/filecoin-project/lotus/api"
-	storiface "github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 var _ = xerrors.Errorf
@@ -31,7 +29,7 @@ func (t *SectorInfo) MarshalCBOR(w io.Writer) error {
 
 	cw := cbg.NewCborWriter(w)
 
-	if _, err := cw.Write([]byte{184, 38}); err != nil {
+	if _, err := cw.Write([]byte{184, 40}); err != nil {
 		return err
 	}
 
@@ -331,6 +329,29 @@ func (t *SectorInfo) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
+	// t.SealGroupID (string) (string)
+	if len("SealGroupID") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"SealGroupID\" was too long")
+	}
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("SealGroupID"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("SealGroupID")); err != nil {
+		return err
+	}
+
+	if len(t.SealGroupID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.SealGroupID was too long")
+	}
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.SealGroupID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.SealGroupID)); err != nil {
+		return err
+	}
+
 	// t.TicketEpoch (abi.ChainEpoch) (int64)
 	if len("TicketEpoch") > cbg.MaxLength {
 		return xerrors.Errorf("Value in field \"TicketEpoch\" was too long")
@@ -397,6 +418,22 @@ func (t *SectorInfo) MarshalCBOR(w io.Writer) error {
 		if err := cw.WriteMajorTypeHeader(cbg.MajNegativeInt, uint64(-t.CreationTime-1)); err != nil {
 			return err
 		}
+	}
+
+	// t.HasFinalized (bool) (bool)
+	if len("HasFinalized") > cbg.MaxLength {
+		return xerrors.Errorf("Value in field \"HasFinalized\" was too long")
+	}
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("HasFinalized"))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string("HasFinalized")); err != nil {
+		return err
+	}
+
+	if err := cbg.WriteBool(w, t.HasFinalized); err != nil {
+		return err
 	}
 
 	// t.SectorNumber (abi.SectorNumber) (uint64)
@@ -1159,6 +1196,17 @@ func (t *SectorInfo) UnmarshalCBOR(r io.Reader) (err error) {
 
 				t.SectorType = abi.RegisteredSealProof(extraI)
 			}
+			// t.SealGroupID (string) (string)
+		case "SealGroupID":
+
+			{
+				sval, err := cbg.ReadString(cr)
+				if err != nil {
+					return err
+				}
+
+				t.SealGroupID = string(sval)
+			}
 			// t.TicketEpoch (abi.ChainEpoch) (int64)
 		case "TicketEpoch":
 			{
@@ -1232,6 +1280,24 @@ func (t *SectorInfo) UnmarshalCBOR(r io.Reader) (err error) {
 				}
 
 				t.CreationTime = int64(extraI)
+			}
+			// t.HasFinalized (bool) (bool)
+		case "HasFinalized":
+
+			maj, extra, err = cr.ReadHeader()
+			if err != nil {
+				return err
+			}
+			if maj != cbg.MajOther {
+				return fmt.Errorf("booleans must be major type 7")
+			}
+			switch extra {
+			case 20:
+				t.HasFinalized = false
+			case 21:
+				t.HasFinalized = true
+			default:
+				return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 			}
 			// t.SectorNumber (abi.SectorNumber) (uint64)
 		case "SectorNumber":
