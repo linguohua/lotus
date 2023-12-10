@@ -7,13 +7,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"math/bits"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"syscall"
@@ -40,11 +39,24 @@ import (
 
 var _ storiface.Storage = &Sealer{}
 
-func New(sectors SectorProvider) (*Sealer, error) {
-	sb := &Sealer{
-		sectors: sectors,
+type SealerCGOExt struct {
+	MerkleTreecache string
+	CCfunc          cacheClearFunc
+	IsCC            bool
+}
 
-		stopping: make(chan struct{}),
+func New(sectors SectorProvider, ext *SealerCGOExt) (*Sealer, error) {
+	log.Infof("sealer_cgo New with ext:%v", ext)
+	if ext == nil {
+		ext = &SealerCGOExt{IsCC: true}
+	}
+
+	sb := &Sealer{
+		sectors:         sectors,
+		merkleTreecache: ext.MerkleTreecache,
+		stopping:        make(chan struct{}),
+		ccfunc:          ext.CCfunc,
+		isCC:            ext.IsCC,
 	}
 
 	return sb, nil
@@ -382,10 +394,17 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storiface.SectorRef, exis
 		pieceCID = paddedCid
 	}
 
-	return abi.PieceInfo{
+	pi := abi.PieceInfo{
 		Size:     pieceSize.Padded(),
 		PieceCID: pieceCID,
-	}, nil
+	}
+
+	v, err := json.Marshal(&pi)
+	if err == nil {
+		log.Info("add piece completed, pieceInfo:\n", string(v))
+	}
+
+	return pi, nil
 }
 
 func (sb *Sealer) pieceCid(spt abi.RegisteredSealProof, in []byte) (cid.Cid, error) {
@@ -834,6 +853,21 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storiface.SectorRef
 		}
 	}
 
+	// lingh: soft link to merkle cache file
+	if sb.merkleTreecache != "" && sb.isCC {
+		_, err := os.Stat(sb.merkleTreecache)
+		if !os.IsNotExist(err) {
+			// exists
+			targetMerkleTreeCache := path.Join(paths.Cache, "sc-02-data-tree-d.dat")
+			err = os.Symlink(sb.merkleTreecache, targetMerkleTreeCache)
+			if err != nil {
+				log.Errorf("sb.SealPreCommit1 Symlink merkleTreecache failed:%v", err)
+			} else {
+				log.Info("sb.SealPreCommit1 link merkleTreecache ok")
+			}
+		}
+	}
+
 	var sum abi.UnpaddedPieceSize
 	for _, piece := range pieces {
 		sum += piece.Size.Unpadded()
@@ -886,15 +920,21 @@ func (sb *Sealer) SealPreCommit2(ctx context.Context, sector storiface.SectorRef
 		return storiface.SectorCids{}, xerrors.Errorf("presealing sector %d (%s): %w", sector.ID.Number, paths.Unsealed, err)
 	}
 
-	ssize, err := sector.ProofType.SectorSize()
-	if err != nil {
-		return storiface.SectorCids{}, xerrors.Errorf("get ssize: %w", err)
-	}
+	//ssize, err := sector.ProofType.SectorSize()
+	//if err != nil {
+	//	return storiface.SectorCids{}, xerrors.Errorf("get ssize: %w", err)
+	//}
+	//
+	//p1odec := map[string]interface{}{}
+	//if err := json.Unmarshal(phase1Out, &p1odec); err != nil {
+	//	return storiface.SectorCids{}, xerrors.Errorf("unmarshaling pc1 output: %w", err)
+	//}
 
-	p1odec := map[string]interface{}{}
-	if err := json.Unmarshal(phase1Out, &p1odec); err != nil {
-		return storiface.SectorCids{}, xerrors.Errorf("unmarshaling pc1 output: %w", err)
-	}
+	//if found {
+	//	ticket, err = base64.StdEncoding.DecodeString(ti.(string))
+	//	if err != nil {
+	//		return storiface.SectorCids{}, xerrors.Errorf("decoding ticket: %w", err)
+	//	}
 
 	ti, found := p1odec["_lotus_SealRandomness"]
 
@@ -939,29 +979,29 @@ func (sb *Sealer) SealPreCommit2(ctx context.Context, sector storiface.SectorRef
 			}
 		}
 
-		for i := 0; i < PC2CheckRounds; i++ {
-			var sd [32]byte
-			_, _ = rand.Read(sd[:])
-
-			_, err := ffi.SealCommitPhase1(
-				sector.ProofType,
-				sealedCID,
-				unsealedCID,
-				paths.Cache,
-				paths.Sealed,
-				sector.ID.Number,
-				sector.ID.Miner,
-				ticket,
-				sd[:],
-				[]abi.PieceInfo{{Size: abi.PaddedPieceSize(ssize), PieceCID: unsealedCID}},
-			)
-			if err != nil {
-				log.Warn("checking PreCommit failed: ", err)
-				log.Warnf("num:%d tkt:%v seed:%v sealedCID:%v, unsealedCID:%v", sector.ID.Number, ticket, sd[:], sealedCID, unsealedCID)
-
-				return storiface.SectorCids{}, xerrors.Errorf("checking PreCommit failed: %w", err)
-			}
-		}
+		//for i := 0; i < PC2CheckRounds; i++ {
+		//	var sd [32]byte
+		//	_, _ = rand.Read(sd[:])
+		//
+		//	_, err := ffi.SealCommitPhase1(
+		//		sector.ProofType,
+		//		sealedCID,
+		//		unsealedCID,
+		//		paths.Cache,
+		//		paths.Sealed,
+		//		sector.ID.Number,
+		//		sector.ID.Miner,
+		//		ticket,
+		//		sd[:],
+		//		[]abi.PieceInfo{{Size: abi.PaddedPieceSize(ssize), PieceCID: unsealedCID}},
+		//	)
+		//	if err != nil {
+		//		log.Warn("checking PreCommit failed: ", err)
+		//		log.Warnf("num:%d tkt:%v seed:%v sealedCID:%v, unsealedCID:%v", sector.ID.Number, ticket, sd[:], sealedCID, unsealedCID)
+		//
+		//		return storiface.SectorCids{}, xerrors.Errorf("checking PreCommit failed: %w", err)
+		//	}
+		//}
 	}
 
 	return storiface.SectorCids{
@@ -1129,7 +1169,8 @@ func (sb *Sealer) ReleaseUnsealed(ctx context.Context, sector storiface.SectorRe
 			}
 		}
 
-		paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathStorage)
+		// paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathStorage)
+		paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathSealing)
 		if err != nil {
 			return xerrors.Errorf("acquiring sector cache path: %w", err)
 		}
@@ -1172,15 +1213,22 @@ func (sb *Sealer) ReleaseUnsealed(ctx context.Context, sector storiface.SectorRe
 	return nil
 }
 
-func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef) error {
+func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	ssize, err := sector.ProofType.SectorSize()
 	if err != nil {
 		return err
 	}
 
-	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
+		return err
+	}
+
+	// lingh: clear storage cache, not seal cache?
+	//paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathSealing)
+
 	if err != nil {
-		return xerrors.Errorf("acquiring sector cache path: %w", err)
+		return xerrors.Errorf("FinalizeSector: acquiring sector cache path: %w", err)
 	}
 	defer done()
 
@@ -1191,7 +1239,28 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef
 		}
 	}
 
-	return ffi.ClearCache(uint64(ssize), paths.Cache)
+	err = ffi.ClearCache(uint64(ssize), paths.Cache)
+	if err != nil {
+		log.Warnf("FinalizeSector: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
+	}
+
+	// lingh: remove unsealed
+	if len(keepUnsealed) == 0 {
+		err = os.Remove(paths.Unsealed)
+		if err != nil {
+			log.Warnf("FinalizeSector: Remove unsealed file with error:%v", err)
+		}
+	}
+
+	// lingh: remove 's-t0%d-%d.txt' if exist
+	txt := paths.Sealed + ".txt"
+	err = os.Remove(txt)
+	if err != nil {
+		log.Debug("FinalizeSector: Remove txt file %s error:%v", txt, err)
+	}
+
+	// ignore clear cache error
+	return nil
 }
 
 // FinalizeSectorInto is like FinalizeSector, but writes finalized sector cache into a new path
@@ -1239,9 +1308,13 @@ func (sb *Sealer) FinalizeSectorInto(ctx context.Context, sector storiface.Secto
 	return ffi.ClearCache(uint64(ssize), dest)
 }
 
-func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) error {
+func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	ssize, err := sector.ProofType.SectorSize()
 	if err != nil {
+		return err
+	}
+
+	if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
 		return err
 	}
 
@@ -1278,6 +1351,7 @@ func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.Se
 	}
 
 	return nil
+
 }
 
 func (sb *Sealer) ReleaseReplicaUpgrade(ctx context.Context, sector storiface.SectorRef) error {

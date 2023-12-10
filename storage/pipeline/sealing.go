@@ -2,6 +2,8 @@ package sealing
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -130,7 +132,9 @@ type Sealing struct {
 	sclk     sync.Mutex
 	legacySc *storedcounter.StoredCounter
 
-	getConfig dtypes.GetSealingConfigFunc
+	getConfig      dtypes.GetSealingConfigFunc
+	recoverMode    bool
+	sealingDisable bool
 }
 
 type openSector struct {
@@ -216,6 +220,12 @@ type pendingPiece struct {
 }
 
 func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events Events, maddr address.Address, ds datastore.Batching, sealer sealer.SectorManager, verif storiface.Verifier, prov storiface.Prover, pcp PreCommitPolicy, gc dtypes.GetSealingConfigFunc, journal journal.Journal, addrSel AddressSelector) *Sealing {
+	recoverMode := false
+	if os.Getenv("YOUZHOU_RECOVER_MODE") == "true" {
+		log.Warn("Miner sealing in recover mode")
+		recoverMode = true
+	}
+	sealingDisable := os.Getenv("YOUZHOU_SEALING_DISABLE") == "true"
 	s := &Sealing{
 		Api:      api,
 		DealInfo: &CurrentDealInfoManager{api},
@@ -254,6 +264,9 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 			bySector: map[abi.SectorID]SectorState{},
 			byState:  map[SectorState]int64{},
 		},
+
+		recoverMode:    recoverMode,
+		sealingDisable: sealingDisable,
 	}
 
 	s.notifee = func(before, after SectorInfo) {
@@ -270,12 +283,17 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 
 	s.startupWait.Add(1)
 
+	// lingh:SectorInfo pass through all state handler
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
 
 	return s
 }
 
 func (m *Sealing) Run(ctx context.Context) {
+	if m.sealingDisable {
+		return
+	}
+
 	if err := m.restartSectors(ctx); err != nil {
 		log.Errorf("failed load sector states: %+v", err)
 	}
@@ -371,6 +389,14 @@ func (m *Sealing) Address() address.Address {
 }
 
 func getDealPerSectorLimit(size abi.SectorSize) (int, error) {
+	msd := os.Getenv("LOTUS_SEALING_MAXDEALS_PER_SECTOR")
+	if len(msd) > 0 {
+		msdi, err := strconv.Atoi(msd)
+		if err == nil {
+			return msdi, nil
+		}
+	}
+
 	if size < 64<<30 {
 		return 256, nil
 	}
