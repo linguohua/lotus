@@ -632,6 +632,7 @@ var runCmd = &cli.Command{
 			newAddress = host + ":" + port
 		}
 
+		groupID := cctx.String("group")
 		localStore, err := paths.NewLocal(ctx, lr, nodeApi, []string{"http://" + newAddress + "/remote"}, role, groupID)
 		if err != nil {
 			return err
