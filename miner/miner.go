@@ -652,78 +652,78 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tProof := build.Clock.Now()
 	// delay more time to wait
-	if m.createBlockDeadline > 0 {
-		btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)), 0)
-		now := build.Clock.Now()
-		deadline := time.Second * time.Duration(uint64(m.createBlockDeadline))
-		diff := now.Sub(btime)
+	// if m.createBlockDeadline > 0 {
+	// 	btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)), 0)
+	// 	now := build.Clock.Now()
+	// 	deadline := time.Second * time.Duration(uint64(m.createBlockDeadline))
+	// 	diff := now.Sub(btime)
 
-		if diff < deadline {
-			if base.NullRounds == 0 {
-				m.niceSleep(deadline - diff)
-			} else {
-				const sleepStep = 2
-				// detect first parent block
-				for {
-					// found! return to upper to re-do mineOne again
-					newBase, err := m.GetBestMiningCandidate(ctx)
-					if err == nil {
-						oheight := base.TipSet.Height()
-						nheight := newBase.TipSet.Height()
-						if oheight != nheight {
-							log.Warnf("rebase, detect total new base %d != %d, need redo mineOne", oheight, nheight)
-							err = fmt.Errorf("AABB")
-							return nil, err
-						}
-					}
+	// 	if diff < deadline {
+	// 		if base.NullRounds == 0 {
+	// 			m.niceSleep(deadline - diff)
+	// 		} else {
+	// 			const sleepStep = 2
+	// 			// detect first parent block
+	// 			for {
+	// 				// found! return to upper to re-do mineOne again
+	// 				newBase, err := m.GetBestMiningCandidate(ctx)
+	// 				if err == nil {
+	// 					oheight := base.TipSet.Height()
+	// 					nheight := newBase.TipSet.Height()
+	// 					if oheight != nheight {
+	// 						log.Warnf("rebase, detect total new base %d != %d, need redo mineOne", oheight, nheight)
+	// 						err = fmt.Errorf("AABB")
+	// 						return nil, err
+	// 					}
+	// 				}
 
-					now = build.Clock.Now()
-					diff = now.Sub(btime)
-					if (diff + (time.Second * sleepStep)) >= deadline {
-						// timeout
-						break
-					}
+	// 				now = build.Clock.Now()
+	// 				diff = now.Sub(btime)
+	// 				if (diff + (time.Second * sleepStep)) >= deadline {
+	// 					// timeout
+	// 					break
+	// 				}
 
-					m.niceSleep(time.Second * sleepStep)
-				}
-			}
-		}
-	}
+	// 				m.niceSleep(time.Second * sleepStep)
+	// 			}
+	// 		}
+	// 	}
+	// }
 
-	tHardDelay := build.Clock.Now()
-	// check if we have new base
-	oldbase := *base
-	var replaceBase bool = false
-	newBase, err2 := m.GetBestMiningCandidate(ctx)
-	if err2 == nil {
-		oblks := oldbase.TipSet.Blocks()
-		nblks := newBase.TipSet.Blocks()
+	// tHardDelay := build.Clock.Now()
+	// // check if we have new base
+	// oldbase := *base
+	// var replaceBase bool = false
+	// newBase, err2 := m.GetBestMiningCandidate(ctx)
+	// if err2 == nil {
+	// 	oblks := oldbase.TipSet.Blocks()
+	// 	nblks := newBase.TipSet.Blocks()
 
-		oheight := oldbase.TipSet.Height()
-		onull := oldbase.NullRounds
-		nheight := newBase.TipSet.Height()
-		nnull := newBase.NullRounds
-		if len(oblks) != len(nblks) && oheight == nheight && onull == nnull {
-			log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
-			// replace with new base
-			base = newBase
-			replaceBase = true
-		} else if oheight != nheight && (oheight+onull) == (nheight+nnull) {
-			log.Errorf("rebase failed, base totally changed: %d != %d", oheight, nheight)
-		}
-	} else {
-		log.Errorf("mineOne GetBestMiningCandidate error:%v", err2)
-	}
+	// 	oheight := oldbase.TipSet.Height()
+	// 	onull := oldbase.NullRounds
+	// 	nheight := newBase.TipSet.Height()
+	// 	nnull := newBase.NullRounds
+	// 	if len(oblks) != len(nblks) && oheight == nheight && onull == nnull {
+	// 		log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
+	// 		// replace with new base
+	// 		base = newBase
+	// 		replaceBase = true
+	// 	} else if oheight != nheight && (oheight+onull) == (nheight+nnull) {
+	// 		log.Errorf("rebase failed, base totally changed: %d != %d", oheight, nheight)
+	// 	}
+	// } else {
+	// 	log.Errorf("mineOne GetBestMiningCandidate error:%v", err2)
+	// }
 
-	if replaceBase {
-		log.Warnf("rebase, re-compute ticket")
-		ticket, err2 = m.computeTicket(ctx, &rbase, base, mbi)
-		if err2 != nil {
-			log.Errorf("scratching ticket failed for rebase: %w", err2)
-		}
-	}
+	// if replaceBase {
+	// 	log.Warnf("rebase, re-compute ticket")
+	// 	ticket, err2 = m.computeTicket(ctx, &rbase, base, mbi)
+	// 	if err2 != nil {
+	// 		log.Errorf("scratching ticket failed for rebase: %w", err2)
+	// 	}
+	// }
 
-	tHardReplace := build.Clock.Now()
+	// tHardReplace := build.Clock.Now()
 
 	// get pending messages early,
 	msgs, err := m.api.MpoolSelect(ctx, base.TipSet.Key(), ticket.Quality())
@@ -813,8 +813,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		"miner", b.Header.Miner,
 		"parents", parentMiners,
 		"parentTipset", base.TipSet.Key().String(),
-		"tHardDealy ", tHardDelay.Sub(tProof),
-		"tHardReplace ", tHardReplace.Sub(tHardDelay),
+		// "tHardDealy ", tHardDelay.Sub(tProof),
+		// "tHardReplace ", tHardReplace.Sub(tHardDelay),
 		"took", dur)
 
 	if len(m.winReportURL) > 0 {
@@ -824,7 +824,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		wr.Height = uint64(b.Header.Height)
 		wr.Took = fmt.Sprintf("%s", dur)
 		wr.Parents = len(parentMiners)
-		wr.NewBase = replaceBase
+		// wr.NewBase = replaceBase
 		go reportWin(&wr, m.winReportURL)
 	}
 
@@ -835,9 +835,10 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			"tSeed ", tSeed.Sub(tTicket),
 			"tProof ", tProof.Sub(tSeed),
 			"tEquivocateWait ", tEquivocateWait.Sub(tProof),
-			"tHardDealy ", tHardDelay.Sub(tProof),
-			"tHardReplace ", tHardReplace.Sub(tHardDelay),
-			"tPending ", tPending.Sub(tHardReplace),
+			// "tHardDealy ", tHardDelay.Sub(tProof),
+			// "tHardReplace ", tHardReplace.Sub(tHardDelay),
+			// "tPending ", tPending.Sub(tHardReplace),
+			"tPending ", tPending.Sub(tEquivocateWait),
 			"tCreateBlock ", tCreateBlock.Sub(tPending),
 			"sector-number", sectorNumber,
 		)
