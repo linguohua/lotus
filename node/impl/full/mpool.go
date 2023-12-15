@@ -234,6 +234,7 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 
 	// credit goes to zhanfei-wu
 	if a.MpoolAPIExt.UseMinerBalance && (msg.Method == builtin.MethodsMiner.ProveCommitSector ||
+		msg.Method == builtin.MethodsMiner.PreCommitSectorBatch2 ||
 		msg.Method == builtin.MethodsMiner.PreCommitSector ||
 		msg.Method == builtin.MethodsMiner.ProveCommitAggregate ||
 		msg.Method == builtin.MethodsMiner.PreCommitSectorBatch) {
