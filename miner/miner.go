@@ -604,14 +604,14 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		rbase = bvals[len(bvals)-1]
 	}
 
-	ticket, err2 := m.computeTicket(ctx, &rbase, base, mbi)
+	ticket, err2 := m.computeTicket(ctx, &rbase, round, base.TipSet, mbi)
 	if err2 != nil {
 		err = xerrors.Errorf("scratching ticket failed: %w", err2)
 		return nil, err
 	}
 
 	// lingh: how to ensure exactly 5 winners a round?
-	winner, err2 = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
+	winner, err2 = gen.IsRoundWinner(ctx, round, m.address, rbase, mbi, m.api)
 	if err2 != nil {
 		err = xerrors.Errorf("failed to check if we win next round: %w", err2)
 		return nil, err
@@ -629,7 +629,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		return nil, err
 	}
 
-	rand, err2 := lrand.DrawRandomness(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
+	rand, err2 := lrand.DrawRandomnessFromBase(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
 	if err2 != nil {
 		err = xerrors.Errorf("failed to get randomness for winning post: %w", err2)
 		return nil, err
@@ -718,7 +718,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	if replaceBase {
 		log.Warnf("rebase, re-compute ticket")
-		ticket, err2 = m.computeTicket(ctx, &rbase, base, mbi)
+		round = base.TipSet.Height() + base.NullRounds + 1
+		ticket, err2 = m.computeTicket(ctx, &rbase, round, base.TipSet, mbi)
 		if err2 != nil {
 			log.Errorf("scratching ticket failed for rebase: %w", err2)
 		}
