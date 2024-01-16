@@ -604,15 +604,16 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		rbase = bvals[len(bvals)-1]
 	}
 
-	ticket, err := m.computeTicket(ctx, &rbase, round, base.TipSet.MinTicket(), mbi)
-	if err != nil {
-		err = xerrors.Errorf("scratching ticket failed: %w", err)
+	ticket, err2 := m.computeTicket(ctx, &rbase, base, mbi)
+	if err2 != nil {
+		err = xerrors.Errorf("scratching ticket failed: %w", err2)
 		return nil, err
 	}
 
-	winner, err = gen.IsRoundWinner(ctx, round, m.address, rbase, mbi, m.api)
-	if err != nil {
-		err = xerrors.Errorf("failed to check if we win next round: %w", err)
+	// lingh: how to ensure exactly 5 winners a round?
+	winner, err2 = gen.IsRoundWinner(ctx, base.TipSet, round, m.address, rbase, mbi, m.api)
+	if err2 != nil {
+		err = xerrors.Errorf("failed to check if we win next round: %w", err2)
 		return nil, err
 	}
 
@@ -628,9 +629,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		return nil, err
 	}
 
-	rand, err := lrand.DrawRandomnessFromBase(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
-	if err != nil {
-		err = xerrors.Errorf("failed to get randomness for winning post: %w", err)
+	rand, err2 := lrand.DrawRandomness(rbase.Data, crypto.DomainSeparationTag_WinningPoStChallengeSeed, round, buf.Bytes())
+	if err2 != nil {
+		err = xerrors.Errorf("failed to get randomness for winning post: %w", err2)
 		return nil, err
 	}
 
@@ -652,143 +653,84 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tProof := build.Clock.Now()
 	// delay more time to wait
-	// if m.createBlockDeadline > 0 {
-	// 	btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)), 0)
-	// 	now := build.Clock.Now()
-	// 	deadline := time.Second * time.Duration(uint64(m.createBlockDeadline))
-	// 	diff := now.Sub(btime)
+	if m.createBlockDeadline > 0 {
+		btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)), 0)
+		now := build.Clock.Now()
+		deadline := time.Second * time.Duration(uint64(m.createBlockDeadline))
+		diff := now.Sub(btime)
 
-	// 	if diff < deadline {
-	// 		if base.NullRounds == 0 {
-	// 			m.niceSleep(deadline - diff)
-	// 		} else {
-	// 			const sleepStep = 2
-	// 			// detect first parent block
-	// 			for {
-	// 				// found! return to upper to re-do mineOne again
-	// 				newBase, err := m.GetBestMiningCandidate(ctx)
-	// 				if err == nil {
-	// 					oheight := base.TipSet.Height()
-	// 					nheight := newBase.TipSet.Height()
-	// 					if oheight != nheight {
-	// 						log.Warnf("rebase, detect total new base %d != %d, need redo mineOne", oheight, nheight)
-	// 						err = fmt.Errorf("AABB")
-	// 						return nil, err
-	// 					}
-	// 				}
+		if diff < deadline {
+			if base.NullRounds == 0 {
+				m.niceSleep(deadline - diff)
+			} else {
+				const sleepStep = 2
+				// detect first parent block
+				for {
+					// found! return to upper to re-do mineOne again
+					newBase, err := m.GetBestMiningCandidate(ctx)
+					if err == nil {
+						oheight := base.TipSet.Height()
+						nheight := newBase.TipSet.Height()
+						if oheight != nheight {
+							log.Warnf("rebase, detect total new base %d != %d, need redo mineOne", oheight, nheight)
+							err = fmt.Errorf("AABB")
+							return nil, err
+						}
+					}
 
-	// 				now = build.Clock.Now()
-	// 				diff = now.Sub(btime)
-	// 				if (diff + (time.Second * sleepStep)) >= deadline {
-	// 					// timeout
-	// 					break
-	// 				}
+					now = build.Clock.Now()
+					diff = now.Sub(btime)
+					if (diff + (time.Second * sleepStep)) >= deadline {
+						// timeout
+						break
+					}
 
-	// 				m.niceSleep(time.Second * sleepStep)
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	// tHardDelay := build.Clock.Now()
-	// // check if we have new base
-	// oldbase := *base
-	// var replaceBase bool = false
-	// newBase, err2 := m.GetBestMiningCandidate(ctx)
-	// if err2 == nil {
-	// 	oblks := oldbase.TipSet.Blocks()
-	// 	nblks := newBase.TipSet.Blocks()
-
-	// 	oheight := oldbase.TipSet.Height()
-	// 	onull := oldbase.NullRounds
-	// 	nheight := newBase.TipSet.Height()
-	// 	nnull := newBase.NullRounds
-	// 	if len(oblks) != len(nblks) && oheight == nheight && onull == nnull {
-	// 		log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
-	// 		// replace with new base
-	// 		base = newBase
-	// 		replaceBase = true
-	// 	} else if oheight != nheight && (oheight+onull) == (nheight+nnull) {
-	// 		log.Errorf("rebase failed, base totally changed: %d != %d", oheight, nheight)
-	// 	}
-	// } else {
-	// 	log.Errorf("mineOne GetBestMiningCandidate error:%v", err2)
-	// }
-
-	// if replaceBase {
-	// 	log.Warnf("rebase, re-compute ticket")
-	// 	ticket, err2 = m.computeTicket(ctx, &rbase, base, mbi)
-	// 	if err2 != nil {
-	// 		log.Errorf("scratching ticket failed for rebase: %w", err2)
-	// 	}
-	// }
-
-	// tHardReplace := build.Clock.Now()
-
-	// get pending messages early,
-	msgs, err := m.api.MpoolSelect(ctx, base.TipSet.Key(), ticket.Quality())
-	if err != nil {
-		err = xerrors.Errorf("failed to select messages for block: %w", err)
-		return nil, err
-	}
-
-	tEquivocateWait := build.Clock.Now()
-
-	// This next block exists to "catch" equivocating miners,
-	// who submit 2 blocks at the same height at different times in order to split the network.
-	// To safeguard against this, we make sure it's been EquivocationDelaySecs since our base was calculated,
-	// then re-calculate it.
-	// If the daemon detected equivocated blocks, those blocks will no longer be in the new base.
-	m.niceSleep(time.Until(base.ComputeTime.Add(time.Duration(build.EquivocationDelaySecs) * time.Second)))
-	newBase, err := m.GetBestMiningCandidate(ctx)
-	if err != nil {
-		err = xerrors.Errorf("failed to refresh best mining candidate: %w", err)
-		return nil, err
-	}
-
-	// If the base has changed, we take the _intersection_ of our old base and new base,
-	// thus ejecting blocks from any equivocating miners, without taking any new blocks.
-	if newBase.TipSet.Height() == base.TipSet.Height() && !newBase.TipSet.Equals(base.TipSet) {
-		log.Warnf("base changed from %s to %s, taking intersection", base.TipSet.Key(), newBase.TipSet.Key())
-		newBaseMap := map[cid.Cid]struct{}{}
-		for _, newBaseBlk := range newBase.TipSet.Cids() {
-			newBaseMap[newBaseBlk] = struct{}{}
-		}
-
-		refreshedBaseBlocks := make([]*types.BlockHeader, 0, len(base.TipSet.Cids()))
-		for _, baseBlk := range base.TipSet.Blocks() {
-			if _, ok := newBaseMap[baseBlk.Cid()]; ok {
-				refreshedBaseBlocks = append(refreshedBaseBlocks, baseBlk)
-			}
-		}
-
-		if len(refreshedBaseBlocks) != 0 && len(refreshedBaseBlocks) != len(base.TipSet.Blocks()) {
-			refreshedBase, err := types.NewTipSet(refreshedBaseBlocks)
-			if err != nil {
-				err = xerrors.Errorf("failed to create new tipset when refreshing: %w", err)
-				return nil, err
-			}
-
-			if !base.TipSet.MinTicket().Equals(refreshedBase.MinTicket()) {
-				log.Warn("recomputing ticket due to base refresh")
-
-				ticket, err = m.computeTicket(ctx, &rbase, round, refreshedBase.MinTicket(), mbi)
-				if err != nil {
-					err = xerrors.Errorf("failed to refresh ticket: %w", err)
-					return nil, err
+					m.niceSleep(time.Second * sleepStep)
 				}
 			}
-
-			log.Warn("re-selecting messages due to base refresh")
-			// refresh messages, as the selected messages may no longer be valid
-			msgs, err = m.api.MpoolSelect(ctx, refreshedBase.Key(), ticket.Quality())
-			if err != nil {
-				err = xerrors.Errorf("failed to re-select messages for block: %w", err)
-				return nil, err
-			}
-
-			base.TipSet = refreshedBase
 		}
+	}
+
+	tHardDelay := build.Clock.Now()
+	// check if we have new base
+	oldbase := *base
+	var replaceBase bool = false
+	newBase, err2 := m.GetBestMiningCandidate(ctx)
+	if err2 == nil {
+		oblks := oldbase.TipSet.Blocks()
+		nblks := newBase.TipSet.Blocks()
+
+		oheight := oldbase.TipSet.Height()
+		onull := oldbase.NullRounds
+		nheight := newBase.TipSet.Height()
+		nnull := newBase.NullRounds
+		if len(oblks) != len(nblks) && oheight == nheight && onull == nnull {
+			log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
+			// replace with new base
+			base = newBase
+			replaceBase = true
+		} else if oheight != nheight && (oheight+onull) == (nheight+nnull) {
+			log.Errorf("rebase failed, base totally changed: %d != %d", oheight, nheight)
+		}
+	} else {
+		log.Errorf("mineOne GetBestMiningCandidate error:%v", err2)
+	}
+
+	if replaceBase {
+		log.Warnf("rebase, re-compute ticket")
+		ticket, err2 = m.computeTicket(ctx, &rbase, base, mbi)
+		if err2 != nil {
+			log.Errorf("scratching ticket failed for rebase: %w", err2)
+		}
+	}
+
+	tHardReplace := build.Clock.Now()
+
+	// get pending messages early,
+	msgs, err2 := m.api.MpoolSelect(context.TODO(), base.TipSet.Key(), ticket.Quality())
+	if err2 != nil {
+		err = xerrors.Errorf("failed to select messages for block: %w", err2)
+		return nil, err
 	}
 
 	tPending := build.Clock.Now()
@@ -813,8 +755,8 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		"miner", b.Header.Miner,
 		"parents", parentMiners,
 		"parentTipset", base.TipSet.Key().String(),
-		// "tHardDealy ", tHardDelay.Sub(tProof),
-		// "tHardReplace ", tHardReplace.Sub(tHardDelay),
+		"tHardDealy ", tHardDelay.Sub(tProof),
+		"tHardReplace ", tHardReplace.Sub(tHardDelay),
 		"took", dur)
 
 	if len(m.winReportURL) > 0 {
@@ -824,7 +766,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		wr.Height = uint64(b.Header.Height)
 		wr.Took = fmt.Sprintf("%s", dur)
 		wr.Parents = len(parentMiners)
-		// wr.NewBase = replaceBase
+		wr.NewBase = replaceBase
 		go reportWin(&wr, m.winReportURL)
 	}
 
@@ -834,11 +776,9 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			"tTicket ", tTicket.Sub(tPowercheck),
 			"tSeed ", tSeed.Sub(tTicket),
 			"tProof ", tProof.Sub(tSeed),
-			"tEquivocateWait ", tEquivocateWait.Sub(tProof),
-			// "tHardDealy ", tHardDelay.Sub(tProof),
-			// "tHardReplace ", tHardReplace.Sub(tHardDelay),
-			// "tPending ", tPending.Sub(tHardReplace),
-			"tPending ", tPending.Sub(tEquivocateWait),
+			"tHardDealy ", tHardDelay.Sub(tProof),
+			"tHardReplace ", tHardReplace.Sub(tHardDelay),
+			"tPending ", tPending.Sub(tHardReplace),
 			"tCreateBlock ", tCreateBlock.Sub(tPending),
 			"sector-number", sectorNumber,
 		)
