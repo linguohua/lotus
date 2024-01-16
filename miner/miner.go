@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/arc/v2"
-	"github.com/ipfs/go-cid"
+	//"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
@@ -604,7 +604,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		rbase = bvals[len(bvals)-1]
 	}
 
-	ticket, err2 := m.computeTicket(ctx, &rbase, round, base.TipSet, mbi)
+	ticket, err2 := m.computeTicket(ctx, &rbase, round, base.TipSet.MinTicket(), mbi)
 	if err2 != nil {
 		err = xerrors.Errorf("scratching ticket failed: %w", err2)
 		return nil, err
@@ -719,7 +719,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	if replaceBase {
 		log.Warnf("rebase, re-compute ticket")
 		round = base.TipSet.Height() + base.NullRounds + 1
-		ticket, err2 = m.computeTicket(ctx, &rbase, round, base.TipSet, mbi)
+		ticket, err2 = m.computeTicket(ctx, &rbase, round, base.TipSet.MinTicket(), mbi)
 		if err2 != nil {
 			log.Errorf("scratching ticket failed for rebase: %w", err2)
 		}
