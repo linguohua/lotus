@@ -294,7 +294,7 @@ func NewLocalWorkerWithExecutor(executor ExecutorFunc, wcfg WorkerConfig, envLoo
 	return w
 }
 
-func NewLocalWorker(wcfg WorkerConfig, store paths.Store, local *paths.Local, sindex paths.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore, ext) *LocalWorker {
+func NewLocalWorker(wcfg WorkerConfig, store paths.Store, local *paths.Local, sindex paths.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore, ext *LocalWorkerExtParams) *LocalWorker {
 	return NewLocalWorkerWithExecutor(nil, wcfg, os.LookupEnv, store, local, sindex, ret, cst, ext)
 }
 
@@ -334,12 +334,19 @@ func (l *localWorkerPathProvider) AcquireSector(ctx context.Context, sector stor
 
 func FFIExec(opts ...ffiwrapper.FFIWrapperOpt) func(l *LocalWorker) (storiface.Storage, error) {
 	return func(l *LocalWorker) (storiface.Storage, error) {
+	        ccfunc := func(cache string, size uint64) {
+			l.clearLocalCache(cache, size)
+		}
 		return ffiwrapper.New(&localWorkerPathProvider{w: l}, &ffiwrapper.SealerCGOExt{
 			CCfunc:          ccfunc,
 			IsCC:            l.isCC,
 			MerkleTreecache: l.merkleTreecache,
 		}, opts...)
 	}
+}
+
+func (l *localWorkerPathProvider) AcquireSectorCopy(ctx context.Context, id storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, ptype storiface.PathType) (storiface.SectorPaths, func(), error) {
+	return (&localWorkerPathProvider{w: l.w, op: storiface.AcquireCopy}).AcquireSector(ctx, id, existing, allocate, ptype)
 }
 
 func (l *localWorkerPathProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
@@ -776,7 +783,7 @@ func (l *LocalWorker) GenerateSectorKeyFromData(ctx context.Context, sector stor
 	})
 }
 
-func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
+func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
 	sb, err := l.executor(l)
 	if err != nil {
 		return storiface.UndefCall, err
@@ -803,7 +810,7 @@ func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.Secto
 	})
 }
 
-func (l *LocalWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
+func (l *LocalWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
 	sb, err := l.executor(l)
 	if err != nil {
 		return storiface.UndefCall, err

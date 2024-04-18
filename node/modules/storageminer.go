@@ -323,7 +323,7 @@ func WindowPostScheduler(fc config.MinerFeeConfig, pc config.ProvingConfig) func
 		var fps *wdpost.WindowPoStScheduler = nil
 		var err error
 		if os.Getenv("YOUZHOU_WINDOW_POST_DISABLE") != "true" {
-			fps, err = wdpost.NewWindowedPoStScheduler(api, fc, pc, as, sealer, verif, sealer, j, maddr, []dtypes.MinerAddress{params.Maddr})
+			fps, err = wdpost.NewWindowedPoStScheduler(api, fc, pc, as, sealer, verif, sealer, j,  []dtypes.MinerAddress{params.Maddr})
 			if err != nil {
 				return nil, err
 			}

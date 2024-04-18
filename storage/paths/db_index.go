@@ -998,4 +998,14 @@ func (dbi *DBIndex) StorageGetLocks(ctx context.Context) (storiface.SectorLocks,
 	return result, nil
 }
 
+func (i *DBIndex) TryBindSector2SealStorage(ctx context.Context, fileType storiface.SectorFileType, pathType storiface.PathType,
+	sector abi.SectorID, groupID string) ([]storiface.StorageInfo, error) {
+	return nil, xerrors.Errorf("TryBindSector2SealStorage not implemented for DBIndex")
+}
+
+func (i *DBIndex) UnBindSector2SealStorage(ctx context.Context, sector abi.SectorID) error {
+	return xerrors.Errorf("UnBindSector2SealStorage not implemented for DBIndex")
+}
+
+
 var _ SectorIndex = &DBIndex{}

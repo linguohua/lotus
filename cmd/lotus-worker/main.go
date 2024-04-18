@@ -741,7 +741,7 @@ Example invocation of lotus-bench as external executor:
 					MaxParallelChallengeReads: cctx.Int("post-parallel-reads"),
 					ChallengeReadTimeout:      cctx.Duration("post-read-timeout"),
 					Name:                      cctx.String("name"),
-				}, os.LookupEnv, remote, localStore, nodeApi, nodeApi, wsts, ex),
+				}, os.LookupEnv, remote, localStore, nodeApi, nodeApi, wsts, ext),
 			LocalStore: localStore,
 			Storage:    lr,
 		}
