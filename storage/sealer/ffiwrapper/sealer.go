@@ -17,6 +17,8 @@ type ExternalSealer struct {
 	PreCommit2 ExternPrecommit2
 }
 
+type cacheClearFunc func(cache string, size uint64)
+
 type Sealer struct {
 	sectors SectorProvider
 
@@ -24,6 +26,10 @@ type Sealer struct {
 	externCalls ExternalSealer
 
 	stopping chan struct{}
+
+	merkleTreecache string
+	ccfunc          cacheClearFunc
+	isCC            bool
 }
 
 func (sb *Sealer) Stop() {

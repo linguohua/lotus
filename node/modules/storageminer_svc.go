@@ -27,7 +27,7 @@ func connectMinerService(apiInfo string) func(mctx helpers.MetricsCtx, lc fx.Lif
 			return nil, xerrors.Errorf("could not get DialArgs: %w", err)
 		}
 
-		log.Infof("Checking (svc) api version of %s", addr)
+		log.Infof("Checking (svc) api version of %s, lin", addr)
 
 		mapi, closer, err := client.NewStorageMinerRPCV0(ctx, addr, info.AuthHeader())
 		if err != nil {
@@ -57,14 +57,14 @@ func connectMinerService(apiInfo string) func(mctx helpers.MetricsCtx, lc fx.Lif
 
 func ConnectSealingService(apiInfo string) func(mctx helpers.MetricsCtx, lc fx.Lifecycle) (MinerSealingService, error) {
 	return func(mctx helpers.MetricsCtx, lc fx.Lifecycle) (MinerSealingService, error) {
-		log.Info("Connecting sealing service to miner")
+		log.Info("Connecting sealing service to miner, lin")
 		return connectMinerService(apiInfo)(mctx, lc)
 	}
 }
 
 func ConnectStorageService(apiInfo string) func(mctx helpers.MetricsCtx, lc fx.Lifecycle) (MinerStorageService, error) {
 	return func(mctx helpers.MetricsCtx, lc fx.Lifecycle) (MinerStorageService, error) {
-		log.Info("Connecting storage service to miner")
+		log.Info("Connecting storage service to miner, lin")
 		return connectMinerService(apiInfo)(mctx, lc)
 	}
 }

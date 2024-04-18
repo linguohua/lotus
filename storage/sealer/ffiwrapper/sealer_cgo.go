@@ -14,6 +14,7 @@ import (
 	"io"
 	"math/bits"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"syscall"
@@ -40,6 +41,12 @@ import (
 
 var _ storiface.Storage = &Sealer{}
 
+type SealerCGOExt struct {
+	MerkleTreecache string
+	CCfunc          cacheClearFunc
+	IsCC            bool
+}
+
 type FFIWrapperOpts struct {
 	ext ExternalSealer
 }
@@ -52,8 +59,11 @@ func WithExternalSealCalls(ext ExternalSealer) FFIWrapperOpt {
 	}
 }
 
-func New(sectors SectorProvider, opts ...FFIWrapperOpt) (*Sealer, error) {
+func New(sectors SectorProvider, ext *SealerCGOExt, opts ...FFIWrapperOpt) (*Sealer, error) {
 	options := &FFIWrapperOpts{}
+	if ext == nil {
+		ext = &SealerCGOExt{IsCC: true}
+	}
 
 	for _, o := range opts {
 		o(options)
@@ -65,6 +75,10 @@ func New(sectors SectorProvider, opts ...FFIWrapperOpt) (*Sealer, error) {
 		externCalls: options.ext,
 
 		stopping: make(chan struct{}),
+
+		merkleTreecache: ext.MerkleTreecache,
+		ccfunc:          ext.CCfunc,
+		isCC:            ext.IsCC,
 	}
 
 	return sb, nil
@@ -406,10 +420,17 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storiface.SectorRef, exis
 		pieceCID = paddedCid
 	}
 
-	return abi.PieceInfo{
+	pi := abi.PieceInfo{
 		Size:     pieceSize.Padded(),
 		PieceCID: pieceCID,
-	}, nil
+	}
+
+	v, err := json.Marshal(&pi)
+	if err == nil {
+		log.Info("add piece completed, pieceInfo:\n", string(v))
+	}
+
+	return pi, nil
 }
 
 func (sb *Sealer) pieceCid(spt abi.RegisteredSealProof, in []byte) (cid.Cid, error) {
@@ -858,6 +879,21 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storiface.SectorRef
 		}
 	}
 
+	// lingh: soft link to merkle cache file
+	if sb.merkleTreecache != "" && sb.isCC {
+		_, err := os.Stat(sb.merkleTreecache)
+		if !os.IsNotExist(err) {
+			// exists
+			targetMerkleTreeCache := path.Join(paths.Cache, "sc-02-data-tree-d.dat")
+			err = os.Symlink(sb.merkleTreecache, targetMerkleTreeCache)
+			if err != nil {
+				log.Errorf("sb.SealPreCommit1 Symlink merkleTreecache failed:%v", err)
+			} else {
+				log.Info("sb.SealPreCommit1 link merkleTreecache ok")
+			}
+		}
+	}
+
 	var sum abi.UnpaddedPieceSize
 	for _, piece := range pieces {
 		sum += piece.Size.Unpadded()
@@ -896,7 +932,7 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector storiface.SectorRef
 	return json.Marshal(&p1odec)
 }
 
-var PC2CheckRounds = 3
+var PC2CheckRounds = 0
 
 func (sb *Sealer) SealPreCommit2(ctx context.Context, sector storiface.SectorRef, phase1Out storiface.PreCommit1Out) (storiface.SectorCids, error) {
 	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTSealed|storiface.FTCache, 0, storiface.PathSealing)
@@ -1162,7 +1198,8 @@ func (sb *Sealer) ReleaseUnsealed(ctx context.Context, sector storiface.SectorRe
 			}
 		}
 
-		paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathStorage)
+		// paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathStorage)
+		paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTUnsealed, 0, storiface.PathSealing)
 		if err != nil {
 			return xerrors.Errorf("acquiring sector cache path: %w", err)
 		}
@@ -1205,15 +1242,22 @@ func (sb *Sealer) ReleaseUnsealed(ctx context.Context, sector storiface.SectorRe
 	return nil
 }
 
-func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef) error {
+func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	ssize, err := sector.ProofType.SectorSize()
 	if err != nil {
 		return err
 	}
 
-	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
+		return err
+	}
+
+	// lingh: clear storage cache, not seal cache?
+	//paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathStorage)
+	paths, done, err := sb.sectors.AcquireSector(ctx, sector, storiface.FTCache, 0, storiface.PathSealing)
+
 	if err != nil {
-		return xerrors.Errorf("acquiring sector cache path: %w", err)
+		return xerrors.Errorf("FinalizeSector: acquiring sector cache path: %w", err)
 	}
 	defer done()
 
@@ -1224,7 +1268,28 @@ func (sb *Sealer) FinalizeSector(ctx context.Context, sector storiface.SectorRef
 		}
 	}
 
-	return ffi.ClearCache(uint64(ssize), paths.Cache)
+	err = ffi.ClearCache(uint64(ssize), paths.Cache)
+	if err != nil {
+		log.Warnf("FinalizeSector: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
+	}
+
+	// lingh: remove unsealed
+	if len(keepUnsealed) == 0 {
+		err = os.Remove(paths.Unsealed)
+		if err != nil {
+			log.Warnf("FinalizeSector: Remove unsealed file with error:%v", err)
+		}
+	}
+
+	// lingh: remove 's-t0%d-%d.txt' if exist
+	txt := paths.Sealed + ".txt"
+	err = os.Remove(txt)
+	if err != nil {
+		log.Debug("FinalizeSector: Remove txt file %s error:%v", txt, err)
+	}
+
+	// ignore clear cache error
+	return nil
 }
 
 // FinalizeSectorInto is like FinalizeSector, but writes finalized sector cache into a new path
@@ -1272,9 +1337,13 @@ func (sb *Sealer) FinalizeSectorInto(ctx context.Context, sector storiface.Secto
 	return ffi.ClearCache(uint64(ssize), dest)
 }
 
-func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) error {
+func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	ssize, err := sector.ProofType.SectorSize()
 	if err != nil {
+		return err
+	}
+
+	if err := sb.ReleaseUnsealed(ctx, sector, keepUnsealed); err != nil {
 		return err
 	}
 
@@ -1311,6 +1380,7 @@ func (sb *Sealer) FinalizeReplicaUpdate(ctx context.Context, sector storiface.Se
 	}
 
 	return nil
+
 }
 
 func (sb *Sealer) ReleaseReplicaUpgrade(ctx context.Context, sector storiface.SectorRef) error {

@@ -2,6 +2,7 @@ package basicfs
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -92,4 +93,8 @@ func (b *Provider) AcquireSector(ctx context.Context, id storiface.SectorRef, ex
 
 func (b *Provider) AcquireSectorCopy(ctx context.Context, id storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, ptype storiface.PathType) (storiface.SectorPaths, func(), error) {
 	return b.AcquireSector(ctx, id, existing, allocate, ptype)
+}
+
+func (b *Provider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
+	return fmt.Errorf("DiscoverSectorStore not implemented for basicfs.Provider")
 }

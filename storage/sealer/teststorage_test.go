@@ -61,7 +61,7 @@ func (t *testExec) SealCommit2(ctx context.Context, sector storiface.SectorRef, 
 	panic("implement me")
 }
 
-func (t *testExec) FinalizeSector(ctx context.Context, sector storiface.SectorRef) error {
+func (t *testExec) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	panic("implement me")
 }
 
@@ -101,7 +101,7 @@ func (t *testExec) GenerateSectorKeyFromData(ctx context.Context, sector storifa
 	panic("implement me")
 }
 
-func (t *testExec) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) error {
+func (t *testExec) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
 	panic("implement me")
 }
 
