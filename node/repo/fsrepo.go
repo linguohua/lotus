@@ -343,11 +343,12 @@ func (fsr *FsRepo) initKeystore() error {
 // APIEndpoint returns endpoint of API in this repo
 func (fsr *FsRepo) APIEndpoint() (multiaddr.Multiaddr, error) {
 	p := filepath.Join(fsr.path, fsAPI)
-
+	log.Debugf("APIEndpoint, try to open api file:%s", p)
 	f, err := os.Open(p)
 	if os.IsNotExist(err) {
 		return nil, xerrors.Errorf("No file (%s): %w", p, ErrNoAPIEndpoint)
 	} else if err != nil {
+		log.Debugf("APIEndpoint,open api file:%s error:%v", p, err)
 		return nil, err
 	}
 	defer f.Close() //nolint: errcheck // Read only op
@@ -358,9 +359,11 @@ func (fsr *FsRepo) APIEndpoint() (multiaddr.Multiaddr, error) {
 	}
 	strma := string(data)
 	strma = strings.TrimSpace(strma)
+	log.Debugf("APIEndpoint, read data from api file:%s, data:%s", p, strma)
 
 	apima, err := multiaddr.NewMultiaddr(strma)
 	if err != nil {
+		log.Debugf("APIEndpoint, NewMultiaddr failed:%v", err)
 		return nil, err
 	}
 	return apima, nil
