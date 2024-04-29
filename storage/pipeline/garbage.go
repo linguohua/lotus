@@ -54,7 +54,7 @@ func (m *Sealing) RecoverSector(ctx context.Context, sid abi.SectorNumber) (stor
 		return storiface.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is sealing disable")
 	}
 
-	if !m.recoverMode {
+	if m.recoverMode == 0 {
 		return storiface.SectorRef{}, xerrors.Errorf("Miner RecoverSector failed, miner is not in recover mode")
 	}
 
@@ -72,6 +72,11 @@ func (m *Sealing) RecoverSector(ctx context.Context, sid abi.SectorNumber) (stor
 		return storiface.SectorRef{}, xerrors.Errorf("getting seal proof type: %w", err)
 	}
 
-	log.Infof("Recover CC sector %d", sid)
+	if m.recoverMode == 1 {
+		log.Infof("Recover CC sector %d", sid)
+	} else if m.recoverMode == 2 {
+		log.Infof("Recover sector %d from unseal", sid)
+	}
+
 	return m.minerSector(spt, sid), m.sectors.Send(uint64(sid), SectorRedoPacked{})
 }

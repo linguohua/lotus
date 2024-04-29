@@ -462,6 +462,10 @@ func (m *Manager) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, 
 	return out, err
 }
 
+func (m *Manager) FindUnsealGroupID(ctx context.Context, sector storiface.SectorRef) (string, error) {
+	return findSectorGroup(ctx, m.index, sector.ProofType, sector.ID, storiface.FTUnsealed)
+}
+
 func (m *Manager) AddPiece(ctx context.Context, sector storiface.SectorRef, existingPieces []abi.UnpaddedPieceSize, sz abi.UnpaddedPieceSize, r io.Reader) (abi.PieceInfo, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

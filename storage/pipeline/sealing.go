@@ -143,7 +143,7 @@ type Sealing struct {
 	legacySc *storedcounter.StoredCounter
 
 	getConfig      dtypes.GetSealingConfigFunc
-	recoverMode    bool
+	recoverMode    int
 	sealingDisable bool
 }
 
@@ -235,10 +235,11 @@ type pendingPiece struct {
 }
 
 func New(mctx context.Context, sapi SealingAPI, fc config.MinerFeeConfig, events Events, maddr address.Address, ds datastore.Batching, sealer sealer.SectorManager, verif storiface.Verifier, prov storiface.Prover, pcp PreCommitPolicy, gc dtypes.GetSealingConfigFunc, journal journal.Journal, addrSel AddressSelector) *Sealing {
-	recoverMode := false
-	if os.Getenv("YOUZHOU_RECOVER_MODE") == "true" {
-		log.Warn("Miner sealing in recover mode")
-		recoverMode = true
+	recoverMode := 0
+	rmStr := os.Getenv("YOUZHOU_RECOVER_MODE")
+	if len(rmStr) > 0 {
+		log.Warn("Miner sealing in recover mode:", rmStr)
+		recoverMode = strconv.Atoi(rmStr)
 	}
 	sealingDisable := os.Getenv("YOUZHOU_SEALING_DISABLE") == "true"
 

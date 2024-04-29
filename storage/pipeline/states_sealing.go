@@ -65,6 +65,26 @@ func (m *Sealing) cleanupAssignedDeals(sector SectorInfo) {
 }
 
 func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode == 2 {
+		// recover by unseal file
+		log.Infow("handlePacking recoverMode by unseal", "sector", sector.SectorNumber)
+
+		gid := ""
+		var err error
+		for {
+			// find groupID
+			gid, err = m.sealer.FindUnsealGroupID(ctx, sectorID)
+			if err != nil {
+				err = failedCooldown(ctx, sector)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return ctx.Send(SectorRedoPacked{GroupID: gid})
+	}
+
 	m.cleanupAssignedDeals(sector)
 
 	// if this is a snapdeals sector, but it ended up not having any deals, abort the upgrade
@@ -90,7 +110,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		return xerrors.Errorf("handlePacking failed, too much data in sector %d: %d > %d", sector.SectorNumber, allocated, ubytes)
 	}
 
-	if m.recoverMode {
+	if m.recoverMode > 0 {
 		log.Infof("recover mode reset allocated from %d to 0", allocated)
 		allocated = 0
 	}
@@ -233,7 +253,7 @@ func (m *Sealing) getTicket(ctx statemachine.Context, sector SectorInfo) (abi.Se
 }
 
 func (m *Sealing) handleGetTicket(ctx statemachine.Context, sector SectorInfo) error {
-	if m.recoverMode {
+	if m.recoverMode > 0 {
 		log.Infof("recover mode handleGetTicket, sector:%d, reuse ticket value:%v, ticket epoch:%d", sector.SectorNumber, sector.TicketValue, sector.TicketEpoch)
 		return ctx.Send(SectorTicket{
 			TicketValue: sector.TicketValue,
@@ -299,7 +319,7 @@ func retrySoftErr(ctx context.Context, cb func() error) error {
 }
 
 func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) error {
-	if m.recoverMode {
+	if m.recoverMode > 0 {
 		log.Infof("recover mode handlePreCommit1 start, sector:%d, ticket value:%v", sector.SectorNumber, sector.TicketValue)
 		pc1o, err := m.sealer.SealPreCommit1(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.TicketValue, sector.pieceInfos())
 		if err != nil {
@@ -382,7 +402,7 @@ func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) 
 }
 
 func (m *Sealing) handlePreCommit2(ctx statemachine.Context, sector SectorInfo) error {
-	if m.recoverMode {
+	if m.recoverMode > 0 {
 		log.Infof("recover mode handlePreCommit2 start, sector:%d", sector.SectorNumber)
 	}
 
@@ -401,7 +421,7 @@ func (m *Sealing) handlePreCommit2(ctx statemachine.Context, sector SectorInfo) 
 		return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("seal pre commit(2) returned undefined CommD")})
 	}
 
-	if m.recoverMode {
+	if m.recoverMode > 0 {
 		log.Infof("recover mode handlePreCommit2 finish, sector:%d", sector.SectorNumber)
 		return ctx.Send(SectorRedoPreCommit2{})
 	}
@@ -1016,7 +1036,8 @@ func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorIn
 	keepUnsealed = sector.keepUnsealedRanges(sector.Pieces, false, cfg.AlwaysKeepUnsealedCopy)
 
 	log.Infof("Sealing handleFinalizeSector, sector:%d", sector.SectorNumber)
-	if m.recoverMode || !sector.HasFinalized {
+
+	if m.recoverMode > 0 || !sector.HasFinalized {
 		if len(keepUnsealed) > 0 {
 			log.Warnf("Sealing handleFinalizeSector keep unsealed sector:%d", sector.SectorNumber)
 		}
