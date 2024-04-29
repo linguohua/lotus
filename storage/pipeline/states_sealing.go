@@ -73,7 +73,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		var err error
 		for {
 			// find groupID
-			gid, err = m.sealer.FindUnsealGroupID(ctx, sectorID)
+			gid, err = m.sealer.FindUnsealGroupID(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber))
 			if err != nil {
 				err = failedCooldown(ctx, sector)
 				if err != nil {
@@ -127,7 +127,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 	// lingh: pledge AddPiece call
 	for {
 		existingPieceSizes := sector.existingPieceSizes()
-		if m.recoverMode {
+		if m.recoverMode > 0 {
 			log.Infof("recover mode reset existingPieceSizes from %+v to empty", existingPieceSizes)
 			existingPieceSizes = []abi.UnpaddedPieceSize{}
 		}
@@ -142,7 +142,7 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 				return err
 			}
 		} else {
-			if m.recoverMode {
+			if m.recoverMode > 0 {
 				return ctx.Send(SectorRedoPacked{FillerPieces: fillerPieces, GroupID: gid})
 			}
 

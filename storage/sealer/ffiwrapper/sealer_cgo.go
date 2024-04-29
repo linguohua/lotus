@@ -224,6 +224,10 @@ func (sb *Sealer) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, 
 	}, nil
 }
 
+func (sb *Sealer) FindUnsealGroupID(ctx context.Context, sector storiface.SectorRef) (string, error) {
+     return "", xerrors.Errorf("not implemented")
+}
+
 func (sb *Sealer) AddPiece(ctx context.Context, sector storiface.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, pieceSize abi.UnpaddedPieceSize, pieceData storiface.Data) (abi.PieceInfo, error) {
 	origPieceData := pieceData
 	defer func() {

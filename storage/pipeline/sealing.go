@@ -239,7 +239,7 @@ func New(mctx context.Context, sapi SealingAPI, fc config.MinerFeeConfig, events
 	rmStr := os.Getenv("YOUZHOU_RECOVER_MODE")
 	if len(rmStr) > 0 {
 		log.Warn("Miner sealing in recover mode:", rmStr)
-		recoverMode = strconv.Atoi(rmStr)
+		recoverMode, _ = strconv.Atoi(rmStr)
 	}
 	sealingDisable := os.Getenv("YOUZHOU_SEALING_DISABLE") == "true"
 
