@@ -620,6 +620,10 @@ func (mgr *SectorMgr) ReturnDownloadSector(ctx context.Context, callID storiface
 	panic("not supported")
 }
 
+func (mgr *SectorMgr) FindUnsealGroupID(ctx context.Context, sector storiface.SectorRef) (string, error) {
+     return "", xerrors.Errorf("not implemented")
+}
+
 func (m mockVerifProver) VerifySeal(svi prooftypes.SealVerifyInfo) (bool, error) {
 	plen, err := svi.SealProof.ProofSize()
 	if err != nil {
