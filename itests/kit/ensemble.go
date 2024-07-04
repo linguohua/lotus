@@ -914,14 +914,14 @@ func (n *Ensemble) Start() *Ensemble {
 
 		addr := m.RemoteListener.Addr().String()
 
-		localStore, err := paths.NewLocal(ctx, lr, m.MinerNode, []string{"http://" + addr + "/remote"})
+		localStore, err := paths.NewLocal(ctx, lr, m.MinerNode, []string{"http://" + addr + "/remote"}, "", "")
 		require.NoError(n.t, err)
 
 		auth := http.Header(nil)
 
 		// FUTURE: Use m.MinerNode.(BaseAPI).(impl.StorageMinerAPI).HarmonyDB to setup.
 
-		remote := paths.NewRemote(localStore, m.MinerNode, auth, 20, &paths.DefaultPartialFileHandler{})
+		remote := paths.NewRemote(localStore, m.MinerNode, auth, 20, &paths.DefaultPartialFileHandler{}, "")
 		store := m.options.workerStorageOpt(remote)
 
 		fh := &paths.FetchHandler{Local: localStore, PfHandler: &paths.DefaultPartialFileHandler{}}
@@ -934,7 +934,7 @@ func (n *Ensemble) Start() *Ensemble {
 				TaskTypes: m.options.workerTasks,
 				NoSwap:    false,
 				Name:      m.options.workerName,
-			}, store, localStore, m.MinerNode, m.MinerNode, wsts),
+			}, store, localStore, m.MinerNode, m.MinerNode, wsts, nil),
 			LocalStore: localStore,
 			Storage:    lr,
 		}

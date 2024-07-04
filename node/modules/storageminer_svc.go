@@ -28,7 +28,7 @@ func connectMinerService(apiInfo string) func(mctx helpers.MetricsCtx, lc fx.Lif
 			return nil, xerrors.Errorf("could not get DialArgs: %w", err)
 		}
 
-		log.Infof("Checking (svc) api version of %s", addr)
+		log.Infof("Checking (svc) api version of %s, lin", addr)
 
 		mapi, closer, err := client.NewStorageMinerRPCV0(ctx, addr, info.AuthHeader())
 		if err != nil {

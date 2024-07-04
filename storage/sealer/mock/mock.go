@@ -495,11 +495,11 @@ func (mgr *SectorMgr) StageFakeData(mid abi.ActorID, spt abi.RegisteredSealProof
 	return id, []abi.PieceInfo{pi}, nil
 }
 
-func (mgr *SectorMgr) FinalizeSector(context.Context, storiface.SectorRef) error {
+func (mgr *SectorMgr) FinalizeSector(context.Context, storiface.SectorRef, []storiface.Range) error {
 	return nil
 }
 
-func (mgr *SectorMgr) FinalizeReplicaUpdate(context.Context, storiface.SectorRef) error {
+func (mgr *SectorMgr) FinalizeReplicaUpdate(context.Context, storiface.SectorRef, []storiface.Range) error {
 	return nil
 }
 
@@ -617,6 +617,10 @@ func (mgr *SectorMgr) ReturnFinalizeReplicaUpdate(ctx context.Context, callID st
 
 func (mgr *SectorMgr) ReturnDownloadSector(ctx context.Context, callID storiface.CallID, err *storiface.CallError) error {
 	panic("not supported")
+}
+
+func (mgr *SectorMgr) FindUnsealGroupID(ctx context.Context, sector storiface.SectorRef) (string, error) {
+     return "", xerrors.Errorf("not implemented")
 }
 
 func (m mockVerifProver) VerifySeal(svi prooftypes.SealVerifyInfo) (bool, error) {

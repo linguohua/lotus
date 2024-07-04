@@ -3,6 +3,7 @@ package sealing
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -109,7 +110,7 @@ func (m *Sealing) maybeStartSealing(ctx statemachine.Context, sector SectorInfo,
 	now := time.Now()
 	st := m.sectorTimers[m.minerSectorID(sector.SectorNumber)]
 	if st != nil {
-		if !st.Stop() { // timer expired, SectorStartPacking was/is being sent
+		if !st.Stop() && sector.hasData() { // timer expired, SectorStartPacking was/is being sent
 			// we send another SectorStartPacking in case one was sent in the handleAddPiece state
 			log.Infow("starting to seal deal sector", "trigger", "wait-timeout")
 			return true, ctx.Send(SectorStartPacking{})
@@ -132,7 +133,7 @@ func (m *Sealing) maybeStartSealing(ctx statemachine.Context, sector SectorInfo,
 		return true, ctx.Send(SectorStartPacking{})
 	}
 
-	if used.Padded() == abi.PaddedPieceSize(ssize) {
+	if used.Padded() == abi.PaddedPieceSize(ssize) && sector.hasData() {
 		// sector full
 		log.Infow("starting to seal deal sector", "trigger", "filled")
 		return true, ctx.Send(SectorStartPacking{})
@@ -190,16 +191,17 @@ func (m *Sealing) maybeStartSealing(ctx statemachine.Context, sector SectorInfo,
 			sealTime = dealSafeSealTime
 		}
 
-		if now.After(sealTime) {
+		if now.After(sealTime) && sector.hasData() {
 			log.Infow("starting to seal deal sector", "trigger", "wait-timeout", "creation", sector.CreationTime)
 			return true, ctx.Send(SectorStartPacking{})
 		}
 
 		m.sectorTimers[m.minerSectorID(sector.SectorNumber)] = time.AfterFunc(sealTime.Sub(now), func() {
 			log.Infow("starting to seal deal sector", "trigger", "wait-timer")
-
-			if err := ctx.Send(SectorStartPacking{}); err != nil {
-				log.Errorw("sending SectorStartPacking event failed", "error", err)
+			if sector.hasData() {
+				if err := ctx.Send(SectorStartPacking{}); err != nil {
+					log.Errorw("sending SectorStartPacking event failed", "error", err)
+				}
 			}
 		})
 	}
@@ -263,6 +265,7 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 
 		offset += padLength.Unpadded()
 
+		groupID := sector.SealGroupID
 		for _, p := range pads {
 			expectCid := zerocomm.ZeroPieceCommitment(p.Unpadded())
 
@@ -272,9 +275,15 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 				p.Unpadded(),
 				nullreader.NewNullReader(p.Unpadded()))
 			if err != nil {
-				err = xerrors.Errorf("writing padding piece: %w", err)
-				deal.accepted(sector.SectorNumber, offset, err)
-				return ctx.Send(SectorAddPieceFailed{err})
+				errStr := err.Error()
+				if i := strings.Index(errStr, "ugly:"); i >= 0 {
+					// TODO: log
+					groupID = errStr[i+5:]
+				} else {
+					err = xerrors.Errorf("writing padding piece: %w", err)
+					deal.accepted(sector.SectorNumber, offset, err)
+					return ctx.Send(SectorAddPieceFailed{err})
+				}
 			}
 			if !ppi.PieceCID.Equals(expectCid) {
 				err = xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
@@ -296,9 +305,14 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 			deal.size,
 			deal.data)
 		if err != nil {
-			err = xerrors.Errorf("writing piece: %w", err)
-			deal.accepted(sector.SectorNumber, offset, err)
-			return ctx.Send(SectorAddPieceFailed{err})
+			errStr := err.Error()
+			if i := strings.Index(errStr, "ugly:"); i >= 0 {
+				groupID = errStr[i+5:]
+			} else {
+				err = xerrors.Errorf("writing piece: %w", err)
+				deal.accepted(sector.SectorNumber, offset, err)
+				return ctx.Send(SectorAddPieceFailed{err})
+			}
 		}
 		if !ppi.PieceCID.Equals(deal.deal.PieceCID()) {
 			err = xerrors.Errorf("got unexpected piece CID: expected:%s, got:%s", deal.deal.PieceCID(), ppi.PieceCID)
@@ -306,7 +320,7 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 			return ctx.Send(SectorAddPieceFailed{err})
 		}
 
-		log.Infow("deal added to a sector", "pieceID", deal.deal.String(), "sector", sector.SectorNumber, "piece", ppi.PieceCID)
+		log.Infow("deal added to a sector", "pieceID", deal.deal.String(), "sector", sector.SectorNumber, "piece", ppi.PieceCID, "group", groupID)
 
 		deal.accepted(sector.SectorNumber, offset, nil)
 
@@ -314,7 +328,7 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 		pieceSizes = append(pieceSizes, deal.size)
 
 		dinfo := deal.deal.Impl()
-
+		res.GroupID = groupID
 		res.NewPieces = append(res.NewPieces, SafeSectorPiece{
 			api.SectorPiece{
 				Piece:    ppi,
@@ -655,6 +669,9 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 	log.Debugw("updateInput matching done", "matches", len(matches), "toAssign", len(toAssign), "assigned", assigned, "openSectors", len(m.openSectors), "pieces", len(m.pendingPieces))
 
 	if len(toAssign) > 0 {
+		// log.Errorf("we are trying to create a new sector with open sectors %v", m.openSectors)
+		log.Errorf("we are trying to create a new sector for deals %v", toAssign)
+
 		if err := m.tryGetDealSector(ctx, sp, getExpirationCached); err != nil {
 			log.Errorw("Failed to create a new sector for deals", "error", err)
 		}
@@ -931,6 +948,15 @@ func (m *Sealing) StartPackingSector(sid abi.SectorNumber) error {
 	m.startupWait.Wait()
 
 	log.Infow("starting to seal deal sector", "sector", sid, "trigger", "user")
+	ss, err := m.GetSectorInfo(sid)
+	if err != nil {
+		return err
+	}
+
+	if !ss.hasData() {
+		return xerrors.Errorf("no deal with sector %v", sid)
+	}
+
 	return m.sectors.Send(uint64(sid), SectorStartPacking{})
 }
 
@@ -1025,6 +1051,9 @@ func (m *Sealing) SectorsStatus(ctx context.Context, sid abi.SectorNumber, showO
 		InitialPledge:      big.Zero(),
 		OnTime:             0,
 		Early:              0,
+
+		HasFinalized: info.HasFinalized,
+		SealGroupID:  info.SealGroupID,
 	}
 
 	return sInfo, nil
