@@ -87,6 +87,15 @@ func (sb *Sealer) pubExtendedSectorToPriv(ctx context.Context, mid abi.ActorID, 
 			ID:        abi.SectorID{Miner: mid, Number: s.SectorNumber},
 			ProofType: s.SealProof,
 		}
+
+		// ensure sector has storage info
+		err := sb.sectors.DiscoverSectorStore(ctx, sid.ID)
+		if err != nil {
+			log.Errorw("pubExtendedSectorToPriv failed to DiscoverSectorStore, skipping", "sector", sid.ID, "error", err)
+			skipped = append(skipped, sid.ID)
+			continue
+		}
+
 		proveUpdate := s.SectorKey != nil
 		var cache string
 		var sealed string

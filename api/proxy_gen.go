@@ -151,6 +151,8 @@ type FullNodeMethods struct {
 
 	ChainHasObj func(p0 context.Context, p1 cid.Cid) (bool, error) `perm:"read"`
 
+	AnchorBlocksCountByHeight func(p0 context.Context, p1 abi.ChainEpoch) (int, error) `perm:"read"`
+
 	ChainHead func(p0 context.Context) (*types.TipSet, error) `perm:"read"`
 
 	ChainHotGC func(p0 context.Context, p1 HotGCOpts) error `perm:"admin"`
@@ -377,7 +379,10 @@ type FullNodeMethods struct {
 
 	PaychNewPayment func(p0 context.Context, p1 address.Address, p2 address.Address, p3 []VoucherSpec) (*PaymentInfo, error) `perm:"sign"`
 
+
 	PaychSettle func(p0 context.Context, p1 address.Address) (cid.Cid, error) `perm:"sign"`
+
+	StateMarketDealsDump func(p0 context.Context, p1 types.TipSetKey, p2 string) (int, error) `perm:"read"`
 
 	PaychStatus func(p0 context.Context, p1 address.Address) (*PaychStatus, error) `perm:"read"`
 
@@ -878,6 +883,8 @@ type StorageMinerMethods struct {
 
 	ComputeDataCid func(p0 context.Context, p1 abi.UnpaddedPieceSize, p2 storiface.Data) (abi.PieceInfo, error) `perm:"admin"`
 
+	CheckProvableExt func(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storiface.SectorRef) (map[abi.SectorNumber]string, error) `perm:"admin"`
+
 	ComputeProof func(p0 context.Context, p1 []builtinactors.ExtendedSectorInfo, p2 abi.PoStRandomness, p3 abi.ChainEpoch, p4 abinetwork.Version) ([]builtinactors.PoStProof, error) `perm:"read"`
 
 	ComputeWindowPoSt func(p0 context.Context, p1 uint64, p2 types.TipSetKey) ([]miner.SubmitWindowedPoStParams, error) `perm:"admin"`
@@ -887,6 +894,8 @@ type StorageMinerMethods struct {
 	MarketListDeals func(p0 context.Context) ([]*MarketDeal, error) `perm:"read"`
 
 	MiningBase func(p0 context.Context) (*types.TipSet, error) `perm:"read"`
+
+	RecoverSector func(p0 context.Context, p1 abi.SectorNumber) (abi.SectorID, error) `perm:"write"`
 
 	PledgeSector func(p0 context.Context) (abi.SectorID, error) `perm:"write"`
 
@@ -1034,11 +1043,25 @@ type StorageMinerMethods struct {
 
 	StorageTryLock func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 storiface.SectorFileType) (bool, error) `perm:"admin"`
 
+	TryBindSector2SealStorage func(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) ([] storiface.StorageInfo, error) `perm:"admin"`
+
+	UnBindSector2SealStorage func(p0 context.Context, p1 abi.SectorID) error `perm:"admin"`
+
 	WorkerConnect func(p0 context.Context, p1 string) error `perm:"admin"`
 
 	WorkerJobs func(p0 context.Context) (map[uuid.UUID][]storiface.WorkerJob, error) `perm:"admin"`
 
 	WorkerStats func(p0 context.Context) (map[uuid.UUID]storiface.WorkerStats, error) `perm:"admin"`
+
+	WorkerPause func(p0 context.Context, p1 string, p2 string) error `perm:"admin"`
+
+	WorkerResume func(p0 context.Context, p1 string, p2 string) error `perm:"admin"`
+
+	WorkerRemove func(p0 context.Context, p1 string) error `perm:"admin"`
+
+	UpdateFinalizeTicketsParams func(p0 context.Context, tickets uint, interval uint) error `perm:"admin"`
+
+	UpdateP1TicketsParams func(p0 context.Context, tickets uint, interval uint) error `perm:"admin"`
 }
 
 type StorageMinerStub struct {
@@ -1083,9 +1106,9 @@ type WorkerMethods struct {
 
 	Fetch func(p0 context.Context, p1 storiface.SectorRef, p2 storiface.SectorFileType, p3 storiface.PathType, p4 storiface.AcquireMode) (storiface.CallID, error) `perm:"admin"`
 
-	FinalizeReplicaUpdate func(p0 context.Context, p1 storiface.SectorRef) (storiface.CallID, error) `perm:"admin"`
+	FinalizeReplicaUpdate func(p0 context.Context, p1 storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error) `perm:"admin"`
 
-	FinalizeSector func(p0 context.Context, p1 storiface.SectorRef) (storiface.CallID, error) `perm:"admin"`
+	FinalizeSector func(p0 context.Context, p1 storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error) `perm:"admin"`
 
 	GenerateSectorKeyFromData func(p0 context.Context, p1 storiface.SectorRef, p2 cid.Cid) (storiface.CallID, error) `perm:"admin"`
 
@@ -1140,6 +1163,8 @@ type WorkerMethods struct {
 	TaskEnable func(p0 context.Context, p1 sealtasks.TaskType) error `perm:"admin"`
 
 	TaskTypes func(p0 context.Context) (map[sealtasks.TaskType]struct{}, error) `perm:"admin"`
+
+	HasResourceForNewTask func(p0 context.Context, p1 sealtasks.TaskType) bool `perm:"admin"`
 
 	UnsealPiece func(p0 context.Context, p1 storiface.SectorRef, p2 storiface.UnpaddedByteIndex, p3 abi.UnpaddedPieceSize, p4 abi.SealRandomness, p5 cid.Cid) (storiface.CallID, error) `perm:"admin"`
 
@@ -1545,6 +1570,17 @@ func (s *FullNodeStruct) ChainHotGC(p0 context.Context, p1 HotGCOpts) error {
 
 func (s *FullNodeStub) ChainHotGC(p0 context.Context, p1 HotGCOpts) error {
 	return ErrNotSupported
+}
+
+func (s *FullNodeStruct) AnchorBlocksCountByHeight(p0 context.Context, p1 abi.ChainEpoch) (int, error) {
+	if s.Internal.AnchorBlocksCountByHeight == nil {
+		return 0, ErrNotSupported
+	}
+	return s.Internal.AnchorBlocksCountByHeight(p0, p1)
+}
+
+func (s *FullNodeStub) AnchorBlocksCountByHeight(p0 context.Context, p1 abi.ChainEpoch) (int, error) {
+	return 0, ErrNotSupported
 }
 
 func (s *FullNodeStruct) ChainNotify(p0 context.Context) (<-chan []*HeadChange, error) {
@@ -3228,6 +3264,17 @@ func (s *FullNodeStruct) StateMarketDeals(p0 context.Context, p1 types.TipSetKey
 
 func (s *FullNodeStub) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]*MarketDeal, error) {
 	return *new(map[string]*MarketDeal), ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateMarketDealsDump(p0 context.Context, p1 types.TipSetKey, p2 string) (int, error) {
+	if s.Internal.StateMarketDealsDump == nil {
+		return 0, ErrNotSupported
+	}
+	return s.Internal.StateMarketDealsDump(p0, p1, p2)
+}
+
+func (s *FullNodeStub) StateMarketDealsDump(p0 context.Context, p1 types.TipSetKey, p2 string) (int, error) {
+	return 0, ErrNotSupported
 }
 
 func (s *FullNodeStruct) StateMarketParticipants(p0 context.Context, p1 types.TipSetKey) (map[string]MarketBalance, error) {
@@ -5298,6 +5345,17 @@ func (s *StorageMinerStub) ComputeDataCid(p0 context.Context, p1 abi.UnpaddedPie
 	return *new(abi.PieceInfo), ErrNotSupported
 }
 
+func (s *StorageMinerStruct) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storiface.SectorRef) (map[abi.SectorNumber]string, error) {
+	if s.Internal.CheckProvableExt == nil {
+		return *new(map[abi.SectorNumber]string), ErrNotSupported
+	}
+	return s.Internal.CheckProvableExt(p0, p1, p2)
+}
+
+func (s *StorageMinerStub) CheckProvableExt(p0 context.Context, p1 abi.RegisteredPoStProof, p2 []storiface.SectorRef) (map[abi.SectorNumber]string, error) {
+	return *new(map[abi.SectorNumber]string), ErrNotSupported
+}
+
 func (s *StorageMinerStruct) ComputeProof(p0 context.Context, p1 []builtinactors.ExtendedSectorInfo, p2 abi.PoStRandomness, p3 abi.ChainEpoch, p4 abinetwork.Version) ([]builtinactors.PoStProof, error) {
 	if s.Internal.ComputeProof == nil {
 		return *new([]builtinactors.PoStProof), ErrNotSupported
@@ -5373,6 +5431,17 @@ func (s *StorageMinerStruct) RecoverFault(p0 context.Context, p1 []abi.SectorNum
 
 func (s *StorageMinerStub) RecoverFault(p0 context.Context, p1 []abi.SectorNumber) ([]cid.Cid, error) {
 	return *new([]cid.Cid), ErrNotSupported
+}
+
+func (s *StorageMinerStruct) RecoverSector(p0 context.Context, p1 abi.SectorNumber) (abi.SectorID, error) {
+	if s.Internal.PledgeSector == nil {
+		return *new(abi.SectorID), ErrNotSupported
+	}
+	return s.Internal.RecoverSector(p0, p1)
+}
+
+func (s *StorageMinerStub) RecoverSector(p0 context.Context, p1 abi.SectorNumber) (abi.SectorID, error) {
+	return *new(abi.SectorID), ErrNotSupported
 }
 
 func (s *StorageMinerStruct) ReturnAddPiece(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error {
@@ -6156,6 +6225,22 @@ func (s *StorageMinerStub) StorageTryLock(p0 context.Context, p1 abi.SectorID, p
 	return false, ErrNotSupported
 }
 
+func (s *StorageMinerStruct) TryBindSector2SealStorage(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) ([]storiface.StorageInfo, error) {
+	return s.Internal.TryBindSector2SealStorage(p0, fileType, pathType, p1, p2)
+}
+
+func (s *StorageMinerStub) TryBindSector2SealStorage(p0 context.Context, fileType storiface.SectorFileType, pathType storiface.PathType, p1 abi.SectorID, p2 string) ([]storiface.StorageInfo, error) {
+	return nil, xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) UnBindSector2SealStorage(p0 context.Context, p1 abi.SectorID) error {
+	return s.Internal.UnBindSector2SealStorage(p0, p1)
+}
+
+func (s *StorageMinerStub) UnBindSector2SealStorage(p0 context.Context, p1 abi.SectorID) error {
+	return xerrors.New("method not supported")
+}
+
 func (s *StorageMinerStruct) WorkerConnect(p0 context.Context, p1 string) error {
 	if s.Internal.WorkerConnect == nil {
 		return ErrNotSupported
@@ -6176,6 +6261,46 @@ func (s *StorageMinerStruct) WorkerJobs(p0 context.Context) (map[uuid.UUID][]sto
 
 func (s *StorageMinerStub) WorkerJobs(p0 context.Context) (map[uuid.UUID][]storiface.WorkerJob, error) {
 	return *new(map[uuid.UUID][]storiface.WorkerJob), ErrNotSupported
+}
+
+func (s *StorageMinerStruct) WorkerPause(p0 context.Context, p1 string, p2 string) error {
+	return s.Internal.WorkerPause(p0, p1, p2)
+}
+
+func (s *StorageMinerStub) WorkerPause(p0 context.Context, p1 string, p2 string) error {
+	return xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) WorkerResume(p0 context.Context, p1 string, p2 string) error {
+	return s.Internal.WorkerResume(p0, p1, p2)
+}
+
+func (s *StorageMinerStub) WorkerResume(p0 context.Context, p1 string, p2 string) error {
+	return xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) WorkerRemove(p0 context.Context, p1 string) error {
+	return s.Internal.WorkerRemove(p0, p1)
+}
+
+func (s *StorageMinerStub) WorkerRemove(p0 context.Context, p1 string) error {
+	return xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) UpdateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return s.Internal.UpdateFinalizeTicketsParams(ctx, tickets, interval)
+}
+
+func (s *StorageMinerStub) UpdateFinalizeTicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) UpdateP1TicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return s.Internal.UpdateP1TicketsParams(ctx, tickets, interval)
+}
+
+func (s *StorageMinerStub) UpdateP1TicketsParams(ctx context.Context, tickets uint, interval uint) error {
+	return xerrors.New("method not supported")
 }
 
 func (s *StorageMinerStruct) WorkerStats(p0 context.Context) (map[uuid.UUID]storiface.WorkerStats, error) {
@@ -6321,25 +6446,25 @@ func (s *WorkerStub) Fetch(p0 context.Context, p1 storiface.SectorRef, p2 storif
 	return *new(storiface.CallID), ErrNotSupported
 }
 
-func (s *WorkerStruct) FinalizeReplicaUpdate(p0 context.Context, p1 storiface.SectorRef) (storiface.CallID, error) {
+func (s *WorkerStruct) FinalizeReplicaUpdate(p0 context.Context, p1 storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error) {
 	if s.Internal.FinalizeReplicaUpdate == nil {
 		return *new(storiface.CallID), ErrNotSupported
 	}
-	return s.Internal.FinalizeReplicaUpdate(p0, p1)
+	return s.Internal.FinalizeReplicaUpdate(p0, p1, p2)
 }
 
-func (s *WorkerStub) FinalizeReplicaUpdate(p0 context.Context, p1 storiface.SectorRef) (storiface.CallID, error) {
+func (s *WorkerStub) FinalizeReplicaUpdate(p0 context.Context, p1 storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error) {
 	return *new(storiface.CallID), ErrNotSupported
 }
 
-func (s *WorkerStruct) FinalizeSector(p0 context.Context, p1 storiface.SectorRef) (storiface.CallID, error) {
+func (s *WorkerStruct) FinalizeSector(p0 context.Context, p1 storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error) {
 	if s.Internal.FinalizeSector == nil {
 		return *new(storiface.CallID), ErrNotSupported
 	}
-	return s.Internal.FinalizeSector(p0, p1)
+	return s.Internal.FinalizeSector(p0, p1, p2)
 }
 
-func (s *WorkerStub) FinalizeSector(p0 context.Context, p1 storiface.SectorRef) (storiface.CallID, error) {
+func (s *WorkerStub) FinalizeSector(p0 context.Context, p1 storiface.SectorRef, p2 []storiface.Range) (storiface.CallID, error) {
 	return *new(storiface.CallID), ErrNotSupported
 }
 
@@ -6638,6 +6763,14 @@ func (s *WorkerStruct) TaskTypes(p0 context.Context) (map[sealtasks.TaskType]str
 
 func (s *WorkerStub) TaskTypes(p0 context.Context) (map[sealtasks.TaskType]struct{}, error) {
 	return *new(map[sealtasks.TaskType]struct{}), ErrNotSupported
+}
+
+func (s *WorkerStruct) HasResourceForNewTask(p0 context.Context, p1 sealtasks.TaskType) bool {
+	return s.Internal.HasResourceForNewTask(p0, p1)
+}
+
+func (s *WorkerStub) HasResourceForNewTask(p0 context.Context, p1 sealtasks.TaskType) bool {
+	return true
 }
 
 func (s *WorkerStruct) UnsealPiece(p0 context.Context, p1 storiface.SectorRef, p2 storiface.UnpaddedByteIndex, p3 abi.UnpaddedPieceSize, p4 abi.SealRandomness, p5 cid.Cid) (storiface.CallID, error) {

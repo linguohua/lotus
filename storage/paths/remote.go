@@ -7,17 +7,13 @@ import (
 	"io"
 	"math/bits"
 	"net/http"
-	"net/url"
 	"os"
-	gopath "path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
-	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -38,14 +34,18 @@ var LocalReaderTimeout = 5 * time.Second
 type Remote struct {
 	local Store
 	index SectorIndex
-	auth  http.Header
+	// auth  http.Header
 
-	limit chan struct{}
+	//limit chan struct{}
 
-	fetchLk  sync.Mutex
-	fetching map[abi.SectorID]chan struct{}
+	// fetchLk  sync.Mutex
+	// fetching map[abi.SectorID]chan struct{}
 
 	pfHandler PartialFileHandler
+
+	//fetchLk  sync.Mutex
+	//fetching map[abi.SectorID]chan struct{}
+	groupID string
 }
 
 func (r *Remote) RemoveCopies(ctx context.Context, s abi.SectorID, typ storiface.SectorFileType) error {
@@ -80,137 +80,157 @@ func (r *Remote) RemoveCopies(ctx context.Context, s abi.SectorID, typ storiface
 	return r.Remove(ctx, s, typ, true, keep)
 }
 
-func NewRemote(local Store, index SectorIndex, auth http.Header, fetchLimit int, pfHandler PartialFileHandler) *Remote {
+func NewRemote(local Store, index SectorIndex, auth http.Header, fetchLimit int, pfHandler PartialFileHandler, groupID string) *Remote {
 	return &Remote{
-		local: local,
-		index: index,
-		auth:  auth,
+		local:   local,
+		index:   index,
+		groupID: groupID,
+		//auth:  auth,
 
-		limit: make(chan struct{}, fetchLimit),
+		//limit: make(chan struct{}, fetchLimit),
 
-		fetching:  map[abi.SectorID]chan struct{}{},
+		// fetching:  map[abi.SectorID]chan struct{}{},
 		pfHandler: pfHandler,
 	}
 }
 
-func (r *Remote) AcquireSector(ctx context.Context, s storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, pathType storiface.PathType, op storiface.AcquireMode, opts ...storiface.AcquireOption) (storiface.SectorPaths, storiface.SectorPaths, error) {
+func (r *Remote) AcquireSector(ctx context.Context, s storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, pathType storiface.PathType, op storiface.AcquireMode) (storiface.SectorPaths, storiface.SectorPaths, error) {
 	if existing|allocate != existing^allocate {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")
 	}
 
-	settings := storiface.AcquireSettings{
-		// Into will tell us which paths things should be fetched into or allocated in.
-		Into: nil,
+	// lingh: no-fetch
+	// for {
+	// 	r.fetchLk.Lock()
+
+	// 	c, locked := r.fetching[s.ID]
+	// 	if !locked {
+	// 		r.fetching[s.ID] = make(chan struct{})
+	// 		r.fetchLk.Unlock()
+	// 		break
+	// 	}
+
+	// 	r.fetchLk.Unlock()
+
+	// 	select {
+	// 	case <-c:
+	// 		continue
+	// 	case <-ctx.Done():
+	// 		return storiface.SectorPaths{}, storiface.SectorPaths{}, ctx.Err()
+	// 	}
+	// }
+
+	// defer func() {
+	// 	r.fetchLk.Lock()
+	// 	close(r.fetching[s.ID])
+	// 	delete(r.fetching, s.ID)
+	// 	r.fetchLk.Unlock()
+	// }()
+
+	// paths, stores, err := r.local.AcquireSector(ctx, s, existing, allocate, pathType, op)
+	// if err != nil {
+	// 	return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("local acquire error: %w", err)
+	// }
+
+	// var toFetch storiface.SectorFileType
+	// for _, fileType := range storiface.PathTypes {
+	// 	if fileType&existing == 0 {
+	// 		continue
+	// 	}
+
+	// 	if storiface.PathByType(paths, fileType) == "" {
+	// 		toFetch |= fileType
+	// 	}
+	// }
+
+	// apaths, ids, err := r.local.AcquireSector(ctx, s, storiface.FTNone, toFetch, pathType, op)
+	// if err != nil {
+	// 	return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("allocate local sector for fetching: %w", err)
+	// }
+
+	// odt := storiface.FSOverheadSeal
+	// if pathType == storiface.PathStorage {
+	// 	odt = storiface.FsOverheadFinalized
+	// }
+
+	// releaseStorage, err := r.local.Reserve(ctx, s, toFetch, ids, odt)
+	// if err != nil {
+	// 	return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("reserving storage space: %w", err)
+	// }
+	// defer releaseStorage()
+
+	// for _, fileType := range storiface.PathTypes {
+	// 	if fileType&existing == 0 {
+	// 		continue
+	// 	}
+
+	// 	if storiface.PathByType(paths, fileType) != "" {
+	// 		continue
+	// 	}
+
+	// 	dest := storiface.PathByType(apaths, fileType)
+	// 	storageID := storiface.PathByType(ids, fileType)
+
+	// 	url, err := r.acquireFromRemote(ctx, s.ID, fileType, dest)
+	// 	if err != nil {
+	// 		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
+	// 	}
+
+	// 	storiface.SetPathByType(&paths, fileType, dest)
+	// 	storiface.SetPathByType(&stores, fileType, storageID)
+
+	// 	if err := r.index.StorageDeclareSector(ctx, ID(storageID), s.ID, fileType, op == storiface.AcquireMove); err != nil {
+	// 		log.Warnf("declaring sector %v in %s failed: %+v", s, storageID, err)
+	// 		continue
+	// 	}
+
+	// 	if op == storiface.AcquireMove {
+	// 		if err := r.deleteFromRemote(ctx, url); err != nil {
+	// 			log.Warnf("deleting sector %v from %s (delete %s): %+v", s, storageID, url, err)
+	// 		}
+	// 	}
+	// }
+	paths := storiface.SectorPaths{}
+	stores := storiface.SectorPaths{}
+	groupID := r.groupID
+	if pathType != storiface.PathSealing {
+		//return paths, stores, xerrors.Errorf("-lin- this version only supply remote.AcquireSector with sealing type:%s", pathType)
+		groupID = "" // use empty groupID to alloc store type storage
 	}
-	for _, o := range opts {
-		o(&settings)
-	}
 
-	if settings.Into != nil {
-		if !allocate.IsNone() {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("cannot specify Into with allocate")
-		}
-		if !settings.Into.HasAllSet(existing) {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("Into has to have all existing paths")
-		}
-	}
-
-	// First make sure that no other goroutines are trying to fetch this sector;
-	// wait if there are any.
-	for {
-		r.fetchLk.Lock()
-
-		c, locked := r.fetching[s.ID]
-		if !locked {
-			r.fetching[s.ID] = make(chan struct{})
-			r.fetchLk.Unlock()
-			break
-		}
-
-		r.fetchLk.Unlock()
-
-		select {
-		case <-c:
-			continue
-		case <-ctx.Done():
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, ctx.Err()
-		}
-	}
-
-	defer func() {
-		r.fetchLk.Lock()
-		close(r.fetching[s.ID])
-		delete(r.fetching, s.ID)
-		r.fetchLk.Unlock()
-	}()
-
-	// Try to get the sector from local storage
-	paths, stores, err := r.local.AcquireSector(ctx, s, existing, allocate, pathType, op)
+	// get the local path, lock storage by sector
+	sis, err := r.index.TryBindSector2SealStorage(ctx, existing, pathType, s.ID, groupID)
 	if err != nil {
-		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("local acquire error: %w", err)
+		return storiface.SectorPaths{}, storiface.SectorPaths{}, err
 	}
 
-	var toFetch storiface.SectorFileType
-	for _, fileType := range existing.AllSet() {
-		if storiface.PathByType(paths, fileType) == "" {
-			toFetch |= fileType
-		}
-	}
-
-	// get a list of paths to fetch data into. Note: file type filters will apply inside this call.
-	var fetchPaths, fetchIDs storiface.SectorPaths
-
-	if settings.Into == nil {
-		// fetching without existing reservation, so allocate paths and create a reservation
-		fetchPaths, fetchIDs, err = r.local.AcquireSector(ctx, s, storiface.FTNone, toFetch, pathType, op)
-		if err != nil {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("allocate local sector for fetching: %w", err)
-		}
-
-		log.Debugw("Fetching sector data without existing reservation", "sector", s, "toFetch", toFetch, "fetchPaths", fetchPaths, "fetchIDs", fetchIDs)
-
-		overheadTable := storiface.FSOverheadSeal
-		if pathType == storiface.PathStorage {
-			overheadTable = storiface.FsOverheadFinalized
-		}
-
-		// If any path types weren't found in local storage, try fetching them
-
-		// First reserve storage
-		releaseStorage, err := r.local.Reserve(ctx, s, toFetch, fetchIDs, overheadTable, MinFreeStoragePercentage)
-		if err != nil {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("reserving storage space: %w", err)
-		}
-		defer releaseStorage()
-	} else {
-		fetchPaths = settings.Into.Paths
-		fetchIDs = settings.Into.IDs
-
-		log.Debugw("Fetching sector data with existing reservation", "sector", s, "toFetch", toFetch, "fetchPaths", fetchPaths, "fetchIDs", fetchIDs)
-	}
-
-	for _, fileType := range toFetch.AllSet() {
-		dest := storiface.PathByType(fetchPaths, fileType)
-		storageID := storiface.PathByType(fetchIDs, fileType)
-
-		url, err := r.acquireFromRemote(ctx, s.ID, fileType, dest)
-		if err != nil {
-			return storiface.SectorPaths{}, storiface.SectorPaths{}, err
-		}
-
-		storiface.SetPathByType(&paths, fileType, dest)
-		storiface.SetPathByType(&stores, fileType, storageID)
-
-		if err := r.index.StorageDeclareSector(ctx, storiface.ID(storageID), s.ID, fileType, op == storiface.AcquireMove); err != nil {
-			log.Warnf("declaring sector %v in %s failed: %+v", s, storageID, err)
-			continue
-		}
-
-		if op == storiface.AcquireMove {
-			id := storiface.ID(storageID)
-			if err := r.deleteFromRemote(ctx, url, []storiface.ID{id}); err != nil {
-				log.Warnf("deleting sector %v from %s (delete %s): %+v", s, storageID, url, err)
+	if len(sis) == 1 {
+		si := &sis[0]
+		if len(si.URLs) > 0 {
+			loclpath := si.URLs[0]
+			for _, fileType := range storiface.PathTypes {
+				dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(s.ID))
+				storiface.SetPathByType(&paths, fileType, dest)
+				storiface.SetPathByType(&stores, fileType, string(si.ID))
 			}
+		}
+	} else {
+		sealS := &sis[1]
+		for j, fileType := range storiface.PathTypes {
+			si := &sis[j] // it will be ok
+			if len(si.URLs) == 0 {
+				continue
+			}
+
+			if si.ID == "" {
+				si = sealS
+			}
+
+			loclpath := si.URLs[0]
+			dest := filepath.Join(loclpath, fileType.String(), storiface.SectorName(s.ID))
+			storiface.SetPathByType(&paths, fileType, dest)
+
+			storiface.SetPathByType(&stores, fileType, string(si.ID))
 		}
 	}
 
@@ -229,110 +249,170 @@ func tempFetchDest(spath string, create bool) (string, error) {
 	return filepath.Join(tempdir, b), nil
 }
 
-func (r *Remote) acquireFromRemote(ctx context.Context, s abi.SectorID, fileType storiface.SectorFileType, dest string) (string, error) {
-	si, err := r.index.StorageFindSector(ctx, s, fileType, 0, false)
-	if err != nil {
-		return "", err
-	}
+// func (r *Remote) acquireFromRemote(ctx context.Context, s abi.SectorID, fileType storiface.SectorFileType, dest string) (string, error) {
+// si, err := r.index.StorageFindSector(ctx, s, fileType, 0, false)
+// if err != nil {
+// 	return "", err
+// }
 
-	if len(si) == 0 {
-		return "", xerrors.Errorf("failed to acquire sector %v from remote(%d): %w", s, fileType, storiface.ErrSectorNotFound)
-	}
+// if len(si) == 0 {
+// 	return "", xerrors.Errorf("failed to acquire sector %v from remote(%d): %w", s, fileType, storiface.ErrSectorNotFound)
+// }
 
-	sort.Slice(si, func(i, j int) bool {
-		return si[i].Weight < si[j].Weight
-	})
+// sort.Slice(si, func(i, j int) bool {
+// 	return si[i].Weight < si[j].Weight
+// })
 
-	var merr error
-	for _, info := range si {
-		// TODO: see what we have local, prefer that
+// var merr error
+// for _, info := range si {
+// 	// TODO: see what we have local, prefer that
 
-		for _, url := range info.URLs {
-			tempDest, err := tempFetchDest(dest, true)
-			if err != nil {
-				return "", err
-			}
+// 	for _, url := range info.URLs {
+// 		tempDest, err := tempFetchDest(dest, true)
+// 		if err != nil {
+// 			return "", err
+// 		}
 
-			if err := os.RemoveAll(dest); err != nil {
-				return "", xerrors.Errorf("removing dest: %w", err)
-			}
+// 		if err := os.RemoveAll(dest); err != nil {
+// 			return "", xerrors.Errorf("removing dest: %w", err)
+// 		}
 
-			err = r.fetchThrottled(ctx, url, tempDest)
-			if err != nil {
-				merr = multierror.Append(merr, xerrors.Errorf("fetch error %s (storage %s) -> %s: %w", url, info.ID, tempDest, err))
-				// fetching failed, remove temp file
-				if rerr := os.RemoveAll(tempDest); rerr != nil {
-					merr = multierror.Append(merr, xerrors.Errorf("removing temp dest (post-err cleanup): %w", rerr))
-				}
-				continue
-			}
 
-			if err := Move(tempDest, dest); err != nil {
-				return "", xerrors.Errorf("fetch move error (storage %s) %s -> %s: %w", info.ID, tempDest, dest, err)
-			}
+		//if err := Move(tempDest, dest); err != nil {
+		//	return "", xerrors.Errorf("fetch move error (storage %s) %s -> %s: %w", info.ID, tempDest, dest, err)
+		//}
 
-			if merr != nil {
-				log.Warnw("acquireFromRemote encountered errors when fetching sector from remote", "errors", merr)
-			}
-			return url, nil
-		}
-	}
 
-	return "", xerrors.Errorf("failed to acquire sector %v from remote (tried %v): %w", s, si, merr)
-}
+// 		if err := move(tempDest, dest); err != nil {
+// 			return "", xerrors.Errorf("fetch move error (storage %s) %s -> %s: %w", info.ID, tempDest, dest, err)
+// 		}
 
-func (r *Remote) fetchThrottled(ctx context.Context, url, outname string) (rerr error) {
-	if len(r.limit) >= cap(r.limit) {
-		log.Infof("Throttling fetch, %d already running", len(r.limit))
-	}
+// 		if merr != nil {
+// 			log.Warnw("acquireFromRemote encountered errors when fetching sector from remote", "errors", merr)
+// 		}
+// 		return url, nil
+// 	}
+// }
 
-	// TODO: Smarter throttling
-	//  * Priority (just going sequentially is still pretty good)
-	//  * Per interface
-	//  * Aware of remote load
-	select {
-	case r.limit <- struct{}{}:
-		defer func() { <-r.limit }()
-	case <-ctx.Done():
-		return xerrors.Errorf("context error while waiting for fetch limiter: %w", ctx.Err())
-	}
+// return "", xerrors.Errorf("failed to acquire sector %v from remote (tried %v): %w", s, si, merr)
+//return "", xerrors.Errorf("-lin- this version not support acquireFromRemote %s", dest)
+// }
 
-	return fetch(ctx, url, outname, r.auth)
-}
+//func (r *Remote) fetchThrottled(ctx context.Context, url, outname string) (rerr error) {
+//	if len(r.limit) >= cap(r.limit) {
+//		log.Infof("Throttling fetch, %d already running", len(r.limit))
+//	}
+//}
+// func (r *Remote) fetch(ctx context.Context, url, outname string) error {
+// 	log.Debugf("Fetch %s -> %s", url, outname)
+
+// if len(r.limit) >= cap(r.limit) {
+// 	log.Infof("Throttling fetch, %d already running", len(r.limit))
+// }
+
+// // TODO: Smarter throttling
+// //  * Priority (just going sequentially is still pretty good)
+// //  * Per interface
+// //  * Aware of remote load
+// select {
+// case r.limit <- struct{}{}:
+// 	defer func() { <-r.limit }()
+// case <-ctx.Done():
+// 	return xerrors.Errorf("context error while waiting for fetch limiter: %w", ctx.Err())
+// }
+
+// req, err := http.NewRequest("GET", url, nil)
+// if err != nil {
+// 	return xerrors.Errorf("request: %w", err)
+// }
+// req.Header = r.auth
+// req = req.WithContext(ctx)
+
+// resp, err := http.DefaultClient.Do(req)
+// if err != nil {
+// 	return xerrors.Errorf("do request: %w", err)
+// }
+// defer resp.Body.Close() // nolint
+
+// if resp.StatusCode != 200 {
+// 	return xerrors.Errorf("non-200 code: %d", resp.StatusCode)
+// }
+
+// 	/*bar := pb.New64(w.sizeForType(typ))
+// 	bar.ShowPercent = true
+// 	bar.ShowSpeed = true
+// 	bar.Units = pb.U_BYTES
+
+// 	barreader := bar.NewProxyReader(resp.Body)
+
+// 	bar.Start()
+// 	defer bar.Finish()*/
+
+// mediatype, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+// if err != nil {
+// 	return xerrors.Errorf("parse media type: %w", err)
+// }
+
+// if err := os.RemoveAll(outname); err != nil {
+// 	return xerrors.Errorf("removing dest: %w", err)
+// }
+
+// switch mediatype {
+// case "application/x-tar":
+// 	return tarutil.ExtractTar(resp.Body, outname)
+// case "application/octet-stream":
+// 	f, err := os.Create(outname)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	_, err = io.CopyBuffer(f, resp.Body, make([]byte, CopyBuf))
+// 	if err != nil {
+// 		f.Close() // nolint
+// 		return err
+// 	}
+// 	return f.Close()
+// default:
+// 	return xerrors.Errorf("unknown content type: '%s'", mediatype)
+// }
+//return xerrors.Errorf("-lin- this version not support Fetch %s", url)
+// }
 
 func (r *Remote) checkAllocated(ctx context.Context, url string, spt abi.RegisteredSealProof, offset, size abi.PaddedPieceSize) (bool, error) {
-	url = fmt.Sprintf("%s/%d/allocated/%d/%d", url, spt, offset.Unpadded(), size.Unpadded())
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return false, xerrors.Errorf("request: %w", err)
-	}
-	req.Header = r.auth.Clone()
-	req = req.WithContext(ctx)
+	// url = fmt.Sprintf("%s/%d/allocated/%d/%d", url, spt, offset.Unpadded(), size.Unpadded())
+	// req, err := http.NewRequest("GET", url, nil)
+	// if err != nil {
+	// 	return false, xerrors.Errorf("request: %w", err)
+	// }
+	// req.Header = r.auth.Clone()
+	// fmt.Printf("req using header: %#v \n", r.auth)
+	// req = req.WithContext(ctx)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false, xerrors.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close() // nolint
+	// resp, err := http.DefaultClient.Do(req)
+	// if err != nil {
+	// 	return false, xerrors.Errorf("do request: %w", err)
+	// }
+	// defer resp.Body.Close() // nolint
 
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return true, nil
-	case http.StatusRequestedRangeNotSatisfiable:
-		return false, nil
-	default:
-		return false, xerrors.Errorf("unexpected http response: %d", resp.StatusCode)
-	}
+	// switch resp.StatusCode {
+	// case http.StatusOK:
+	// 	return true, nil
+	// case http.StatusRequestedRangeNotSatisfiable:
+	// 	return false, nil
+	// default:
+	// 	return false, xerrors.Errorf("unexpected http response: %d", resp.StatusCode)
+	// }
+	return false, xerrors.Errorf("-lin- this version not support checkAllocated")
 }
 
-func (r *Remote) MoveStorage(ctx context.Context, s storiface.SectorRef, types storiface.SectorFileType, opts ...storiface.AcquireOption) error {
+func (r *Remote) MoveStorage(ctx context.Context, s storiface.SectorRef, types storiface.SectorFileType) error {
+	// lingh: the data must be local!
 	// Make sure we have the data local
-	_, _, err := r.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove, opts...)
-	if err != nil {
-		return xerrors.Errorf("acquire src storage (remote): %w", err)
-	}
+	// _, _, err := r.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
+	// if err != nil {
+	// 	return xerrors.Errorf("acquire src storage (remote): %w", err)
+	// }
 
-	return r.local.MoveStorage(ctx, s, types, opts...)
+	return r.local.MoveStorage(ctx, s, types)
 }
 
 func (r *Remote) Remove(ctx context.Context, sid abi.SectorID, typ storiface.SectorFileType, force bool, keepIn []storiface.ID) error {
@@ -375,22 +455,23 @@ func (r *Remote) deleteFromRemote(ctx context.Context, url string, keepIn storif
 
 	log.Infof("Delete %s", url)
 
-	req, err := http.NewRequest("DELETE", url, nil)
-	if err != nil {
-		return xerrors.Errorf("request: %w", err)
-	}
-	req.Header = r.auth
-	req = req.WithContext(ctx)
+	// req, err := http.NewRequest("DELETE", url, nil)
+	// if err != nil {
+	// 	return xerrors.Errorf("request: %w", err)
+	// }
+	// req.Header = r.auth
+	// req = req.WithContext(ctx)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return xerrors.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close() // nolint
+	// resp, err := http.DefaultClient.Do(req)
+	// if err != nil {
+	// 	return xerrors.Errorf("do request: %w", err)
+	// }
+	// defer resp.Body.Close() // nolint
 
-	if resp.StatusCode != 200 {
-		return xerrors.Errorf("non-200 code: %d", resp.StatusCode)
-	}
+	// if resp.StatusCode != 200 {
+	// 	return xerrors.Errorf("non-200 code: %d", resp.StatusCode)
+	// }
+	log.Debugf("-lin- this version not support Delete %s", url)
 
 	return nil
 }
@@ -406,103 +487,97 @@ func (r *Remote) FsStat(ctx context.Context, id storiface.ID) (fsutil.FsStat, er
 		return fsutil.FsStat{}, xerrors.Errorf("local stat: %w", err)
 	}
 
-	si, err := r.index.StorageInfo(ctx, id)
-	if err != nil {
-		return fsutil.FsStat{}, xerrors.Errorf("getting remote storage info: %w", err)
-	}
+	// si, err := r.index.StorageInfo(ctx, id)
+	// if err != nil {
+	// 	return fsutil.FsStat{}, xerrors.Errorf("getting remote storage info: %w", err)
+	// }
 
-	if len(si.URLs) == 0 {
-		return fsutil.FsStat{}, xerrors.Errorf("no known URLs for remote storage %s", id)
-	}
+	// if len(si.URLs) == 0 {
+	// 	return fsutil.FsStat{}, xerrors.Errorf("no known URLs for remote storage %s", id)
+	// }
 
-	for _, urlStr := range si.URLs {
-		out, err := r.StatUrl(ctx, urlStr, id)
-		if err != nil {
-			log.Warnw("stat url failed", "url", urlStr, "error", err)
-			continue
-		}
+	// rl, err := url.Parse(si.URLs[0])
+	// if err != nil {
+	// 	return fsutil.FsStat{}, xerrors.Errorf("failed to parse url: %w", err)
+	// }
 
-		return out, nil
-	}
+	// rl.Path = gopath.Join(rl.Path, "stat", string(id))
 
-	return fsutil.FsStat{}, xerrors.Errorf("all endpoints failed for remote storage %s", id)
-}
+	// req, err := http.NewRequest("GET", rl.String(), nil)
+	// if err != nil {
+	// 	return fsutil.FsStat{}, xerrors.Errorf("request: %w", err)
+	// }
+	// req.Header = r.auth
+	// req = req.WithContext(ctx)
 
-func (r *Remote) StatUrl(ctx context.Context, urlStr string, id storiface.ID) (fsutil.FsStat, error) {
-	rl, err := url.Parse(urlStr)
-	if err != nil {
-		return fsutil.FsStat{}, xerrors.Errorf("parsing URL: %w", err)
-	}
+	//resp, err := http.DefaultClient.Do(req)
+	//if err != nil {
+	//	return fsutil.FsStat{}, xerrors.Errorf("do request: %w", err)
+	//}
+	//switch resp.StatusCode {
+	//case 200:
+	//	break
+	//case 404:
+	//	return fsutil.FsStat{}, errPathNotFound
+	//case 500:
+	//	b, err := io.ReadAll(resp.Body)
+	//	if err != nil {
+	//		return fsutil.FsStat{}, xerrors.Errorf("fsstat: got http 500, then failed to read the error: %w", err)
+	//	}
 
-	rl.Path = gopath.Join(rl.Path, "stat", string(id))
+	// 	return fsutil.FsStat{}, xerrors.Errorf("fsstat: got http 500: %s", string(b))
+	// }
 
-	req, err := http.NewRequest("GET", rl.String(), nil)
-	if err != nil {
-		return fsutil.FsStat{}, xerrors.Errorf("creating request failed: %w", err)
-	}
-	req.Header = r.auth
-	req = req.WithContext(ctx)
+	// var out fsutil.FsStat
+	// if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	// 	return fsutil.FsStat{}, xerrors.Errorf("decoding fsstat: %w", err)
+	// }
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fsutil.FsStat{}, xerrors.Errorf("do request: %w", err)
-	}
+	// defer resp.Body.Close() // nolint
 
-	if resp.StatusCode == 200 {
-		var out fsutil.FsStat
-		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-			_ = resp.Body.Close()
-			return fsutil.FsStat{}, xerrors.Errorf("decoding response failed: %w", err)
-		}
-		_ = resp.Body.Close()
-		return out, nil // Successfully decoded, return the result
-	}
-
-	// non-200 status code
-	b, _ := io.ReadAll(resp.Body) // Best-effort read the body for logging
-	_ = resp.Body.Close()
-
-	return fsutil.FsStat{}, xerrors.Errorf("endpoint failed %s: %d %s", rl.String(), resp.StatusCode, string(b))
+	// return fsutil.FsStat{}, xerrors.Errorf("-lin- this version not support remote FsStat")
+	log.Debugf("-lin- this version not support remote FsStat")
+	return fsutil.FsStat{}, nil
 }
 
 func (r *Remote) readRemote(ctx context.Context, url string, offset, size abi.PaddedPieceSize) (io.ReadCloser, error) {
-	if len(r.limit) >= cap(r.limit) {
-		log.Infof("Throttling remote read, %d already running", len(r.limit))
-	}
+	// if len(r.limit) >= cap(r.limit) {
+	// 	log.Infof("Throttling remote read, %d already running", len(r.limit))
+	// }
 
-	// TODO: Smarter throttling
-	//  * Priority (just going sequentially is still pretty good)
-	//  * Per interface
-	//  * Aware of remote load
-	select {
-	case r.limit <- struct{}{}:
-		defer func() { <-r.limit }()
-	case <-ctx.Done():
-		return nil, xerrors.Errorf("context error while waiting for fetch limiter: %w", ctx.Err())
-	}
+	// // TODO: Smarter throttling
+	// //  * Priority (just going sequentially is still pretty good)
+	// //  * Per interface
+	// //  * Aware of remote load
+	// select {
+	// case r.limit <- struct{}{}:
+	// 	defer func() { <-r.limit }()
+	// case <-ctx.Done():
+	// 	return nil, xerrors.Errorf("context error while waiting for fetch limiter: %w", ctx.Err())
+	// }
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, xerrors.Errorf("request: %w", err)
-	}
+	// req, err := http.NewRequest("GET", url, nil)
+	// if err != nil {
+	// 	return nil, xerrors.Errorf("request: %w", err)
+	// }
 
-	if r.auth != nil {
-		req.Header = r.auth.Clone()
-	}
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", offset, offset+size-1))
-	req = req.WithContext(ctx)
+	// if r.auth != nil {
+	// 	req.Header = r.auth.Clone()
+	// }
+	// req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", offset, offset+size-1))
+	// req = req.WithContext(ctx)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, xerrors.Errorf("do request: %w", err)
-	}
+	// resp, err := http.DefaultClient.Do(req)
+	// if err != nil {
+	// 	return nil, xerrors.Errorf("do request: %w", err)
+	// }
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		resp.Body.Close() // nolint
-		return nil, xerrors.Errorf("non-200 code: %d", resp.StatusCode)
-	}
-
-	return resp.Body, nil
+	// if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+	// 	resp.Body.Close() // nolint
+	// 	return nil, xerrors.Errorf("non-200 code: %d", resp.StatusCode)
+	// }
+	log.Debugf("-lin- this version not support readRemote %s", url)
+	return nil, nil
 }
 
 // CheckIsUnsealed checks if we have an unsealed piece at the given offset in an already unsealed sector file for the given piece
@@ -770,49 +845,7 @@ func (r *Remote) Reader(ctx context.Context, s storiface.SectorRef, offset, size
 	return nil, nil
 }
 
-// ReaderSeq creates a simple sequential reader for a file. Does not work for
-// file types which are a directory (e.g. FTCache).
-func (r *Remote) ReaderSeq(ctx context.Context, s storiface.SectorRef, ft storiface.SectorFileType) (io.ReadCloser, error) {
-	paths, _, err := r.local.AcquireSector(ctx, s, ft, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
-	if err != nil {
-		return nil, xerrors.Errorf("acquire local: %w", err)
-	}
-
-	path := storiface.PathByType(paths, ft)
-	if path != "" {
-		return os.Open(path)
-	}
-
-	si, err := r.index.StorageFindSector(ctx, s.ID, ft, 0, false)
-	if err != nil {
-		log.Debugf("Reader, did not find file on any of the workers %s (%s)", path, ft.String())
-		return nil, err
-	}
-
-	if len(si) == 0 {
-		return nil, xerrors.Errorf("failed to read sector %v from remote(%d): %w", s, ft, storiface.ErrSectorNotFound)
-	}
-
-	sort.Slice(si, func(i, j int) bool {
-		return si[i].Weight > si[j].Weight
-	})
-
-	for _, info := range si {
-		for _, url := range info.URLs {
-			rd, err := r.readRemote(ctx, url, 0, 0)
-			if err != nil {
-				log.Warnw("reading from remote", "url", url, "error", err)
-				continue
-			}
-
-			return rd, err
-		}
-	}
-
-	return nil, xerrors.Errorf("failed to read sector %v from remote(%d): %w", s, ft, storiface.ErrSectorNotFound)
-}
-
-func (r *Remote) Reserve(ctx context.Context, sid storiface.SectorRef, ft storiface.SectorFileType, storageIDs storiface.SectorPaths, overheadTab map[storiface.SectorFileType]int, minFreePercentage float64) (func(), error) {
+func (r *Remote) Reserve(ctx context.Context, sid storiface.SectorRef, ft storiface.SectorFileType, storageIDs storiface.SectorPaths, overheadTab map[storiface.SectorFileType]int) (func(), error) {
 	log.Warnf("reserve called on remote store, sectorID: %v", sid.ID)
 	return func() {
 
@@ -850,29 +883,23 @@ func (r *Remote) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 		return nil, err
 	}
 
-	merr := xerrors.Errorf("sector not found")
-
 	for _, info := range si {
 		for _, u := range info.BaseURLs {
 			url := fmt.Sprintf("%s/vanilla/single", u)
 
 			req, err := http.NewRequest("POST", url, strings.NewReader(string(jreq)))
 			if err != nil {
-				merr = multierror.Append(merr, xerrors.Errorf("request: %w", err))
-				log.Warnw("GenerateSingleVanillaProof request failed", "url", url, "error", err)
-				continue
+				return nil, xerrors.Errorf("request: %w", err)
 			}
 
-			if r.auth != nil {
-				req.Header = r.auth.Clone()
-			}
+			// if r.auth != nil {
+			// 	req.Header = r.auth.Clone()
+			// }
 			req = req.WithContext(ctx)
 
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
-				merr = multierror.Append(merr, xerrors.Errorf("do request: %w", err))
-				log.Warnw("GenerateSingleVanillaProof do request failed", "url", url, "error", err)
-				continue
+				return nil, xerrors.Errorf("do request: %w", err)
 			}
 
 			if resp.StatusCode != http.StatusOK {
@@ -882,18 +909,14 @@ func (r *Remote) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 				}
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
-					merr = multierror.Append(merr, xerrors.Errorf("resp.Body ReadAll: %w", err))
-					log.Warnw("GenerateSingleVanillaProof read response body failed", "url", url, "error", err)
-					continue
+					return nil, xerrors.Errorf("resp.Body ReadAll: %w", err)
 				}
 
 				if err := resp.Body.Close(); err != nil {
 					log.Error("response close: ", err)
 				}
 
-				merr = multierror.Append(merr, xerrors.Errorf("non-200 code from %s: '%s'", url, strings.TrimSpace(string(body))))
-				log.Warnw("GenerateSingleVanillaProof non-200 code from remote", "code", resp.StatusCode, "url", url, "body", string(body))
-				continue
+				return nil, xerrors.Errorf("non-200 code from %s: '%s'", url, strings.TrimSpace(string(body)))
 			}
 
 			body, err := io.ReadAll(resp.Body)
@@ -902,109 +925,17 @@ func (r *Remote) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 					log.Error("response close: ", err)
 				}
 
-				merr = multierror.Append(merr, xerrors.Errorf("resp.Body ReadAll: %w", err))
-				log.Warnw("GenerateSingleVanillaProof read response body failed", "url", url, "error", err)
-				continue
+				return nil, xerrors.Errorf("resp.Body ReadAll: %w", err)
 			}
-
-			_ = resp.Body.Close()
 
 			return body, nil
 		}
 	}
 
-	return nil, merr
+	return nil, xerrors.Errorf("sector not found")
 }
 
-func (r *Remote) GeneratePoRepVanillaProof(ctx context.Context, sr storiface.SectorRef, sealed, unsealed cid.Cid, ticket abi.SealRandomness, seed abi.InteractiveSealRandomness) ([]byte, error) {
-	// Attempt to generate the proof locally first
-	p, err := r.local.GeneratePoRepVanillaProof(ctx, sr, sealed, unsealed, ticket, seed)
-	if err != errPathNotFound {
-		return p, err
-	}
-
-	// Define the file types to look for based on the sector's state
-	ft := storiface.FTSealed | storiface.FTCache
-
-	// Find sector information
-	si, err := r.index.StorageFindSector(ctx, sr.ID, ft, 0, false)
-	if err != nil {
-		return nil, xerrors.Errorf("finding sector %d failed: %w", sr.ID, err)
-	}
-
-	// Prepare request parameters
-	requestParams := PoRepVanillaParams{
-		Sector:   sr,
-		Sealed:   sealed,
-		Unsealed: unsealed,
-		Ticket:   ticket,
-		Seed:     seed,
-	}
-	jreq, err := json.Marshal(requestParams)
-	if err != nil {
-		return nil, err
-	}
-
-	merr := xerrors.Errorf("sector not found")
-
-	// Iterate over all found sector locations
-	for _, info := range si {
-		for _, u := range info.BaseURLs {
-			url := fmt.Sprintf("%s/vanilla/porep", u)
-
-			// Create and send the request
-			req, err := http.NewRequest("POST", url, strings.NewReader(string(jreq)))
-			if err != nil {
-				merr = multierror.Append(merr, xerrors.Errorf("request: %w", err))
-				log.Warnw("GeneratePoRepVanillaProof request failed", "url", url, "error", err)
-				continue
-			}
-
-			// Set auth headers if available
-			if r.auth != nil {
-				req.Header = r.auth.Clone()
-			}
-			req = req.WithContext(ctx)
-
-			// Execute the request
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				merr = multierror.Append(merr, xerrors.Errorf("do request: %w", err))
-				log.Warnw("GeneratePoRepVanillaProof do request failed", "url", url, "error", err)
-				continue
-			}
-
-			// Handle non-OK status codes
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				_ = resp.Body.Close()
-
-				if resp.StatusCode == http.StatusNotFound {
-					log.Debugw("reading vanilla proof from remote not-found response", "url", url, "store", info.ID)
-					continue
-				}
-
-				merr = multierror.Append(merr, xerrors.Errorf("non-200 code from %s: '%s'", url, strings.TrimSpace(string(body))))
-				log.Warnw("GeneratePoRepVanillaProof non-200 code from remote", "code", resp.StatusCode, "url", url, "body", string(body))
-				continue
-			}
-
-			// Read the response body
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				merr = multierror.Append(merr, xerrors.Errorf("resp.Body ReadAll: %w", err))
-				log.Warnw("GeneratePoRepVanillaProof read response body failed", "url", url, "error", err)
-			}
-			_ = resp.Body.Close()
-
-			// Return the proof if successful
-			return body, nil
-		}
-	}
-
-	// Return the accumulated error if the proof was not generated
-	return nil, merr
-}
+var _ Store = &Remote{}
 
 type funcCloser func() error
 
