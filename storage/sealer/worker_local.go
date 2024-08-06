@@ -347,9 +347,6 @@ func FFIExec(opts ...ffiwrapper.FFIWrapperOpt) func(l *LocalWorker) (storiface.S
 	}
 }
 
-func (l *localWorkerPathProvider) AcquireSectorCopy(ctx context.Context, id storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, ptype storiface.PathType) (storiface.SectorPaths, func(), error) {
-	return (&localWorkerPathProvider{w: l.w, op: storiface.AcquireCopy}).AcquireSector(ctx, id, existing, allocate, ptype)
-}
 
 func (l *localWorkerPathProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
 	return fmt.Errorf("DiscoverSectorStore not implemented for localWorkerPathProvider")

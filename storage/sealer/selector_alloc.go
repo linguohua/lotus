@@ -118,7 +118,7 @@ func (s *addPieceSelector) findBestStorages() []storiface.StorageInfo {
 
 	// try to find best group
 	ctx := context.TODO()
-	best, err := s.index.StorageBestAlloc(ctx, s.alloc, ssize, s.ptype)
+	best, err := s.index.StorageBestAlloc(ctx, s.alloc, ssize, s.ptype, s.sector.ID.Miner)
 	if err != nil {
 		log.Errorf("addPieceSelector: sector:%v, finding best alloc storage: %v", s.sector.ID, err)
 		return nil

@@ -487,7 +487,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storiface.SectorRef, exis
 			log.Debugf("Manager.AddPiece try to use new selector, sector: %s, existing pieces:%d", sector.ID, len(existingPieces))
 			// new
 			selector = newAddPieceSelector(m.index, sector,
-				storiface.FTUnsealed, storiface.PathSealing, sector.ID.Miner)
+				storiface.FTUnsealed, storiface.PathSealing)
 		}
 
 	} else {
@@ -501,7 +501,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storiface.SectorRef, exis
 			return abi.PieceInfo{}, xerrors.Errorf("AddPiece failed, no groupID found for sector: %s", sector.ID)
 		}
 
-		selector = newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTUnsealed, groupID)
+		selector = newExistingSelector(m.queryWorker, m.index, sector.ID, storiface.FTUnsealed, sector.ID.Miner, groupID)
 	}
 
 	var out abi.PieceInfo

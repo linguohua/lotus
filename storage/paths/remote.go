@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
+	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -94,7 +96,7 @@ func NewRemote(local Store, index SectorIndex, auth http.Header, fetchLimit int,
 	}
 }
 
-func (r *Remote) AcquireSector(ctx context.Context, s storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, pathType storiface.PathType, op storiface.AcquireMode) (storiface.SectorPaths, storiface.SectorPaths, error) {
+func (r *Remote) AcquireSector(ctx context.Context, s storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, pathType storiface.PathType, op storiface.AcquireMode, opts ...storiface.AcquireOption) (storiface.SectorPaths, storiface.SectorPaths, error) {
 	if existing|allocate != existing^allocate {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")
 	}
@@ -404,7 +406,7 @@ func (r *Remote) checkAllocated(ctx context.Context, url string, spt abi.Registe
 	return false, xerrors.Errorf("-lin- this version not support checkAllocated")
 }
 
-func (r *Remote) MoveStorage(ctx context.Context, s storiface.SectorRef, types storiface.SectorFileType) error {
+func (r *Remote) MoveStorage(ctx context.Context, s storiface.SectorRef, types storiface.SectorFileType, opts ...storiface.AcquireOption) error {
 	// lingh: the data must be local!
 	// Make sure we have the data local
 	// _, _, err := r.AcquireSector(ctx, s, types, storiface.FTNone, storiface.PathStorage, storiface.AcquireMove)
@@ -412,7 +414,7 @@ func (r *Remote) MoveStorage(ctx context.Context, s storiface.SectorRef, types s
 	// 	return xerrors.Errorf("acquire src storage (remote): %w", err)
 	// }
 
-	return r.local.MoveStorage(ctx, s, types)
+	return r.local.MoveStorage(ctx, s, types, opts...)
 }
 
 func (r *Remote) Remove(ctx context.Context, sid abi.SectorID, typ storiface.SectorFileType, force bool, keepIn []storiface.ID) error {
@@ -845,7 +847,7 @@ func (r *Remote) Reader(ctx context.Context, s storiface.SectorRef, offset, size
 	return nil, nil
 }
 
-func (r *Remote) Reserve(ctx context.Context, sid storiface.SectorRef, ft storiface.SectorFileType, storageIDs storiface.SectorPaths, overheadTab map[storiface.SectorFileType]int) (func(), error) {
+func (r *Remote) Reserve(ctx context.Context, sid storiface.SectorRef, ft storiface.SectorFileType, storageIDs storiface.SectorPaths, overheadTab map[storiface.SectorFileType]int, minFreePercentage float64) (func(), error) {
 	log.Warnf("reserve called on remote store, sectorID: %v", sid.ID)
 	return func() {
 
@@ -933,6 +935,97 @@ func (r *Remote) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 	}
 
 	return nil, xerrors.Errorf("sector not found")
+}
+
+
+func (r *Remote) GeneratePoRepVanillaProof(ctx context.Context, sr storiface.SectorRef, sealed, unsealed cid.Cid, ticket abi.SealRandomness, seed abi.InteractiveSealRandomness) ([]byte, error) {
+	// Attempt to generate the proof locally first
+	p, err := r.local.GeneratePoRepVanillaProof(ctx, sr, sealed, unsealed, ticket, seed)
+	if err != errPathNotFound {
+		return p, err
+	}
+
+	// Define the file types to look for based on the sector's state
+	ft := storiface.FTSealed | storiface.FTCache
+
+	// Find sector information
+	si, err := r.index.StorageFindSector(ctx, sr.ID, ft, 0, false)
+	if err != nil {
+		return nil, xerrors.Errorf("finding sector %d failed: %w", sr.ID, err)
+	}
+
+	// Prepare request parameters
+	requestParams := PoRepVanillaParams{
+		Sector:   sr,
+		Sealed:   sealed,
+		Unsealed: unsealed,
+		Ticket:   ticket,
+		Seed:     seed,
+	}
+	jreq, err := json.Marshal(requestParams)
+	if err != nil {
+		return nil, err
+	}
+
+	merr := xerrors.Errorf("sector not found")
+
+	// Iterate over all found sector locations
+	for _, info := range si {
+		for _, u := range info.BaseURLs {
+			url := fmt.Sprintf("%s/vanilla/porep", u)
+
+			// Create and send the request
+			req, err := http.NewRequest("POST", url, strings.NewReader(string(jreq)))
+			if err != nil {
+				merr = multierror.Append(merr, xerrors.Errorf("request: %w", err))
+				log.Warnw("GeneratePoRepVanillaProof request failed", "url", url, "error", err)
+				continue
+			}
+
+			// Set auth headers if available
+			//if r.auth != nil {
+			//	req.Header = r.auth.Clone()
+			//}
+			req = req.WithContext(ctx)
+
+			// Execute the request
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				merr = multierror.Append(merr, xerrors.Errorf("do request: %w", err))
+				log.Warnw("GeneratePoRepVanillaProof do request failed", "url", url, "error", err)
+				continue
+			}
+
+			// Handle non-OK status codes
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				_ = resp.Body.Close()
+
+				if resp.StatusCode == http.StatusNotFound {
+					log.Debugw("reading vanilla proof from remote not-found response", "url", url, "store", info.ID)
+					continue
+				}
+
+				merr = multierror.Append(merr, xerrors.Errorf("non-200 code from %s: '%s'", url, strings.TrimSpace(string(body))))
+				log.Warnw("GeneratePoRepVanillaProof non-200 code from remote", "code", resp.StatusCode, "url", url, "body", string(body))
+				continue
+			}
+
+			// Read the response body
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				merr = multierror.Append(merr, xerrors.Errorf("resp.Body ReadAll: %w", err))
+				log.Warnw("GeneratePoRepVanillaProof read response body failed", "url", url, "error", err)
+			}
+			_ = resp.Body.Close()
+
+			// Return the proof if successful
+			return body, nil
+		}
+	}
+
+	// Return the accumulated error if the proof was not generated
+	return nil, merr
 }
 
 var _ Store = &Remote{}
