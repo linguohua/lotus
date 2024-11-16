@@ -82,6 +82,7 @@ func (s *WindowPoStScheduler) startGeneratePoST(
 
 		posts, err := s.runGeneratePoST(ctx, ts, deadline)
 		completeGeneratePoST(posts, err)
+
 	}()
 
 	return abort
@@ -206,7 +207,9 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 	}
 
 	sectors := make(map[abi.SectorNumber]checkSector)
+
 	var tocheck []storiface.SectorRef
+
 	for _, info := range sectorInfos {
 		sectors[info.SectorNumber] = checkSector{
 			sealed: info.SealedCID,
@@ -235,13 +238,15 @@ func (s *WindowPoStScheduler) checkSectors(ctx context.Context, check bitfield.B
 		}
 	}
 
-	bad, err := s.faultTracker.CheckProvable(ctx, pp, tocheck, func(ctx context.Context, id abi.SectorID) (cid.Cid, bool, error) {
-		s, ok := sectors[id.Number]
-		if !ok {
-			return cid.Undef, false, xerrors.Errorf("sealed CID not found")
-		}
-		return s.sealed, s.update, nil
-	})
+	//bad, err := s.faultTracker.CheckProvable(ctx, pp, tocheck, func(ctx context.Context, id abi.SectorID) (cid.Cid, bool, error) {
+	//	s, ok := sectors[id.Number]
+	//	if !ok {
+	//		return cid.Undef, false, xerrors.Errorf("sealed CID not found")
+	//	}
+	//	return s.sealed, s.update, nil
+	//})
+	bad, err := s.faultTracker.CheckProvable(ctx, s.proofType, tocheck, nil)
+
 	if err != nil {
 		return bitfield.BitField{}, xerrors.Errorf("checking provable sectors: %w", err)
 	}
@@ -324,6 +329,13 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 		}
 	}()
 
+	partitionCounts := make([]int, len(partitionBatches))
+	for i, pb := range partitionBatches {
+		partitionCounts[i] = len(pb)
+	}
+
+	log.Infow("runPoStCycle start", "deadline", di.Index, "partition batches", partitionCounts)
+
 	// Generate proofs in batches
 	posts := make([]miner.SubmitWindowedPoStParams, 0, len(partitionBatches))
 	for batchIdx, batch := range partitionBatches {
@@ -345,7 +357,10 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 		for retries := 0; ; retries++ {
 			skipCount := uint64(0)
 			var partitions []miner.PoStPartition
+
 			var xsinfos []proof7.ExtendedSectorInfo
+			tsStart := build.Clock.Now()
+
 			for partIdx, partition := range batch {
 				// TODO: Can do this in parallel
 				toProve, err := bitfield.SubtractBitField(partition.LiveSectors, partition.FaultySectors)
@@ -367,10 +382,12 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 					return nil, xerrors.Errorf("copy toProve: %w", err)
 				}
 				if !s.disablePreChecks {
+					log.Infow("runPoStCycle check sectors begin", "deadline", di.Index, "batch idx", batchIdx, "part idx", partIdx)
 					good, err = s.checkSectors(ctx, toProve, ts.Key())
 					if err != nil {
 						return nil, xerrors.Errorf("checking sectors to skip: %w", err)
 					}
+					log.Infow("runPoStCycle check sectors end", "deadline", di.Index, "batch idx", batchIdx, "part idx", partIdx)
 				}
 
 				good, err = bitfield.SubtractBitField(good, postSkipped)
@@ -396,6 +413,7 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 				}
 
 				if len(ssi) == 0 {
+					log.Warnw("runPoStCycle no sectors need to prove", "deadline", di.Index, "batch idx", batchIdx, "part idx", partIdx)
 					continue
 				}
 
@@ -411,14 +429,15 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 				break
 			}
 
+			elapsed2 := time.Since(tsStart)
+
 			// Generate proof
 			log.Infow("running window post",
 				"chain-random", rand,
 				"deadline", di,
 				"height", ts.Height(),
-				"skipped", skipCount)
-
-			tsStart := build.Clock.Now()
+				"skipped", skipCount,
+				"check-elapsed", elapsed2)
 
 			mid, err := address.IDFromAddress(s.actor)
 			if err != nil {
@@ -432,10 +451,12 @@ func (s *WindowPoStScheduler) runPoStCycle(ctx context.Context, manual bool, di 
 
 			postOut, ps, err := s.prover.GenerateWindowPoSt(ctx, abi.ActorID(mid), ppt, xsinfos, append(abi.PoStRandomness{}, rand...))
 			elapsed := time.Since(tsStart)
-			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed, "skip", len(ps), "err", err)
+			log.Infow("computing window post", "batch", batchIdx, "elapsed", elapsed, "skip", len(ps), "err", err, "check-elapsed", elapsed2)
+
 			if err != nil {
 				log.Errorf("error generating window post: %s", err)
 			}
+
 			if err == nil {
 
 				// If we proved nothing, something is very wrong.

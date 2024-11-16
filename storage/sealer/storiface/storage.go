@@ -77,6 +77,7 @@ type Sealer interface {
 	NewSector(ctx context.Context, sector SectorRef) error
 	DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, pieceData Data) (abi.PieceInfo, error)
 	AddPiece(ctx context.Context, sector SectorRef, pieceSizes []abi.UnpaddedPieceSize, newPieceSize abi.UnpaddedPieceSize, pieceData Data) (abi.PieceInfo, error)
+	FindUnsealGroupID(ctx context.Context, sector SectorRef) (string, error)
 
 	SealPreCommit1(ctx context.Context, sector SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (PreCommit1Out, error)
 	SealPreCommit2(ctx context.Context, sector SectorRef, pc1o PreCommit1Out) (SectorCids, error)
@@ -84,7 +85,7 @@ type Sealer interface {
 	SealCommit1(ctx context.Context, sector SectorRef, ticket abi.SealRandomness, seed abi.InteractiveSealRandomness, pieces []abi.PieceInfo, cids SectorCids) (Commit1Out, error)
 	SealCommit2(ctx context.Context, sector SectorRef, c1o Commit1Out) (Proof, error)
 
-	FinalizeSector(ctx context.Context, sector SectorRef) error
+	FinalizeSector(ctx context.Context, sector SectorRef, keepUnsealed []Range) error
 
 	// ReleaseUnsealed marks parts of the unsealed sector file as safe to drop
 	//  (called by the fsm on restart, allows storage to keep no persistent
@@ -110,7 +111,7 @@ type Sealer interface {
 	// GenerateSectorKeyFromData computes sector key given unsealed data and updated replica
 	GenerateSectorKeyFromData(ctx context.Context, sector SectorRef, unsealed cid.Cid) error
 
-	FinalizeReplicaUpdate(ctx context.Context, sector SectorRef) error
+	FinalizeReplicaUpdate(ctx context.Context, sector SectorRef, keepUnsealed []Range) error
 
 	DownloadSectorData(ctx context.Context, sector SectorRef, finalized bool, src map[SectorFileType]SectorLocation) error
 }
@@ -244,4 +245,9 @@ type LocalStorageMeta struct {
 	// DenyMiners lists miner IDs which are denied to store their sector data into
 	// this path
 	DenyMiners []string
+
+	// which group to bind
+	GroupID string
+	// how many sector instances can this storage allow
+	MaxSealingSectors int
 }

@@ -5,6 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
+	"strconv"
+	"io/ioutil"
+	"net/http"
 	"fmt"
 	"os"
 	"sync"
@@ -68,6 +72,41 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 		panic(err)
 	}
 
+
+	createBlockDeadline := 0
+	delayStr := os.Getenv("YOUZHOU_CREATE_BLOCK_DEADLINE")
+	if delayStr != "" {
+		delayInSeconds, err := strconv.Atoi(delayStr)
+		if err == nil {
+			createBlockDeadline = delayInSeconds
+			log.Infof("miner use create block deadline:%d",
+				createBlockDeadline)
+		}
+	}
+
+	var extraPropagationDelay uint64 = 0
+	delayStr = os.Getenv("YOUZHOU_EXTRA_PROPGATION_DEALY")
+	if delayStr != "" {
+		delayInSeconds, err := strconv.Atoi(delayStr)
+		if err == nil {
+			extraPropagationDelay = uint64(delayInSeconds)
+			log.Infof("miner wait parents delay with extra delay:%d",
+				extraPropagationDelay)
+		}
+	}
+
+	winReportURL := ""
+	u, ok := os.LookupEnv("YOUZHOU_WIN_REPORT_URL")
+	if ok {
+		winReportURL = u
+	}
+
+	var discardMinedBlock = false
+	if os.Getenv("YOUZHOU_DISCARD_WIN_BLOCK") == "true" {
+		discardMinedBlock = true
+		log.Warn("YOUZHOU_DISCARD_WIN_BLOCK == true, will discard all winning blocks")
+	}
+
 	return &Miner{
 		api:     api,
 		epp:     epp,
@@ -83,7 +122,8 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 			// the result is that we WILL NOT wait, therefore fast-forwarding
 			// and thus healing the chain by backfilling it with null rounds
 			// rapidly.
-			deadline := baseTime + buildconstants.PropagationDelaySecs
+			deadline := baseTime + buildconstants.PropagationDelaySecs + extraPropagationDelay
+
 			baseT := time.Unix(int64(deadline), 0)
 
 			baseT = baseT.Add(randTimeOffset(time.Second))
@@ -99,6 +139,10 @@ func NewMiner(api v1api.FullNode, epp gen.WinningPoStProver, addr address.Addres
 			evtTypeBlockMined: j.RegisterEventType("miner", "block_mined"),
 		},
 		journal: j,
+
+		createBlockDeadline: createBlockDeadline,
+		winReportURL:      winReportURL,
+		discardMinedBlock: discardMinedBlock,
 	}
 }
 
@@ -128,6 +172,10 @@ type Miner struct {
 
 	evtTypes [1]journal.EventType
 	journal  journal.Journal
+	
+	createBlockDeadline int
+	winReportURL      string
+	discardMinedBlock bool
 }
 
 // Address returns the address of the miner.
@@ -295,6 +343,10 @@ minerLoop:
 		// Attempt to mine a block.
 		b, err := m.mineOne(ctx, base)
 		if err != nil {
+			if err.Error() == "AABB" {
+				continue
+			}
+
 			log.Errorf("mining block failed: %+v", err)
 			if !m.niceSleep(time.Second) {
 				continue minerLoop
@@ -389,6 +441,16 @@ minerLoop:
 			}
 		}
 	}
+}
+
+type WinReport struct {
+	Miner   string `json:"miner"`
+	CID     string `json:"cid"`
+	Height  uint64 `json:"height"`
+	Took    string `json:"took"`
+	Parents int    `json:"parents"`
+
+	NewBase bool `json:"rebase"`
 }
 
 // MiningBase is the tipset on top of which we plan to construct our next block.
@@ -521,6 +583,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		return nil, nil
 	}
 
+	// lingh: log sector number
+	sectorNumber := abi.SectorNumber(0)
+	if len(mbi.Sectors) > 0 {
+		sectorNumber = mbi.Sectors[0].SectorNumber
+	}
+
 	tPowercheck := build.Clock.Now()
 
 	bvals := mbi.BeaconEntries
@@ -575,6 +643,83 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 
 	tProof := build.Clock.Now()
 
+	// lingh: delay more time to wait
+	if m.createBlockDeadline > 0 {
+		btime := time.Unix(int64(base.TipSet.MinTimestamp()+uint64(base.NullRounds*builtin.EpochDurationSeconds)), 0)
+		now := build.Clock.Now()
+		deadline := time.Second * time.Duration(uint64(m.createBlockDeadline))
+		diff := now.Sub(btime)
+
+		if diff < deadline {
+			if base.NullRounds == 0 {
+				m.niceSleep(deadline - diff)
+			} else {
+				const sleepStep = 2
+				// detect first parent block
+				for {
+					// found! return to upper to re-do mineOne again
+					newBaselin, err := m.GetBestMiningCandidate(ctx)
+					if err == nil {
+						oheight := base.TipSet.Height()
+						nheight := newBaselin.TipSet.Height()
+						if oheight != nheight {
+							log.Warnf("rebase, detect total new base %d != %d, need redo mineOne", oheight, nheight)
+							err = fmt.Errorf("AABB")
+							return nil, err
+						}
+					}
+
+					now = build.Clock.Now()
+					diff = now.Sub(btime)
+					if (diff + (time.Second * sleepStep)) >= deadline {
+						// timeout
+						break
+					}
+
+					m.niceSleep(time.Second * sleepStep)
+				}
+			}
+		}
+	}
+
+	tHardDelay := build.Clock.Now()
+
+	// lingh: check if we have new base
+	oldbase := *base
+	var replaceBase bool = false
+	newBaselin, err2 := m.GetBestMiningCandidate(ctx)
+	if err2 == nil {
+		oblks := oldbase.TipSet.Blocks()
+		nblks := newBaselin.TipSet.Blocks()
+
+		oheight := oldbase.TipSet.Height()
+		onull := oldbase.NullRounds
+		nheight := newBaselin.TipSet.Height()
+		nnull := newBaselin.NullRounds
+		if len(oblks) != len(nblks) && oheight == nheight && onull == nnull {
+			log.Warnf("rebase, old base parents number %d != %d, replace with new base, parent height:%d", len(oblks), len(nblks), oheight)
+			// replace with new base
+			base = newBaselin
+			replaceBase = true
+		} else if oheight != nheight && (oheight+onull) == (nheight+nnull) {
+			log.Errorf("rebase failed, base totally changed: %d != %d", oheight, nheight)
+		}
+	} else {
+		log.Errorf("mineOne GetBestMiningCandidate error:%v", err2)
+	}
+
+	// lingh: rebase
+	if replaceBase {
+		log.Warnf("rebase, re-compute ticket")
+		round = base.TipSet.Height() + base.NullRounds + 1
+		ticket, err2 = m.computeTicket(ctx, &rbase, round, base.TipSet.MinTicket(), mbi)
+		if err2 != nil {
+			log.Errorf("scratching ticket failed for rebase: %w", err2)
+		}
+	}
+
+	tHardReplace := build.Clock.Now()
+
 	// get pending messages early,
 	msgs, err := m.api.MpoolSelect(ctx, base.TipSet.Key(), ticket.Quality())
 	if err != nil {
@@ -583,6 +728,7 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	}
 
 	tPending := build.Clock.Now()
+
 
 	// This next block exists to "catch" equivocating miners,
 	// who submit 2 blocks at the same height at different times in order to split the network.
@@ -658,6 +804,31 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	for i, header := range base.TipSet.Blocks() {
 		parentMiners[i] = header.Miner
 	}
+	
+	{
+		b := minedBlock
+		log.Infow("mined new block", "sector-number", sectorNumber,
+			"cid", b.Cid(),
+			"height", int64(b.Header.Height),
+			"miner", b.Header.Miner,
+			"parents", parentMiners,
+			"parentTipset", base.TipSet.Key().String(),
+			"tHardDealy ", tHardDelay.Sub(tProof),
+			"tHardReplace ", tHardReplace.Sub(tHardDelay),
+			"took", dur)
+
+		if len(m.winReportURL) > 0 {
+			wr := WinReport{}
+			wr.CID = b.Cid().String()
+			wr.Miner = b.Header.Miner.String()
+			wr.Height = uint64(b.Header.Height)
+			wr.Took = fmt.Sprintf("%s", dur)
+			wr.Parents = len(parentMiners)
+			wr.NewBase = replaceBase
+			go reportWin(&wr, m.winReportURL)
+		}
+	}
+
 	log.Infow("mined new block", "cid", minedBlock.Cid(), "height", int64(minedBlock.Header.Height), "miner", minedBlock.Header.Miner, "parents", parentMiners, "parentTipset", base.TipSet.Key().String(), "took", dur)
 	if dur > time.Second*time.Duration(buildconstants.BlockDelaySecs) || time.Now().Compare(time.Unix(int64(minedBlock.Header.Timestamp), 0)) >= 0 {
 		log.Warnw("CAUTION: block production took us past the block time. Your computer may not be fast enough to keep up",
@@ -665,10 +836,17 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 			"tTicket ", tTicket.Sub(tPowercheck),
 			"tSeed ", tSeed.Sub(tTicket),
 			"tProof ", tProof.Sub(tSeed),
-			"tPending ", tPending.Sub(tProof),
+			"tHardDelay", tHardDelay.Sub(tProof),
+			"tHardReplace", tHardReplace.Sub(tHardDelay),
+			"tPending ", tPending.Sub(tHardReplace),
 			"tEquivocateWait ", tEquivocateWait.Sub(tPending),
 			"tIntersectAndRefresh ", tIntersectAndRefresh.Sub(tEquivocateWait),
 			"tCreateBlock ", tCreateBlock.Sub(tIntersectAndRefresh))
+	}
+
+	if m.discardMinedBlock {
+		log.Warnw("YOUZHOU_DISCARD_WIN_BLOCK = true, will discard winning block, loss rewards")
+		minedBlock = nil
 	}
 
 	return minedBlock, nil
@@ -718,3 +896,41 @@ func (m *Miner) createBlock(base *MiningBase, addr address.Address, ticket *type
 		WinningPoStProof: wpostProof,
 	})
 }
+
+func reportWin(wr *WinReport, url string) {
+	client := http.Client{
+		Timeout: 3 * time.Second,
+	}
+
+	jsonBytes, err := json.Marshal(wr)
+	if err != nil {
+		log.Errorf("reportWin marshal failed:%v, url:%s", err, url)
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		log.Errorf("reportWin new request failed:%v, url:%s", err, url)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Errorf("reportWin do failed:%v, url:%s", err, url)
+		return
+	}
+
+	defer resp.Body.Close()
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("reportWin read body failed:%v", err)
+		return
+	}
+
+	if resp.StatusCode != 200 {
+		log.Errorf("reportWin req failed, status %d != 200", resp.StatusCode)
+		return
+	}
+}
+

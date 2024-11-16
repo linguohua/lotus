@@ -529,13 +529,13 @@ fr32 padding is removed from the output.`,
 			return xerrors.Errorf("could not get api info: %w", err)
 		}
 
-		localStore, err := paths.NewLocal(ctx, &emptyLocalStorage{}, api, []string{})
+		localStore, err := paths.NewLocal(ctx, &emptyLocalStorage{}, api, []string{}, "", "")
 		if err != nil {
 			return err
 		}
 
 		remote := paths.NewRemote(localStore, api, sminfo.AuthHeader(), 10,
-			&paths.DefaultPartialFileHandler{})
+			&paths.DefaultPartialFileHandler{}, "")
 
 		readStarter, err := remote.Reader(ctx, sref, abi.PaddedPieceSize(offset), abi.PaddedPieceSize(length))
 		if err != nil {
@@ -631,7 +631,7 @@ var sectorDeleteCmd = &cli.Command{
 			return xerrors.Errorf("could not get api info: %w", err)
 		}
 
-		localStore, err := paths.NewLocal(ctx, &emptyLocalStorage{}, api, []string{})
+		localStore, err := paths.NewLocal(ctx, &emptyLocalStorage{}, api, []string{}, "", "")
 		if err != nil {
 			return err
 		}
@@ -641,7 +641,7 @@ var sectorDeleteCmd = &cli.Command{
 		}
 
 		remote := paths.NewRemote(localStore, api, sminfo.AuthHeader(), 10,
-			&paths.DefaultPartialFileHandler{})
+			&paths.DefaultPartialFileHandler{}, "")
 
 		err = remote.Remove(ctx, sid, ft, true, nil)
 		if err != nil {

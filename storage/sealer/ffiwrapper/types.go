@@ -3,6 +3,7 @@ package ffiwrapper
 import (
 	"context"
 
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper/basicfs"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
@@ -13,6 +14,8 @@ type SectorProvider interface {
 	AcquireSector(ctx context.Context, id storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, ptype storiface.PathType) (storiface.SectorPaths, func(), error)
 	// AcquireSector, but a copy to preseve its long-term storage location.
 	AcquireSectorCopy(ctx context.Context, id storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, ptype storiface.PathType) (storiface.SectorPaths, func(), error)
+
+	DiscoverSectorStore(ctx context.Context, id abi.SectorID) error
 }
 
 var _ SectorProvider = &basicfs.Provider{}

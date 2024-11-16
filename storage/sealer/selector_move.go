@@ -104,4 +104,8 @@ func (s *moveSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b Sc
 	return a.Utilization() < b.Utilization(), nil
 }
 
+func (s *moveSelector) GroupID() string {
+	return ""
+}
+
 var _ WorkerSelector = &moveSelector{}

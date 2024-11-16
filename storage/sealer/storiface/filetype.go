@@ -131,6 +131,17 @@ func TypeFromString(s string) (SectorFileType, error) {
 	}
 }
 
+func (t SectorFileType) IsForUpdate() bool {
+	switch t {
+	case FTUpdate:
+		return true
+	case FTUpdateCache:
+		return true
+	default:
+		return false
+	}
+}
+
 // String returns a string representation of the SectorFileType.
 func (t SectorFileType) String() string {
 	switch t {
