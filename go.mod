@@ -196,6 +196,7 @@ require (
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/drand/drand/v2 v2.0.6
 	github.com/drand/kyber-bls12381 v0.3.3 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/elastic/go-windows v1.0.0 // indirect
 	github.com/etclabscore/go-jsonschema-walk v0.0.6 // indirect
 	github.com/filecoin-project/go-amt-ipld/v2 v2.1.0 // indirect
@@ -215,6 +216,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.19.3 // indirect
 	github.com/go-openapi/jsonreference v0.19.4 // indirect
 	github.com/go-openapi/swag v0.19.11 // indirect
+	github.com/go-redis/redis/v8 v8.11.5 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect

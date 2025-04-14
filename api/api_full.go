@@ -109,6 +109,8 @@ type FullNode interface {
 	ChainGetBlock(context.Context, cid.Cid) (*types.BlockHeader, error) //perm:read
 	// ChainGetTipSet returns the tipset specified by the given TipSetKey.
 	ChainGetTipSet(context.Context, types.TipSetKey) (*types.TipSet, error) //perm:read
+	// get anchor node blocks count
+	AnchorBlocksCountByHeight(context.Context, abi.ChainEpoch) (int, error)
 
 	// ChainGetBlockMessages returns messages stored in the specified block.
 	//
@@ -525,6 +527,7 @@ type FullNode interface {
 	StateMarketParticipants(context.Context, types.TipSetKey) (map[string]MarketBalance, error) //perm:read
 	// StateMarketDeals returns information about every deal in the Storage Market
 	StateMarketDeals(context.Context, types.TipSetKey) (map[string]*MarketDeal, error) //perm:read
+	StateMarketDealsDump(context.Context, types.TipSetKey, string) (int, error)        //perm:read
 	// StateMarketStorageDeal returns information about the indicated deal
 	StateMarketStorageDeal(context.Context, abi.DealID, types.TipSetKey) (*MarketDeal, error) //perm:read
 	// StateMarketProposalPending returns whether a given proposal CID is marked as pending in the market actor

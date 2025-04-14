@@ -5,6 +5,7 @@ import (
 
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/storage/paths"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
@@ -39,4 +40,8 @@ func (l *readonlyProvider) AcquireSector(ctx context.Context, id storiface.Secto
 
 func (l *readonlyProvider) AcquireSectorCopy(ctx context.Context, id storiface.SectorRef, existing storiface.SectorFileType, allocate storiface.SectorFileType, ptype storiface.PathType) (storiface.SectorPaths, func(), error) {
 	return storiface.SectorPaths{}, nil, xerrors.New("read-only storage")
+}
+
+func (l *readonlyProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
+	return l.stor.DiscoverSectorStore(ctx, id)
 }

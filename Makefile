@@ -1,7 +1,8 @@
 SHELL=/usr/bin/env bash
 
-all: build  ## Build all main binaries (default target)
+# all: build  ## Build all main binaries (default target)
 
+all: lin
 .PHONY: all
 
 unexport GOFLAGS
@@ -24,11 +25,45 @@ MODULES:=
 CLEAN:=
 BINS:=
 
-ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+LDFLAGS=-lnuma
+
+CPU_CHECK:=$(shell if lscpu | grep -iq amd; then echo "amd"; else echo "intel"; fi)
+
+dirtystr:=$(CPU_CHECK)
+ifeq ($(MAKECMDGOALS),dubai)
+	dirtystr := $(dirtystr)_dubai
+endif
+
+ifeq ($(MAKECMDGOALS),hn)
+        dirtystr := $(dirtystr)_hn
+endif
+
+ifeq ($(MAKECMDGOALS),jm)
+	dirtystr := $(dirtystr)_jm
+endif
+
+ifeq ($(MAKECMDGOALS),changsha)
+	dirtystr := $(dirtystr)_changsha
+endif
+
+ifeq ($(MAKECMDGOALS),yunkuang)
+	dirtystr := $(dirtystr)_yunkuang
+endif
+
+ifeq ($(MAKECMDGOALS),leshan)
+	dirtystr := $(dirtystr)_leshan
+endif
+
+ifeq ($(MAKECMDGOALS),hongkong)
+	dirtystr := $(dirtystr)_hongkong
+endif
+
+systemstr = $(shell lsb_release -i|cut -f 2).$(shell lsb_release -r|cut -f 2)
+ldflags=-X=github.com/filecoin-project/lotus/build.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)).$(dirtystr).$(systemstr)
+
 ifneq ($(strip $(LDFLAGS)),)
 	ldflags+=-extldflags=$(LDFLAGS)
 endif
-
 GOFLAGS+=-ldflags="$(ldflags)"
 
 FIX_IMPORTS = $(GOCC) run ./scripts/fiximports
@@ -70,7 +105,9 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)  ## Install build dependencies
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed  ## Build binaries for development networks
+#build-devnets: build lotus-seed lotus-shed  ## Build binaries for development networks
+build-devnets: lotus lotus-miner lotus-worker lotus-shed
+
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -81,6 +118,8 @@ debug: build-devnets  ## Build with debug tags
 
 calibnet: GOFLAGS+=-tags=calibnet
 calibnet: build-devnets  ## Build for calibnet network
+lin: GOFLAGS+=-tags=lin
+lin: build
 
 butterflynet: GOFLAGS+=-tags=butterflynet
 butterflynet: build-devnets  ## Build for butterflynet network
@@ -119,7 +158,7 @@ lotus-gateway: $(BUILD_DEPS)  ## Build the Lotus gateway
 .PHONY: lotus-gateway
 BINS+=lotus-gateway
 
-build: lotus lotus-miner lotus-worker  ## Build all main binaries
+build: lotus lotus-miner lotus-worker lotus-shed ## Build all main binaries
 	@[[ $$(type -P "lotus") ]] && echo "Caution: you have \
 an existing lotus binary in your PATH. This may cause problems if you don't run 'sudo make install'" || true
 

@@ -66,4 +66,14 @@ func (c *cachedSchedWorker) Utilization() float64 {
 	return v
 }
 
+func (c *cachedSchedWorker) RemoteWorkerHasResourceForNewTask(ctx context.Context, task sealtasks.TaskType) bool {
+	// can't error
+	return false
+}
+
+func (c *cachedSchedWorker) GroupID() string {
+	// can't error
+	return c.Info.GroupID
+}
+
 var _ SchedWorker = &cachedSchedWorker{}

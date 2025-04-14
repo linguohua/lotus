@@ -138,6 +138,10 @@ func (b benchSectorProvider) AcquireSector(ctx context.Context, id storiface.Sec
 	return out, func() {}, nil
 }
 
+func (b benchSectorProvider) DiscoverSectorStore(ctx context.Context, id abi.SectorID) error {
+	return fmt.Errorf("DiscoverSectorStore not implemented for benchSectorProvider")
+}
+
 var _ ffiwrapper.SectorProvider = &benchSectorProvider{}
 
 var simpleAddPiece = &cli.Command{
@@ -177,7 +181,7 @@ var simpleAddPiece = &cli.Command{
 		pp := benchSectorProvider{
 			storiface.FTUnsealed: cctx.Args().Get(1),
 		}
-		sealer, err := ffiwrapper.New(pp)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -258,7 +262,7 @@ var simplePreCommit1 = &cli.Command{
 			storiface.FTSealed:   cctx.Args().Get(1),
 			storiface.FTCache:    cctx.Args().Get(2),
 		}
-		sealer, err := ffiwrapper.New(pp)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -387,7 +391,8 @@ Example invocation of lotus-bench as external executor:
 			opts = append(opts, ffiwrapper.WithExternalSealCalls(extSeal))
 		}
 
-		sealer, err := ffiwrapper.New(pp, opts...)
+		sealer, err := ffiwrapper.New(pp, nil, opts...)
+
 		if err != nil {
 			return err
 		}
@@ -471,7 +476,7 @@ var simpleCommit1 = &cli.Command{
 			storiface.FTSealed: cctx.Args().Get(0),
 			storiface.FTCache:  cctx.Args().Get(1),
 		}
-		sealer, err := ffiwrapper.New(pp)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -601,7 +606,7 @@ var simpleCommit2 = &cli.Command{
 			return err
 		}
 
-		sb, err := ffiwrapper.New(nil)
+		sb, err := ffiwrapper.New(nil, nil)
 		if err != nil {
 			return err
 		}
@@ -865,7 +870,7 @@ var simpleReplicaUpdate = &cli.Command{
 			storiface.FTUpdate:      cctx.Args().Get(3),
 			storiface.FTUpdateCache: cctx.Args().Get(4),
 		}
-		sealer, err := ffiwrapper.New(pp)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -937,7 +942,7 @@ var simpleProveReplicaUpdate1 = &cli.Command{
 			storiface.FTUpdate:      cctx.Args().Get(2),
 			storiface.FTUpdateCache: cctx.Args().Get(3),
 		}
-		sealer, err := ffiwrapper.New(pp)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
@@ -1024,7 +1029,7 @@ var simpleProveReplicaUpdate2 = &cli.Command{
 		sectorSize := abi.SectorSize(sectorSizeInt)
 
 		pp := benchSectorProvider{}
-		sealer, err := ffiwrapper.New(pp)
+		sealer, err := ffiwrapper.New(pp, nil)
 		if err != nil {
 			return err
 		}
