@@ -42,7 +42,6 @@ import (
 	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
 	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
 	"github.com/filecoin-project/lotus/storage/sealer/storiface"
-	lcli "github.com/filecoin-project/lotus/cli"
 )
 
 const FlagWorkerRepo = "worker-repo"
