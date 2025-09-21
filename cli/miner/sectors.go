@@ -51,6 +51,7 @@ var sectorsCmd = &cli.Command{
 		sectorsNumbersCmd,
 		spcli.SectorPreCommitsCmd(LMActorOrEnvGetter),
 		spcli.SectorsCheckExpireCmd(LMActorOrEnvGetter),
+		sectorsRecoverCmd,
 		sectorsExpiredCmd,
 		spcli.SectorsExtendCmd(LMActorOrEnvGetter),
 		sectorsTerminateCmd,
@@ -93,6 +94,38 @@ var sectorsPledgeCmd = &cli.Command{
 		}
 
 		fmt.Println("Created CC sector: ", id.Number)
+
+		return nil
+	},
+}
+
+var sectorsRecoverCmd = &cli.Command{
+	Name:      "recover",
+	Usage:     "recover a proving sector",
+	ArgsUsage: "<sectorNum>",
+	Action: func(cctx *cli.Context) error {
+		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		if cctx.Args().Len() != 1 {
+			return xerrors.Errorf("must pass sector number")
+		}
+
+		sid, err := strconv.ParseUint(cctx.Args().Get(0), 10, 64)
+		if err != nil {
+			return xerrors.Errorf("could not parse sector number: %w", err)
+		}
+
+		id, err := nodeApi.RecoverSector(ctx, abi.SectorNumber(sid))
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Recover CC sector: ", id)
 
 		return nil
 	},

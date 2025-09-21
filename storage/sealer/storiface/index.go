@@ -94,6 +94,9 @@ type StorageInfo struct {
 	// DenyMiners lists miner IDs which are denied to store their sector data into
 	// this path
 	DenyMiners []string
+
+	GroupID           string
+	MaxSealingSectors int
 }
 
 type HealthReport struct {
@@ -116,6 +119,9 @@ type SectorStorageInfo struct {
 	DenyTypes   []string
 	AllowMiners []string
 	DenyMiners  []string
+
+	GroupID           string
+	MaxSealingSectors int
 }
 
 type Decl struct {

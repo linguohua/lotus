@@ -247,28 +247,29 @@ func (a *ActiveResources) taskCount(tt *sealtasks.SealTaskType) int {
 }
 
 func (wh *WorkerHandle) Utilization() float64 {
-	wh.lk.Lock()
-	u := wh.active.utilization(wh.Info.Resources)
-	u += wh.preparing.utilization(wh.Info.Resources)
-	wh.lk.Unlock()
-	wh.wndLk.Lock()
-	for _, window := range wh.activeWindows {
-		u += window.Allocated.utilization(wh.Info.Resources)
-	}
-	wh.wndLk.Unlock()
+	// wh.lk.Lock()
+	// u := wh.active.utilization(wh.Info.Resources)
+	// u += wh.preparing.utilization(wh.Info.Resources)
+	// wh.lk.Unlock()
+	// wh.wndLk.Lock()
+	// for _, window := range wh.activeWindows {
+	// 	u += window.Allocated.utilization(wh.Info.Resources)
+	// }
+	// wh.wndLk.Unlock()
 
-	return u
+	return 0
 }
 
 func (wh *WorkerHandle) TaskCounts() int {
 	wh.lk.Lock()
-	u := wh.active.taskCount(nil)
-	u += wh.preparing.taskCount(nil)
-	wh.lk.Unlock()
-	wh.wndLk.Lock()
-	for _, window := range wh.activeWindows {
-		u += window.Allocated.taskCount(nil)
-	}
+	u := 0
+	// u += wh.active.taskCount(nil)
+	// u += wh.preparing.taskCount(nil)
+	// wh.lk.Unlock()
+	// wh.wndLk.Lock()
+	// for _, window := range wh.activeWindows {
+	// 	u += window.Allocated.taskCount(nil)
+	// }
 	wh.wndLk.Unlock()
 
 	return u
@@ -276,13 +277,14 @@ func (wh *WorkerHandle) TaskCounts() int {
 
 func (wh *WorkerHandle) TaskCount(tt *sealtasks.SealTaskType) int {
 	wh.lk.Lock()
-	u := wh.active.taskCount(tt)
-	u += wh.preparing.taskCount(tt)
-	wh.lk.Unlock()
-	wh.wndLk.Lock()
-	for _, window := range wh.activeWindows {
-		u += window.Allocated.taskCount(tt)
-	}
+	u := 0
+	// u := wh.active.taskCount(tt)
+	// u += wh.preparing.taskCount(tt)
+	// wh.lk.Unlock()
+	// wh.wndLk.Lock()
+	// for _, window := range wh.activeWindows {
+	// 	u += window.Allocated.taskCount(tt)
+	// }
 	wh.wndLk.Unlock()
 
 	return u

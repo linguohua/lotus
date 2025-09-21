@@ -3,11 +3,13 @@ package sealing
 import (
 	"bytes"
 	"context"
+
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"time"
+	"strings"
 
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -50,7 +52,7 @@ func (m *Sealing) cleanupAssignedDeals(sector SectorInfo) {
 		pp := m.pendingPieces[c]
 		delete(m.pendingPieces, c)
 		if pp == nil {
-			log.Errorf("nil assigned pending piece %s", c)
+			log.Errorf("sector %d nil assigned pending piece %s", sector.SectorNumber, c)
 			continue
 		}
 
@@ -64,6 +66,26 @@ func (m *Sealing) cleanupAssignedDeals(sector SectorInfo) {
 }
 
 func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode == 2 {
+		// recover by unseal file
+		log.Infow("handlePacking recoverMode by unseal", "sector", sector.SectorNumber)
+
+		gid := ""
+		var err error
+		for {
+			// find groupID
+			gid, err = m.sealer.FindUnsealGroupID(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber))
+			if err != nil {
+				err = failedCooldown(ctx, sector)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return ctx.Send(SectorRedoPacked{GroupID: gid})
+	}
+
 	m.cleanupAssignedDeals(sector)
 
 	// if this is a snapdeals sector, but it ended up not having any deals, abort the upgrade
@@ -86,7 +108,12 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 	ubytes := abi.PaddedPieceSize(ssize).Unpadded()
 
 	if allocated > ubytes {
-		return xerrors.Errorf("too much data in sector: %d > %d", allocated, ubytes)
+		return xerrors.Errorf("handlePacking failed, too much data in sector %d: %d > %d", sector.SectorNumber, allocated, ubytes)
+	}
+
+	if m.recoverMode > 0 {
+		log.Infof("recover mode reset allocated from %d to 0", allocated)
+		allocated = 0
 	}
 
 	fillerSizes, err := filler.FillersFromRem(ubytes - allocated)
@@ -98,31 +125,56 @@ func (m *Sealing) handlePacking(ctx statemachine.Context, sector SectorInfo) err
 		log.Warnf("Creating %d filler pieces for sector %d", len(fillerSizes), sector.SectorNumber)
 	}
 
-	fillerPieces, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.existingPieceSizes(), fillerSizes...)
-	if err != nil {
-		return xerrors.Errorf("filling up the sector (%v): %w", fillerSizes, err)
-	}
+	// lingh: pledge AddPiece call
+	for {
+		existingPieceSizes := sector.existingPieceSizes()
+		if m.recoverMode > 0 {
+			log.Infof("recover mode reset existingPieceSizes from %+v to empty", existingPieceSizes)
+			existingPieceSizes = []abi.UnpaddedPieceSize{}
+		}
 
-	return ctx.Send(SectorPacked{FillerPieces: fillerPieces})
+		fillerPieces, gid, err := m.padSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), existingPieceSizes, fillerSizes...)
+		if err != nil {
+			log.Errorf("filling up the sector %v (%v): %s", sector.SectorNumber, fillerSizes, err)
+			err = failedCooldown(ctx, sector)
+			if err != nil {
+				log.Errorf("handlePacking failed,sector %v (%v): %s",
+					sector.SectorNumber, fillerSizes, err)
+				return err
+			}
+		} else {
+			if m.recoverMode > 0 {
+				return ctx.Send(SectorRedoPacked{FillerPieces: fillerPieces, GroupID: gid})
+			}
+
+			return ctx.Send(SectorPacked{FillerPieces: fillerPieces, GroupID: gid})
+		}
+	}
 }
 
-func (m *Sealing) padSector(ctx context.Context, sectorID storiface.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, sizes ...abi.UnpaddedPieceSize) ([]abi.PieceInfo, error) {
+func (m *Sealing) padSector(ctx context.Context, sectorID storiface.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, sizes ...abi.UnpaddedPieceSize) ([]abi.PieceInfo, string, error) {
 	if len(sizes) == 0 {
-		return nil, nil
+		return nil, "", nil
 	}
 
 	log.Infof("Pledge %d, contains %+v", sectorID, existingPieceSizes)
-
+	groupID := ""
 	out := make([]abi.PieceInfo, len(sizes))
 	for i, size := range sizes {
 		expectCid := zerocomm.ZeroPieceCommitment(size)
 
 		ppi, err := m.sealer.AddPiece(ctx, sectorID, existingPieceSizes, size, nullreader.NewNullReader(size))
 		if err != nil {
-			return nil, xerrors.Errorf("add piece: %w", err)
+			errStr := err.Error()
+			if i := strings.Index(errStr, "ugly:"); i >= 0 {
+				groupID = errStr[i+5:]
+			} else {
+				return nil, groupID, xerrors.Errorf("add piece: %v", err)
+			}
 		}
-		if !expectCid.Equals(ppi.PieceCID) {
-			return nil, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
+
+		if !expectCid.Equals(expectCid) {
+			return nil, groupID, xerrors.Errorf("got unexpected padding piece CID: expected:%s, got:%s", expectCid, ppi.PieceCID)
 		}
 
 		existingPieceSizes = append(existingPieceSizes, size)
@@ -130,7 +182,7 @@ func (m *Sealing) padSector(ctx context.Context, sectorID storiface.SectorRef, e
 		out[i] = ppi
 	}
 
-	return out, nil
+	return out, groupID, nil
 }
 
 func checkTicketExpired(ticket, head abi.ChainEpoch) bool {
@@ -202,6 +254,14 @@ func (m *Sealing) getTicket(ctx statemachine.Context, sector SectorInfo) (abi.Se
 }
 
 func (m *Sealing) handleGetTicket(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode > 0 {
+		log.Infof("recover mode handleGetTicket, sector:%d, reuse ticket value:%v, ticket epoch:%d", sector.SectorNumber, sector.TicketValue, sector.TicketEpoch)
+		return ctx.Send(SectorTicket{
+			TicketValue: sector.TicketValue,
+			TicketEpoch: sector.TicketEpoch,
+		})
+	}
+
 	ticketValue, ticketEpoch, allocated, err := m.getTicket(ctx, sector)
 	if err != nil {
 		if allocated {
@@ -260,6 +320,19 @@ func retrySoftErr(ctx context.Context, cb func() error) error {
 }
 
 func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode > 0 {
+		log.Infof("recover mode handlePreCommit1 start, sector:%d, ticket value:%v", sector.SectorNumber, sector.TicketValue)
+		pc1o, err := m.sealer.SealPreCommit1(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.TicketValue, sector.pieceInfos())
+		if err != nil {
+			return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("seal pre commit(1) failed: %w", err)})
+		}
+
+		log.Infof("recover mode handlePreCommit1 finish, sector:%d", sector.SectorNumber)
+		return ctx.Send(SectorPreCommit1{
+			PreCommit1Out: pc1o,
+		})
+	}
+
 	if err := checkPieces(ctx.Context(), m.maddr, sector.SectorNumber, sector.Pieces, m.Api, false); err != nil { // Sanity check state
 		switch err.(type) {
 		case *ErrApi:
@@ -330,18 +403,28 @@ func (m *Sealing) handlePreCommit1(ctx statemachine.Context, sector SectorInfo) 
 }
 
 func (m *Sealing) handlePreCommit2(ctx statemachine.Context, sector SectorInfo) error {
+	if m.recoverMode > 0 {
+		log.Infof("recover mode handlePreCommit2 start, sector:%d", sector.SectorNumber)
+	}
+
 	var cids storiface.SectorCids
 
 	err := retrySoftErr(ctx.Context(), func() (err error) {
 		cids, err = m.sealer.SealPreCommit2(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), sector.PreCommit1Out)
 		return err
 	})
+
 	if err != nil {
 		return ctx.Send(SectorSealPreCommit2Failed{xerrors.Errorf("seal pre commit(2) failed: %w", err)})
 	}
 
 	if cids.Unsealed == cid.Undef {
 		return ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("seal pre commit(2) returned undefined CommD")})
+	}
+
+	if m.recoverMode > 0 {
+		log.Infof("recover mode handlePreCommit2 finish, sector:%d", sector.SectorNumber)
+		return ctx.Send(SectorRedoPreCommit2{})
 	}
 
 	return ctx.Send(SectorPreCommit2{
@@ -554,7 +637,8 @@ func (m *Sealing) handleWaitSeed(ctx statemachine.Context, sector SectorInfo) er
 		return nil
 	}, InteractivePoRepConfidence, randHeight)
 	if err != nil {
-		log.Warn("waitForPreCommitMessage ChainAt errored: ", err)
+		log.Warnf("handleWaitSeed, call ChainAt completed, waitForPreCommitMessage ChainAt errored:%v, sector:%d",
+			err, sector.SectorNumber)
 	}
 
 	return nil
@@ -864,16 +948,34 @@ func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorIn
 		return xerrors.Errorf("getting sealing config: %w", err)
 	}
 
-	if err := m.sealer.ReleaseUnsealed(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(sector.Pieces, false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
-		return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("release unsealed: %w", err)})
-	}
+	//if err := m.sealer.ReleaseUnsealed(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber), sector.keepUnsealedRanges(sector.Pieces, false, cfg.AlwaysKeepUnsealedCopy)); err != nil {
+	//	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("release unsealed: %w", err)})
+	//}
+	//
+	//if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber)); err != nil {
+	//	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
 
-	if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber)); err != nil {
-		return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
+	// keep unsealed if need
+	var keepUnsealed []storiface.Range = nil
+	keepUnsealed = sector.keepUnsealedRanges(sector.Pieces, false, cfg.AlwaysKeepUnsealedCopy)
+
+	log.Infof("Sealing handleFinalizeSector, sector:%d", sector.SectorNumber)
+
+	if m.recoverMode > 0 || !sector.HasFinalized {
+		if len(keepUnsealed) > 0 {
+			log.Warnf("Sealing handleFinalizeSector keep unsealed sector:%d", sector.SectorNumber)
+		}
+
+		if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), keepUnsealed); err != nil {
+			return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
+		}
+	} else {
+		log.Infof("Sealing handleFinalizeSector, sector:%d, early finalized", sector.SectorNumber)
 	}
 
 	if cfg.MakeCCSectorsAvailable && !sector.hasData() {
 		return ctx.Send(SectorFinalizedAvailable{})
 	}
+
 	return ctx.Send(SectorFinalized{})
 }

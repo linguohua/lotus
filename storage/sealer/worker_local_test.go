@@ -45,7 +45,7 @@ func TestWorkerChallengeThrottle(t *testing.T) {
 		MaxParallelChallengeReads: 8,
 	}
 
-	lw := NewLocalWorker(wcfg, hs, nil, nil, nil, statestore.New(datastore.NewMapDatastore()))
+	lw := NewLocalWorker(wcfg, hs, nil, nil, nil, statestore.New(datastore.NewMapDatastore()), nil)
 
 	var ch []storiface.PostSectorChallenge
 	for i := 0; i < 128; i++ {
