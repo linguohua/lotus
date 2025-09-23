@@ -354,9 +354,9 @@ func (p *pieceProviderTestHarness) readPiece(t *testing.T, offset storiface.Unpa
 	require.Equal(t, expectedBytes, readData)
 }
 
-func (p *pieceProviderTestHarness) finalizeSector(t *testing.T, keepUnseal []storiface.Range) {
-	require.NoError(t, p.mgr.ReleaseUnsealed(p.ctx, p.sector, keepUnseal))
-	require.NoError(t, p.mgr.FinalizeSector(p.ctx, p.sector, keepUnseal))
+func (p *pieceProviderTestHarness) finalizeSector(t *testing.T) {
+	require.NoError(t, p.mgr.ReleaseUnsealed(p.ctx, p.sector))
+	require.NoError(t, p.mgr.FinalizeSector(p.ctx, p.sector))
 }
 
 func (p *pieceProviderTestHarness) shutdown(t *testing.T) {

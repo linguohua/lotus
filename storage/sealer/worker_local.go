@@ -784,14 +784,14 @@ func (l *LocalWorker) GenerateSectorKeyFromData(ctx context.Context, sector stor
 	})
 }
 
-func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
+func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
 	sb, err := l.executor(l)
 	if err != nil {
 		return storiface.UndefCall, err
 	}
 
 	return l.asyncCall(ctx, sector, FinalizeSector, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		if err := sb.FinalizeSector(ctx, sector, keepUnsealed); err != nil {
+		if err := sb.FinalizeSector(ctx, sector); err != nil {
 			return nil, xerrors.Errorf("finalizing sector: %w", err)
 		}
 
@@ -803,22 +803,18 @@ func (l *LocalWorker) FinalizeSector(ctx context.Context, sector storiface.Secto
 		// }
 
 		// lingh: do move also
-		if len(keepUnsealed) == 0 {
-			return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed)
-		} else {
-			return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed|storiface.FTUnsealed)
-		}
+		return nil, l.storage.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed)
 	})
 }
 
-func (l *LocalWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) (storiface.CallID, error) {
+func (l *LocalWorker) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) (storiface.CallID, error) {
 	sb, err := l.executor(l)
 	if err != nil {
 		return storiface.UndefCall, err
 	}
 
 	return l.asyncCall(ctx, sector, FinalizeReplicaUpdate, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return nil, sb.FinalizeReplicaUpdate(ctx, sector, keepUnsealed)
+		return nil, sb.FinalizeReplicaUpdate(ctx, sector)
 	})
 }
 

@@ -966,7 +966,7 @@ func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorIn
 			log.Warnf("Sealing handleFinalizeSector keep unsealed sector:%d", sector.SectorNumber)
 		}
 
-		if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), keepUnsealed); err != nil {
+		if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber)); err != nil {
 			return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
 		}
 	} else {

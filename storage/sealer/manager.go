@@ -784,7 +784,7 @@ func (m *Manager) sectorStorageType(ctx context.Context, sector storiface.Sector
 }
 
 // lingh: seal-to-storage
-func (m *Manager) FinalizeSector(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
+func (m *Manager) FinalizeSector(ctx context.Context, sector storiface.SectorRef) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -808,7 +808,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storiface.SectorRef
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTFinalize, selector,
 		schedNop,
 		func(ctx context.Context, w Worker) error {
-			_, err := m.waitSimpleCall(ctx)(w.FinalizeSector(ctx, sector, keepUnsealed))
+			_, err := m.waitSimpleCall(ctx)(w.FinalizeSector(ctx, sector))
 			return err
 		})
 	if err != nil {
@@ -845,7 +845,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storiface.SectorRef
 	return nil
 }
 
-func (m *Manager) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef, keepUnsealed []storiface.Range) error {
+func (m *Manager) FinalizeReplicaUpdate(ctx context.Context, sector storiface.SectorRef) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -895,7 +895,7 @@ func (m *Manager) FinalizeReplicaUpdate(ctx context.Context, sector storiface.Se
 		m.schedFetch(sector, storiface.FTCache|storiface.FTUpdateCache|moveUnsealed, pathType, storiface.AcquireMove),
 
 		func(ctx context.Context, w Worker) error {
-			_, err := m.waitSimpleCall(ctx)(w.FinalizeReplicaUpdate(ctx, sector, keepUnsealed))
+			_, err := m.waitSimpleCall(ctx)(w.FinalizeReplicaUpdate(ctx, sector))
 			return err
 		})
 	if err != nil {
