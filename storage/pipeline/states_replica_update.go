@@ -328,10 +328,10 @@ func (m *Sealing) handleReplicaUpdateWait(ctx statemachine.Context, sector Secto
 }
 
 func (m *Sealing) handleFinalizeReplicaUpdate(ctx statemachine.Context, sector SectorInfo) error {
-	cfg, err := m.getConfig()
-	if err != nil {
-		return xerrors.Errorf("getting sealing config: %w", err)
-	}
+	//cfg, err := m.getConfig()
+	//if err != nil {
+	//	return xerrors.Errorf("getting sealing config: %w", err)
+	//}
 
 	// if err := m.sealer.ReleaseUnsealed(ctx.Context(), m.minerSector(sector.SectorType, sector.SectorNumber)); err != nil {
 	// 	return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("release unsealed: %w", err)})
