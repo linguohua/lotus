@@ -226,7 +226,7 @@ func NewLocalWorkerWithExecutor(executor ExecutorFunc, wcfg WorkerConfig, envLoo
 			log.Info("LocalWorker.chanCacheClear, do:", cached.string)
 
 			// lingh: we clear cache after C1 completed
-			err = ffi.ClearCache(uint64(cached.uint64), cached.string)
+			err = ffi.ClearCache(cached.string)
 			if err != nil {
 				log.Warnf("StandaloneSealCommit: ffi.ClearCache failed with error:%v, cache maybe removed previous", err)
 			}
